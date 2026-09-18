@@ -1,0 +1,12 @@
+[Unit]
+Description=Dashboard agent (host data + dev previews for the dash CT)
+After=network-online.target pve-cluster.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /root/dashboard/agent/agent.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

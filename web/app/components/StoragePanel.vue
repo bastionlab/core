@@ -1,0 +1,47 @@
+<script setup lang="ts">
+const props = defineProps<{ pools: any[], datasets: any[], smart: any[] }>()
+const leaves = computed(() => {
+  const names = props.datasets.map(d => d.name)
+  return props.datasets
+    .filter(d => d.name !== 'tank' && !names.some(n => n.startsWith(d.name + '/')))
+    .sort((a, b) => b.used - a.used)
+})
+const total = computed(() => leaves.value.reduce((s, d) => s + d.used, 0))
+const colors = ['var(--accent)', '#b36bdb', '#2fa8a0', '#d9822b', '#c94f7c', '#6b8e23', '#8a7f72']
+</script>
+
+<template>
+  <Panel id="storage" title="Storage">
+    <Meter v-for="p in pools" :key="p.name" :label="p.name" :value="pct(p.alloc, p.size)" :detail="`${bytes(p.alloc)} / ${bytes(p.size)}`" :warn="80" />
+
+    <div class="split">
+      <div class="bar">
+        <span v-for="(d, i) in leaves" :key="d.name" :style="{ width: pct(d.used, total) + '%', background: colors[i % colors.length] }" :title="d.name" />
+      </div>
+      <div class="legend">
+        <span v-for="(d, i) in leaves" :key="d.name" class="small">
+          <i :style="{ background: colors[i % colors.length] }" />{{ d.name.replace('tank/', '').replace('medien/', '') }}
+          <span class="muted">{{ bytes(d.used) }}</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="disks">
+      <span v-for="d in smart" :key="d.dev" class="pill" :class="d.passed === false ? 'bad' : ''" :title="`${d.model} · ${d.hours ?? '?'}h`">
+        <span class="dot" :class="d.passed ? 'ok' : d.passed === false ? 'bad' : ''" /> {{ d.dev }} {{ bytes(d.size, 0) }}<template v-if="d.temp"> · {{ d.temp }}°C</template>
+      </span>
+    </div>
+    <div v-for="p in pools" :key="p.name" class="faint small scan">{{ p.name }}: {{ p.scan ?? 'never scrubbed' }}</div>
+  </Panel>
+</template>
+
+<style scoped>
+.split { margin-top: 16px; }
+.bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--track); gap: 2px; }
+.bar span { min-width: 3px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+.disks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.scan { margin-top: 6px; }
+.scan + .scan { margin-top: 2px; }
+</style>

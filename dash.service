@@ -1,0 +1,15 @@
+[Unit]
+Description=pve dashboard (Nuxt)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/dash.env
+WorkingDirectory=/opt/dash
+ExecStart=/usr/bin/node .output/server/index.mjs
+Restart=always
+RestartSec=3
+DynamicUser=yes
+
+[Install]
+WantedBy=multi-user.target
