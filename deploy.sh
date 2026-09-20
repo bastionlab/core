@@ -17,7 +17,7 @@ echo "→ sources → CT $CT"
 tar -C "$DIR/web" --exclude=node_modules --exclude=.nuxt --exclude=.output -cf - . | pct exec $CT -- sh -c 'mkdir -p /opt/dash && tar -C /opt/dash -xf -'
 
 echo "→ env + service"
-pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_TOKEN=%s\nHOST=127.0.0.1\nPORT=3000\nNODE_ENV=production\n' '$(cat "$DIR/agent/token")' > /etc/dash.env"
+pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_TOKEN=%s\nNUXT_DEALS_TOKEN=%s\nHOST=127.0.0.1\nPORT=3000\nNODE_ENV=production\n' '$(cat "$DIR/agent/token")' '$(cat /root/deals/token 2>/dev/null)' > /etc/dash.env"
 pct push $CT "$DIR/dash.service" /etc/systemd/system/dash.service
 
 echo "→ build"

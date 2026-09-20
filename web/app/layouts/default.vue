@@ -7,6 +7,7 @@ const nav = [
   { to: '/', icon: '🏠', label: 'Apps' },
   { to: '/media', icon: '🍿', label: 'Media' },
   { to: '/dev', icon: '⌨️', label: 'Dev' },
+  { to: '/deals', icon: '🏷️', label: 'Deals' },
   { to: '/metrics', icon: '📊', label: 'Metrics' },
   { to: '/chat', icon: '✦', label: 'Chat' },
 ]

@@ -12,7 +12,9 @@ const downloading = computed(() => Object.values(m.value?.queues ?? {}).flat().f
 const vpnOk = computed(() => m.value?.vpn && m.value.vpn.up && m.value.vpn.killSwitch && !m.value.vpn.leaking)
 
 const { data: boxes, refresh: refreshProjects } = useProjects()
-onMounted(() => { if (!boxes.value) refreshProjects() })
+const { data: deals, refresh: refreshDeals } = useDeals()
+onMounted(() => { if (!boxes.value) refreshProjects(); if (!deals.value) refreshDeals() })
+const dealsFresh = computed(() => (deals.value?.feed ?? []).filter((i: any) => Date.now() / 1000 - (i.posted_at ?? 0) < 86400).length)
 const projects = computed(() => (boxes.value ?? []).flatMap(b => b.projects ?? []))
 const previews = computed(() => projects.value.filter((p: any) => p.running).length)
 const claudes = computed(() => projects.value.filter((p: any) => p.cc?.running).length)
@@ -53,6 +55,16 @@ const topics = computed(() => [
           { text: `${projects.value.length} projects` },
           { text: `${previews.value} previews`, tone: previews.value ? 'ok' : '' },
           { text: `${claudes.value} Claude`, tone: claudes.value ? 'accent' : '' },
+        ]
+      : [{ text: 'loading…' }],
+  },
+  {
+    to: '/deals', icon: '🏷️', name: 'Deals', hue: 95,
+    line: 'Kleinanzeigen finds in Berlin, pushed to Telegram the moment they appear.',
+    chips: deals.value
+      ? [
+          { text: `${deals.value.status?.enabled ?? 0} searches` },
+          { text: `${dealsFresh.value} new today`, tone: dealsFresh.value ? 'accent' : '' },
         ]
       : [{ text: 'loading…' }],
   },

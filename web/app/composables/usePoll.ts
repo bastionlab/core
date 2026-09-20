@@ -33,3 +33,4 @@ export function useShared<T>(key: string, url: string) {
 export const useOverview = () => useShared<any>('overview', '/api/overview')
 export const useMedia = () => useShared<any>('media', '/api/media')
 export const useProjects = () => useShared<any[]>('projects', '/api/projects')
+export const useDeals = () => useShared<any>('deals', '/api/deals')
