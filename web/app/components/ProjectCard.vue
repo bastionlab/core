@@ -7,6 +7,7 @@ const error = ref('')
 const showPush = ref(false)
 const message = ref('')
 const profile = ref<'noven' | 'work'>('noven')
+const visibility = ref<'private' | 'public'>('private')
 
 const g = computed(() => props.p.git ?? {})
 const state = computed(() => (props.p.running ? 'running' : props.p.exited != null ? `exited (${props.p.exited})` : 'stopped'))
@@ -118,8 +119,20 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
         </span>
         <button v-else class="btn danger" :disabled="!!busy" @click="call('cc', 'stop')">■ Claude</button>
 
-        <button class="btn" :disabled="!g.remote" title="git fetch --prune" @click="emit('action', 'git_fetch', { vmid: box.vmid, path: p.path })">↻ Fetch</button>
-        <button class="btn" :class="{ primary: canPush }" :disabled="!g.remote" @click="showPush = !showPush">↑ Push</button>
+        <template v-if="g.remote">
+          <button class="btn" title="git fetch --prune" @click="emit('action', 'git_fetch', { vmid: box.vmid, path: p.path })">↻ Fetch</button>
+          <button class="btn" :class="{ primary: canPush }" @click="showPush = !showPush">↑ Push</button>
+        </template>
+        <!-- no remote yet: create the repo on GitHub and push it there -->
+        <span v-else class="combo">
+          <button class="btn" title="create the GitHub repo and push this project to it" @click="emit('action', 'github_publish', { vmid: box.vmid, path: p.path, visibility })">
+            ⇪ To GitHub
+          </button>
+          <select v-model="visibility" title="repo visibility">
+            <option value="private">🔒</option>
+            <option value="public">pub</option>
+          </select>
+        </span>
       </div>
 
       <div v-if="showPush" class="pushbox">
@@ -165,7 +178,7 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
 .url { padding: 3px 10px; border-radius: 6px; background: var(--ok-soft); color: var(--ok); font-size: 13px; }
 .url.pending { background: var(--panel); color: var(--muted); }
 .cc { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.acts { display: flex; gap: 6px; margin-top: auto; padding-top: 6px; flex-wrap: nowrap; align-items: center; }
+.acts { display: flex; gap: 6px; margin-top: auto; padding-top: 6px; flex-wrap: wrap; align-items: center; }
 .acts .btn { flex: 1 1 auto; justify-content: center; padding: 5px 10px; min-width: max-content; }
 .combo { display: flex; flex: 1 1 auto; min-width: max-content; }
 .combo .btn { flex: 1; border-radius: 7px 0 0 7px; border-right: 0; }

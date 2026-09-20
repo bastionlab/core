@@ -18,6 +18,7 @@ TOKEN = (HERE / "token").read_text().strip()
 TSKEY = Path("/root/devbox/keys/tailscale_authkey")
 TSKEY_DAYS = 90
 PV = "/usr/local/bin/pv"
+GH_NEW = "/root/dashboard/agent/gh-new"
 POOL = ThreadPoolExecutor(8)
 GH_TOKEN_FILE = Path("/root/devbox/keys/github_token")
 GH_USER_FILE = Path("/root/devbox/keys/github_user")
@@ -834,7 +835,34 @@ def a_project_new(args):
         if not re.fullmatch(r"(?:git@[\w.-]+:[\w.-]+/[\w.-]+|https://[\w.-]+/[\w.-]+/[\w.-]+)(?:\.git)?", repo):
             raise ValueError("repo must be git@host:owner/name or https://host/owner/name")
         return f"clone {repo} into ~/Projects/GitHub/{name} on {box}", _pct(vmid, PV, "new", name, repo), 1800
+    if args.get("github"):
+        if not GH_TOKEN_FILE.exists():
+            raise ValueError("creating repos on GitHub needs a token (repo scope) in /root/devbox/keys/github_token")
+        vis = _visibility(args)
+        return (f"create ~/Projects/GitHub/{name} on {box}, create the {vis} GitHub repo {_gh_user()}/{name} and push it",
+                ["python3", GH_NEW, "new", str(vmid), name, vis], 1800)
     return f"create a new git project ~/Projects/GitHub/{name} on {box}", _pct(vmid, PV, "new", name), 600
+
+
+def _visibility(args):
+    vis = str(args.get("visibility", "private"))
+    if vis not in ("private", "public"):
+        raise ValueError("visibility must be private or public")
+    return vis
+
+
+def a_github_publish(args):
+    """an existing project that has no remote yet: create the repo on GitHub and push it there"""
+    vmid, path, _box = _dev_project(args)
+    if not GH_TOKEN_FILE.exists():
+        raise ValueError("creating repos on GitHub needs a token (repo scope) in /root/devbox/keys/github_token")
+    name = str(args.get("name") or path.rstrip("/").split("/")[-1])
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,40}", name):
+        raise ValueError("repo name: letters, digits, dot, dash, underscore")
+    vis = _visibility(args)
+    box = next((c["name"] for c in cts() if c["vmid"] == vmid), vmid)
+    return (f"create the {vis} GitHub repo {_gh_user()}/{name} and push {path} on {box} to it",
+            ["python3", GH_NEW, "publish", str(vmid), path, name, vis], 1800)
 
 
 MODEL_RE = re.compile(r"^[a-zA-Z0-9][\w.:/-]{0,80}$")
@@ -880,6 +908,7 @@ ACTIONS = {
     "apt_upgrade_all": a_apt_upgrade_all, "zfs_scrub": a_zfs_scrub,
     "unit_start": a_unit_start, "ollama_pull": a_ollama_pull, "ollama_stop": a_ollama_stop, "newdev": a_newdev,
     "git_push": a_git_push, "git_fetch": a_git_fetch, "project_new": a_project_new,
+    "github_publish": a_github_publish,
 }
 
 JOBS, JOBS_LOCK = {}, threading.Lock()

@@ -20,7 +20,8 @@ const CATALOG: { scopes: Scope[], line: string }[] = [
   { scopes: ['dev', 'metrics', 'chat'], line: 'newdev — args: vmid (200-299), name, ip (192.168.1.60-99). Creates a dev box.' },
   { scopes: ['dev', 'chat'], line: 'git_push — args: vmid (the dev box), path (the project path), message (optional). With a message it commits everything first; without one it only pushes commits that already exist.' },
   { scopes: ['dev', 'chat'], line: 'git_fetch — args: vmid, path. Fetches from GitHub so ahead/behind is current.' },
-  { scopes: ['dev', 'chat'], line: 'project_new — args: vmid, name, repo (optional git@github.com:owner/name). Clones that repo into ~/Projects/GitHub/<name>, or scaffolds a fresh git project there.' },
+  { scopes: ['dev', 'chat'], line: 'project_new — args: vmid, name, repo (optional git@github.com:owner/name), github (optional true), visibility (private or public, default private). With repo it clones that repo into ~/Projects/GitHub/<name>. With github: true it scaffolds the project AND creates the GitHub repo for it, then pushes. With neither it only scaffolds locally.' },
+  { scopes: ['dev', 'chat'], line: 'github_publish — args: vmid, path, name (optional, defaults to the folder name), visibility (private or public, default private). For a project that exists but has no remote: creates the GitHub repo and pushes it there. Never propose it for a project that already has one.' },
 ]
 
 export function actionTool(scope: Scope = 'metrics') {
