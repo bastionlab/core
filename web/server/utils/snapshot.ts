@@ -118,7 +118,7 @@ Current Ollama catalog (checked 2026-09-19; MoE = mixture-of-experts, total/acti
 export const PLACES_HOST = `
 ## Where things live on this machine
 Proxmox host "pve" at 192.168.1.50, one NVMe (system + local-lvm) and the ZFS pools "tank" (data, mounted /tank) and "backup" (mounted /backup, holds vzdump images and syncoid replicas of tank).
-Containers: CT 101 immich (photos, /tank/fotos → /mnt/fotos), CT 102 jf (Jellyfin), CT 103 musik (Navidrome + Audiobookshelf), CT 104 dash (this dashboard, Nuxt on 127.0.0.1:3000, published by tailscale serve), CT 105 ai (Ollama + Open WebUI + SearXNG, RTX 3060 passed through, models on a 150 GB NVMe volume at /models), CT 106 dl (the VPN-isolated download stack), CT 200-299 dev boxes.
+Containers: CT 101 immich (photos, /tank/fotos → /mnt/fotos), CT 102 jf (Jellyfin), CT 103 musik (Audiobookshelf; the container is still named musik, music hosting was dropped), CT 104 dash (this dashboard, Nuxt on 127.0.0.1:3000, published by tailscale serve), CT 105 ai (Ollama + Open WebUI + SearXNG, RTX 3060 passed through, models on a 150 GB NVMe volume at /models), CT 106 dl (the VPN-isolated download stack), CT 200-299 dev boxes.
 Everything is reachable on the LAN (192.168.1.0/24) and through Tailscale; nothing is forwarded from the router.
 `
 
@@ -128,7 +128,6 @@ One tree on the host: /tank/medien on the ZFS pool "tank". Every app sees a slic
 - /tank/medien/filme — films. Jellyfin (CT 102) sees it as /mnt/filme, Radarr (CT 106) writes it as /data/filme.
 - /tank/medien/serien — series. Jellyfin /mnt/serien, Sonarr /data/serien.
 - /tank/medien/anime — anime. Jellyfin /mnt/anime, second Sonarr root /data/anime.
-- /tank/medien/musik — music (own ZFS dataset). Navidrome (CT 103) /mnt/musik, Lidarr (CT 106) /data/musik.
 - /tank/medien/hoerbuecher — audiobooks (own ZFS dataset). Audiobookshelf (CT 103) /mnt/hoerbuecher, LazyLibrarian /data/hoerbuecher.
 - /tank/medien/downloads — qBittorrent's incomplete + finished downloads, /data/downloads in CT 106.
 The whole tree is one mount inside CT 106 (/mnt/medien → /data), so the *arr apps hardlink a finished download into the library instead of copying it: the library copy and the seeding torrent are the same bytes on disk. That is why the apparent size is much larger than the ZFS "used".
@@ -179,7 +178,6 @@ export function mediaSnapshot(m: any) {
   if (lib.movies) L.push(`Movies (Radarr): ${lib.movies.have} of ${lib.movies.total} downloaded, ${gb(lib.movies.size)}`)
   if (lib.series) L.push(`Series (Sonarr): ${lib.series.total} shows, ${lib.series.episodes} episodes, ${lib.series.missing} missing, ${gb(lib.series.size)}`)
   if (lib.anime) L.push(`Anime (Sonarr, root /data/anime): ${lib.anime.total} shows, ${lib.anime.episodes} episodes, ${lib.anime.missing} missing, ${gb(lib.anime.size)}`)
-  if (lib.music) L.push(`Music (Lidarr): ${lib.music.artists} artists, ${lib.music.albums} albums, ${lib.music.tracks} tracks, ${gb(lib.music.size)}`)
   if (lib.books) L.push(`Audiobooks (LazyLibrarian): ${lib.books.total} books, ${lib.books.wanted} wanted`)
 
   const s = m.sizes ?? {}
@@ -226,8 +224,8 @@ export function homeSnapshot(o: any) {
 }
 
 export const SCOPE_HINT: Record<string, string> = {
-  home: 'You are the assistant embedded in the dashboard HOME page, which lists the apps the household opens (photos, films, music, audiobooks, requests, AI chat) and links to the Media, Dev, Metrics and Chat pages. Read a vague question as being about those apps or the server as a whole, and point at the page where the detail lives.',
-  media: 'You are the assistant embedded in the MEDIA page. Everything here is the VPN-isolated download stack in CT 106 (gluetun, qBittorrent, Prowlarr, Radarr, Sonarr, Lidarr, LazyLibrarian, Bazarr, Seerr) and the libraries it fills (Jellyfin, Navidrome, Audiobookshelf). Assume a question is about media unless it clearly is not: "is it stuck?" means a download, "how much space?" means the library, "where is that?" means a path under /tank/medien, "is it safe?" means the VPN. Judge the VPN from the kill switch, the exit IP vs the home IP and the forwarded port. Use the paths below verbatim instead of guessing them.',
+  home: 'You are the assistant embedded in the dashboard HOME page, which lists the apps the household opens (photos, films, audiobooks, requests, AI chat) and links to the Media, Dev, Metrics and Chat pages. Read a vague question as being about those apps or the server as a whole, and point at the page where the detail lives.',
+  media: 'You are the assistant embedded in the MEDIA page. Everything here is the VPN-isolated download stack in CT 106 (gluetun, qBittorrent, Prowlarr, Radarr, Sonarr, LazyLibrarian, Bazarr, Seerr) and the libraries it fills (Jellyfin, Audiobookshelf). Assume a question is about media unless it clearly is not: "is it stuck?" means a download, "how much space?" means the library, "where is that?" means a path under /tank/medien, "is it safe?" means the VPN. Judge the VPN from the kill switch, the exit IP vs the home IP and the forwarded port. Use the paths below verbatim instead of guessing them.',
   dev: 'You are the assistant embedded in the DEV page: the dev boxes (LXC tagged dev), the projects in ~/Projects, their previews shared on the tailnet, their git/GitHub state and their Claude Code sessions. Assume a question is about the owner\'s code and these boxes: "what is running?" means previews and Claude sessions, "is it pushed?" means the git state below. Propose git_push / git_fetch / project_new when they want work pushed or a project created.',
   metrics: 'You are the assistant embedded in the METRICS page: the whole machine — host, GPU, containers, storage, backups, ports, tailnet, package updates. Answer with numbers from the snapshot, and propose apt_upgrade / apt_upgrade_all / backup_ct / zfs_scrub when something is behind.',
   chat: 'You are the general assistant on the dashboard CHAT page. The server snapshot is below if it is relevant, but most questions here are ordinary questions — answer them normally and use your web tools for anything current.',

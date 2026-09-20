@@ -26,9 +26,8 @@ const busy = computed(() => Object.values(q.value).flat().filter((i: any) => (i?
       </div>
 
       <h2 class="sec">Downloading <span class="muted small">{{ busy ? `${busy} downloading right now` : 'nothing moving right now' }}</span></h2>
-      <div class="grid cols-3">
+      <div class="grid cols-2">
         <QueuePanel id="q-video" title="Films & series" :items="video" empty="No films or episodes queued" />
-        <QueuePanel id="q-music" title="Music" :items="q.music ?? []" empty="Nothing queued in Lidarr" />
         <QueuePanel id="q-books" title="Audiobooks" :items="q.books ?? []" empty="Nothing queued in LazyLibrarian" />
       </div>
 

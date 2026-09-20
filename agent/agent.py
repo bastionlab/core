@@ -309,7 +309,7 @@ MEDIA_CT = 106
 MEDIA_IP = "192.168.1.56"
 MEDIA_ROOT = Path("/tank/medien")
 # app -> (port, api version, root folder the app owns)
-ARR = {"radarr": (7878, "v3"), "sonarr": (8989, "v3"), "lidarr": (8686, "v1"), "prowlarr": (9696, "v1")}
+ARR = {"radarr": (7878, "v3"), "sonarr": (8989, "v3"), "prowlarr": (9696, "v1")}
 QB = (8080, "admin")
 LL_PORT = 5299
 
@@ -328,7 +328,7 @@ def http_json(url, headers=None, timeout=15, data=None):
 def media_keys():
     """API keys stay on the host: read out of CT 106's configs, never sent to the dashboard"""
     keys = {}
-    for app in ("radarr", "sonarr", "lidarr", "prowlarr"):
+    for app in ("radarr", "sonarr", "prowlarr"):
         m = re.search(r"<ApiKey>([^<]+)</ApiKey>",
                       sh("pct", "exec", str(MEDIA_CT), "--", "cat", f"/opt/media/{app}/config.xml", timeout=15))
         if m:
@@ -510,13 +510,6 @@ def library():
             g["size"] += st.get("sizeOnDisk") or 0
         return groups
 
-    def music():
-        a = arr("lidarr", "artist") or []
-        st = [x.get("statistics") or {} for x in a]
-        return {"artists": len(a), "albums": sum(x.get("albumCount") or 0 for x in st),
-                "tracks": sum(x.get("trackFileCount") or 0 for x in st),
-                "size": sum(x.get("sizeOnDisk") or 0 for x in st)}
-
     def books():
         b = lazylibrarian("getAllBooks") or []
         b = b if isinstance(b, list) else []
@@ -524,7 +517,7 @@ def library():
                 "wanted": len(lazylibrarian("getWanted") or [])}
 
     parts = {"movies": POOL.submit(movies), "series": POOL.submit(series),
-             "music": POOL.submit(music), "books": POOL.submit(books)}
+             "books": POOL.submit(books)}
     out = {}
     for k, f in parts.items():
         try:
@@ -558,7 +551,6 @@ def media():
         "sizes": POOL.submit(media_sizes),
         "movies": POOL.submit(q, "radarr", "movies", includeMovie="true"),
         "series": POOL.submit(q, "sonarr", "series", includeSeries="true", includeEpisode="true"),
-        "music": POOL.submit(q, "lidarr", "music", includeArtist="true", includeAlbum="true"),
     }
     res = {}
     for k, f in parts.items():
@@ -566,7 +558,7 @@ def media():
             res[k] = f.result(timeout=60)
         except Exception as e:
             res[k] = {"error": str(e)[:200]}
-    queues = {"movies": res["movies"], "series": res["series"], "music": res["music"],
+    queues = {"movies": res["movies"], "series": res["series"],
               "books": bare_torrents(torrents, "lazylibrarian", "books")}
     active = [t for t in torrents.values() if t.get("dlspeed") or t.get("state") in ("downloading", "stalledDL", "metaDL")]
     return {"time": int(time.time()), "vpn": res["vpn"], "library": res["library"], "sizes": res["sizes"],
@@ -682,7 +674,6 @@ SERVICES = {
     "immich": (101, "docker", "immich_server"),
     "immich-ml": (101, "docker", "immich_machine_learning"),
     "jellyfin": (102, "docker", "jellyfin"),
-    "navidrome": (103, "docker", "navidrome"),
     "audiobookshelf": (103, "docker", "audiobookshelf"),
     # download stack (CT 106). Restarting gluetun drops the network namespace
     # that qbittorrent, prowlarr and flaresolverr share; media-vpn-sync.service
@@ -693,7 +684,6 @@ SERVICES = {
     "radarr": (106, "docker", "radarr"),
     "sonarr": (106, "docker", "sonarr"),
     "bazarr": (106, "docker", "bazarr"),
-    "lidarr": (106, "docker", "lidarr"),
     "lazylibrarian": (106, "docker", "lazylibrarian"),
     "gluetun": (106, "docker", "gluetun"),
     "subgen": (105, "docker", "subgen"),

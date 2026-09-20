@@ -9,8 +9,6 @@ const cards = computed(() => [
     size: l.value.series?.size, note: l.value.series?.missing ? `${l.value.series.missing} episodes missing` : 'nothing missing', app: 'Sonarr' },
   { icon: '🌸', name: 'Anime', have: l.value.anime?.episodes, of: null, unit: `episodes in ${plural(l.value.anime?.total, 'show')}`,
     size: l.value.anime?.size, note: l.value.anime?.missing ? `${l.value.anime.missing} episodes missing` : 'nothing missing', app: 'Sonarr' },
-  { icon: '🎵', name: 'Music', have: l.value.music?.tracks, of: null, unit: `tracks · ${plural(l.value.music?.albums, 'album')} · ${plural(l.value.music?.artists, 'artist')}`,
-    size: l.value.music?.size, note: l.value.music?.artists ? '' : 'no artists added yet', app: 'Lidarr' },
   { icon: '🎧', name: 'Audiobooks', have: l.value.books?.total, of: null, unit: 'books',
     size: props.sizes?.dirs?.hoerbuecher, note: l.value.books?.wanted ? `${l.value.books.wanted} wanted` : 'nothing wanted', app: 'LazyLibrarian' },
 ])

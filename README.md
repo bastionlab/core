@@ -4,8 +4,8 @@ https://dash.example-tailnet.ts.net/ — tailnet only. Five pages, each with its
 
 | page | what lives there |
 |---|---|
-| `/` **Apps** | only the apps you actually open (Immich, Jellyfin, Seerr, Navidrome, Audiobookshelf, Open WebUI) + one card per topic |
-| `/media` | the download stack: VPN verdict, queues split into films/series, music and audiobooks, library counts, disk usage, the *arr admin UIs |
+| `/` **Apps** | only the apps you actually open (Immich, Jellyfin, Seerr, Audiobookshelf, Open WebUI) + one card per topic |
+| `/media` | the download stack: VPN verdict, queues split into films/series and audiobooks, library counts, disk usage, the *arr admin UIs |
 | `/dev` | dev boxes, projects, previews, git/GitHub state, push, Claude Code sessions, new project |
 | `/metrics` | host, GPU, storage, backups, containers, ports, tailnet |
 | `/chat` | a light Open WebUI: conversation history in the browser, same local models |

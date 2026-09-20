@@ -9,7 +9,7 @@ type Scope = 'home' | 'media' | 'dev' | 'metrics' | 'chat'
 const ALL: Scope[] = ['home', 'media', 'dev', 'metrics', 'chat']
 
 const CATALOG: { scopes: Scope[], line: string }[] = [
-  { scopes: ALL, line: 'service_restart — args: service, one of dash, ollama, open-webui, searxng, immich, immich-ml, jellyfin, navidrome, audiobookshelf, seerr, qbittorrent, prowlarr, radarr, sonarr, lidarr, lazylibrarian, bazarr, gluetun, subgen. Restarting gluetun rotates the VPN server; media-vpn-sync re-attaches the clients.' },
+  { scopes: ALL, line: 'service_restart — args: service, one of dash, ollama, open-webui, searxng, immich, immich-ml, jellyfin, audiobookshelf, seerr, qbittorrent, prowlarr, radarr, sonarr, lazylibrarian, bazarr, gluetun, subgen. Restarting gluetun rotates the VPN server; media-vpn-sync re-attaches the clients.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'backup_ct — args: vmid. vzdump backup of one container.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'ct_start / ct_shutdown / ct_reboot — args: vmid. Container power state.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'apt_upgrade — args: target, either "host" or a container id. Runs apt update && apt upgrade.' },
