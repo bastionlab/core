@@ -45,7 +45,13 @@ const updates = computed(() => (o.value?.updates?.host?.count ?? 0)
         <TailnetPanel :t="o.tailnet" :now="now" />
       </div>
 
-      <div class="grid"><ContainersPanel :cts="o.cts" :updates="o.updates" sub="every LXC on the host" /></div>
+      <div class="grid">
+        <ContainersPanel
+          :cts="o.cts" :updates="o.updates" all
+          sub="every LXC on the host — update one, or the host and all of them at once"
+          @action="(n, a) => run(n, a, refresh)"
+        />
+      </div>
       <div class="grid"><PortsPanel :ports="o.ports" :cts="o.cts" /></div>
 
       <h2 class="sec">Infrastructure</h2>

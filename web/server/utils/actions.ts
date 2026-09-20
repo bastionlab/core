@@ -13,6 +13,7 @@ const CATALOG: { scopes: Scope[], line: string }[] = [
   { scopes: ['home', 'metrics', 'chat'], line: 'backup_ct — args: vmid. vzdump backup of one container.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'ct_start / ct_shutdown / ct_reboot — args: vmid. Container power state.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'apt_upgrade — args: target, either "host" or a container id. Runs apt update && apt upgrade.' },
+  { scopes: ['home', 'metrics', 'chat'], line: 'apt_upgrade_all — no args. Upgrades packages on the pve host AND in every running container, one after the other. Propose this when the owner wants everything updated; use apt_upgrade for a single target.' },
   { scopes: ['metrics', 'chat'], line: 'zfs_scrub — args: pool, either "tank" or "backup".' },
   { scopes: ['metrics', 'chat'], line: 'unit_start — args: unit, either "sanoid.service" (snapshot now) or "syncoid.service" (replicate to the backup pool now).' },
   { scopes: ['home', 'metrics', 'chat'], line: 'ollama_pull — args: model. Downloads it into CT 105. ollama_stop — args: model. Unloads it from VRAM.' },

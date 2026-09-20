@@ -110,6 +110,40 @@ Current Ollama catalog (checked 2026-09-19; MoE = mixture-of-experts, total/acti
 - Huge models (qwen3.8-flash-next 125B, ornith-1.5:397b, mistral-medium-3.5 128B) and "cloud" models do not run locally on this box.
 `
 
+
+// ---------------------------------------------------------------------------
+// Where things physically live. Static facts (they change only when the server is rebuilt), so they cost
+// few tokens and save the model from guessing paths — the thing it is otherwise worst at on this box.
+
+export const PLACES_HOST = `
+## Where things live on this machine
+Proxmox host "pve" at 192.168.1.50, one NVMe (system + local-lvm) and the ZFS pools "tank" (data, mounted /tank) and "backup" (mounted /backup, holds vzdump images and syncoid replicas of tank).
+Containers: CT 101 immich (photos, /tank/fotos → /mnt/fotos), CT 102 jf (Jellyfin), CT 103 musik (Navidrome + Audiobookshelf), CT 104 dash (this dashboard, Nuxt on 127.0.0.1:3000, published by tailscale serve), CT 105 ai (Ollama + Open WebUI + SearXNG, RTX 3060 passed through, models on a 150 GB NVMe volume at /models), CT 106 dl (the VPN-isolated download stack), CT 200-299 dev boxes.
+Everything is reachable on the LAN (192.168.1.0/24) and through Tailscale; nothing is forwarded from the router.
+`
+
+export const PLACES_MEDIA = `
+## Where media lives (ask "where is X stored?" and answer from this)
+One tree on the host: /tank/medien on the ZFS pool "tank". Every app sees a slice of it:
+- /tank/medien/filme — films. Jellyfin (CT 102) sees it as /mnt/filme, Radarr (CT 106) writes it as /data/filme.
+- /tank/medien/serien — series. Jellyfin /mnt/serien, Sonarr /data/serien.
+- /tank/medien/anime — anime. Jellyfin /mnt/anime, second Sonarr root /data/anime.
+- /tank/medien/musik — music (own ZFS dataset). Navidrome (CT 103) /mnt/musik, Lidarr (CT 106) /data/musik.
+- /tank/medien/hoerbuecher — audiobooks (own ZFS dataset). Audiobookshelf (CT 103) /mnt/hoerbuecher, LazyLibrarian /data/hoerbuecher.
+- /tank/medien/downloads — qBittorrent's incomplete + finished downloads, /data/downloads in CT 106.
+The whole tree is one mount inside CT 106 (/mnt/medien → /data), so the *arr apps hardlink a finished download into the library instead of copying it: the library copy and the seeding torrent are the same bytes on disk. That is why the apparent size is much larger than the ZFS "used".
+The download stack runs as docker containers in CT 106 "dl"; qBittorrent, Prowlarr and FlareSolverr share gluetun's network namespace, so they are only reachable while the VPN tunnel is up, and their configs live in /opt/media/<app> in that container.
+Photos are NOT here: they are Immich in CT 101 on /tank/fotos. Backups of tank go to the "backup" pool via syncoid, snapshots via sanoid.
+`
+
+export const PLACES_DEV = `
+## Where code lives
+Projects sit on dev boxes (LXC 200-299, tagged "dev", users max) under ~/Projects (git repos up to 3 levels deep; cloned ones land in ~/Projects/GitHub/<name>).
+Each box has the "pv" CLI (/usr/local/bin/pv): it starts a project's dev command in a tmux session "pv-<id>", shares the ports it listens on over Tailscale, and runs Claude Code in "cc-<id>". Attach from anywhere with ssh -t max@<box> tmux a -t <session>.
+A project's dev command comes from its package.json, or from <project>/.dashboard.yml when it needs an override.
+GitHub: the owner's account is linked in the GitHub panel on this page; clones use the dev box's SSH key. The dashboard itself lives on the host in /root/dashboard (agent + Nuxt app), not on a dev box.
+`
+
 // ---------------------------------------------------------------------------
 // Scoped snapshots: each dashboard page asks about its own topic, so the model
 // gets that topic in full instead of the whole homelab in summary.
@@ -192,9 +226,9 @@ export function homeSnapshot(o: any) {
 }
 
 export const SCOPE_HINT: Record<string, string> = {
-  home: 'You are on the dashboard home page, which lists the apps the household opens (photos, films, music, audiobooks, requests, AI chat). Answer about those and about the server in general; send the owner to the Media, Dev, Metrics or Chat page when the detail lives there.',
-  media: 'You are on the Media page: the VPN-isolated download stack (gluetun, qBittorrent, Prowlarr, Radarr, Sonarr, Lidarr, LazyLibrarian, Bazarr, Seerr) and the libraries it fills (Jellyfin, Navidrome, Audiobookshelf). Answer about downloads, the VPN, the libraries and disk usage. If the owner asks whether the VPN is safe, judge it from the kill switch, the exit IP vs the home IP and the forwarded port.',
-  dev: 'You are on the Dev page: dev boxes (LXC containers tagged dev), the projects in ~/Projects, their dev previews shared on the tailnet, their git/GitHub state and Claude Code sessions. Answer about those, and propose git_push / git_fetch / project_new when the owner wants work pushed or a project created.',
-  metrics: 'You are on the Metrics page: the whole machine — host, GPU, containers, storage, backups, ports, tailnet. Answer with numbers from the snapshot.',
-  chat: 'You are the general assistant on the dashboard chat page. The server snapshot is below if it is relevant, but most questions here are ordinary questions — answer them normally and use your web tools for anything current.',
+  home: 'You are the assistant embedded in the dashboard HOME page, which lists the apps the household opens (photos, films, music, audiobooks, requests, AI chat) and links to the Media, Dev, Metrics and Chat pages. Read a vague question as being about those apps or the server as a whole, and point at the page where the detail lives.',
+  media: 'You are the assistant embedded in the MEDIA page. Everything here is the VPN-isolated download stack in CT 106 (gluetun, qBittorrent, Prowlarr, Radarr, Sonarr, Lidarr, LazyLibrarian, Bazarr, Seerr) and the libraries it fills (Jellyfin, Navidrome, Audiobookshelf). Assume a question is about media unless it clearly is not: "is it stuck?" means a download, "how much space?" means the library, "where is that?" means a path under /tank/medien, "is it safe?" means the VPN. Judge the VPN from the kill switch, the exit IP vs the home IP and the forwarded port. Use the paths below verbatim instead of guessing them.',
+  dev: 'You are the assistant embedded in the DEV page: the dev boxes (LXC tagged dev), the projects in ~/Projects, their previews shared on the tailnet, their git/GitHub state and their Claude Code sessions. Assume a question is about the owner\'s code and these boxes: "what is running?" means previews and Claude sessions, "is it pushed?" means the git state below. Propose git_push / git_fetch / project_new when they want work pushed or a project created.',
+  metrics: 'You are the assistant embedded in the METRICS page: the whole machine — host, GPU, containers, storage, backups, ports, tailnet, package updates. Answer with numbers from the snapshot, and propose apt_upgrade / apt_upgrade_all / backup_ct / zfs_scrub when something is behind.',
+  chat: 'You are the general assistant on the dashboard CHAT page. The server snapshot is below if it is relevant, but most questions here are ordinary questions — answer them normally and use your web tools for anything current.',
 }

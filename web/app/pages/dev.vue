@@ -30,8 +30,6 @@ const dirty = computed(() => all.value.filter((p: any) => p.git?.dirty || p.git?
 
     <JobList :jobs="jobs" @dismiss="dismiss" />
 
-    <div class="grid"><NewProjectPanel :boxes="boxes ?? []" @action="act" /></div>
-
     <div v-if="!boxes && pending" class="muted pad">Loading dev boxes…</div>
     <Panel v-for="box in boxes ?? []" :key="box.vmid" :title="box.name" :sub="`CT ${box.vmid} · ${box.ip}`" class="box">
       <template #actions>
@@ -42,11 +40,16 @@ const dirty = computed(() => all.value.filter((p: any) => p.git?.dirty || p.git?
       <div class="projects">
         <ProjectCard v-for="p in box.projects" :key="p.path" :box="box" :p="p" @refresh="refresh" @action="act" />
       </div>
-      <div v-if="!box.projects?.length && !box.error" class="faint small">No projects yet — create one above.</div>
+      <div v-if="!box.projects?.length && !box.error" class="faint small">No projects yet — clone a repo or create one below.</div>
     </Panel>
 
+    <div class="grid two">
+      <GithubPanel :boxes="boxes ?? []" @action="act" />
+      <NewProjectPanel :boxes="boxes ?? []" @action="act" />
+    </div>
+
     <div v-if="o" class="grid">
-      <ContainersPanel title="Dev containers" sub="LXC boxes tagged dev" :cts="o.cts.filter((c: any) => c.tags?.includes('dev'))" :updates="o.updates" />
+      <ContainersPanel title="Dev containers" sub="LXC boxes tagged dev" :cts="o.cts.filter((c: any) => c.tags?.includes('dev'))" :updates="o.updates" @action="act" />
     </div>
   </div>
 </template>
@@ -55,5 +58,7 @@ const dirty = computed(() => all.value.filter((p: any) => p.git?.dirty || p.git?
 .summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .pad { padding: 40px 0; text-align: center; }
 .box { margin-bottom: 16px; }
-.projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+.projects { display: grid; grid-template-columns: repeat(auto-fit, minmax(640px, 1fr)); gap: 12px; }
+.two { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+@media (max-width: 900px) { .two { grid-template-columns: minmax(0, 1fr); } }
 </style>

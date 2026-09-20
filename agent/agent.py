@@ -4,7 +4,7 @@
 Serves JSON to the dashboard CT only (source IP + bearer token). It never runs caller-supplied
 commands: previews go through `pv` inside a CT tagged `dev`, for a project path that `pv ls` listed.
 """
-import json, os, re, subprocess, threading, time, urllib.error, urllib.request
+import json, os, re, shlex, subprocess, threading, time, urllib.error, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -20,6 +20,8 @@ TSKEY_DAYS = 90
 PV = "/usr/local/bin/pv"
 POOL = ThreadPoolExecutor(8)
 GH_TOKEN_FILE = Path("/root/devbox/keys/github_token")
+GH_USER_FILE = Path("/root/devbox/keys/github_user")
+GH_USER = "MaxJC0"
 
 
 def sh(*args, timeout=20):
@@ -624,24 +626,47 @@ def claude_code(action, vmid, path, profile="noven"):
     return json.loads(pv(vmid, "cc", path, profile, "--json", timeout=60))
 
 
+def _gh_user():
+    """the GitHub account this server belongs to — override by writing a name into keys/github_user"""
+    if GH_USER_FILE.exists():
+        name = GH_USER_FILE.read_text().strip()
+        if re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})", name):
+            return name
+    return GH_USER
+
+
+def _gh_repo(r):
+    return {"name": r["name"], "full": r["full_name"], "owner": r["owner"]["login"], "ssh": r["ssh_url"],
+            "url": r["html_url"], "private": r["private"], "fork": r.get("fork", False),
+            "archived": r.get("archived", False), "lang": r.get("language"), "stars": r.get("stargazers_count", 0),
+            "branch": r.get("default_branch"), "pushed": r.get("pushed_at"),
+            "desc": (r.get("description") or "")[:140]}
+
+
 @cached(120)
 def github_repos():
-    """the owner's repos, for the 'new project' picker — needs a token in /root/devbox/keys/github_token"""
-    if not GH_TOKEN_FILE.exists():
-        return {"configured": False, "repos": [],
-                "hint": "put a GitHub token (repo scope) in /root/devbox/keys/github_token to list and create repos"}
-    token = GH_TOKEN_FILE.read_text().strip()
+    """the owner's repos, for the project picker. With a token in keys/github_token this is every repo
+    (private included); without one we still list the public repos of keys/github_user (GH_USER)."""
+    user = _gh_user()
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "pve-dashboard"}
+    token = GH_TOKEN_FILE.read_text().strip() if GH_TOKEN_FILE.exists() else ""
+    if token:
+        url = "https://api.github.com/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator"
+        headers["Authorization"] = f"Bearer {token}"
+    else:
+        url = f"https://api.github.com/users/{user}/repos?per_page=100&sort=pushed"
+    out = {"configured": bool(token), "user": user, "url": f"https://github.com/{user}?tab=repositories",
+           "scope": "all repos incl. private" if token else "public repos only",
+           "repos": []}
+    if not token:
+        out["hint"] = ("listing public repos of " + user + " — put a GitHub token (repo scope) in "
+                       "/root/devbox/keys/github_token to see private ones too")
     try:
-        data = http_json("https://api.github.com/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator",
-                         {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
-                          "User-Agent": "pve-dashboard"}, timeout=25) or []
-        return {"configured": True, "repos": [{"name": r["name"], "full": r["full_name"], "ssh": r["ssh_url"],
-                                               "url": r["html_url"], "private": r["private"],
-                                               "lang": r.get("language"), "pushed": r.get("pushed_at"),
-                                               "desc": (r.get("description") or "")[:140]} for r in data]}
+        data = http_json(url, headers, timeout=25) or []
+        out["repos"] = [_gh_repo(r) for r in data]
     except Exception as e:
-        return {"configured": True, "repos": [], "error": str(e)[:200]}
-
+        out["error"] = str(e)[:200]
+    return out
 
 
 # --- actions -----------------------------------------------------------------
@@ -733,6 +758,20 @@ def a_apt_upgrade(args):
         return "upgrade packages on the pve host", ["sh", "-c", line], 3600
     c = _ct({"vmid": target}, running=True)
     return f"upgrade packages in CT {c['vmid']} {c['name']}", _pct(c["vmid"], "sh", "-c", line), 3600
+
+
+def a_apt_upgrade_all(args):
+    """host + every running container, one after the other. The script is built here from validated
+    container ids only — nothing the caller sends reaches the shell."""
+    ids = [c["vmid"] for c in cts() if c["status"] == "running" and c["type"] == "lxc"]
+    line = "apt-get update && apt-get -y -o Dpkg::Options::=--force-confold upgrade"
+    steps = [f'echo "=== pve host ==="; ({line}) || echo "host: FAILED"']
+    for vmid in ids:
+        name = next((c["name"] for c in cts() if c["vmid"] == vmid), "")
+        steps.append(f'echo; echo "=== CT {vmid} {name} ==="; '
+                     f'pct exec {vmid} -- sh -c {shlex.quote(line)} || echo "CT {vmid}: FAILED"')
+    return (f"upgrade packages everywhere: the pve host and {len(ids)} running containers",
+            ["sh", "-c", "; ".join(steps)], 4 * 3600)
 
 
 def a_zfs_scrub(args):
@@ -837,7 +876,8 @@ def a_newdev(args):
 
 ACTIONS = {
     "backup_ct": a_backup_ct, "ct_start": a_ct_start, "ct_shutdown": a_ct_shutdown, "ct_reboot": a_ct_reboot,
-    "service_restart": a_service_restart, "apt_upgrade": a_apt_upgrade, "zfs_scrub": a_zfs_scrub,
+    "service_restart": a_service_restart, "apt_upgrade": a_apt_upgrade,
+    "apt_upgrade_all": a_apt_upgrade_all, "zfs_scrub": a_zfs_scrub,
     "unit_start": a_unit_start, "ollama_pull": a_ollama_pull, "ollama_stop": a_ollama_stop, "newdev": a_newdev,
     "git_push": a_git_push, "git_fetch": a_git_fetch, "project_new": a_project_new,
 }

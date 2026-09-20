@@ -1,13 +1,36 @@
 <script setup lang="ts">
-withDefaults(defineProps<{ cts: any[], updates: any, title?: string, sub?: string }>(), { title: 'Containers' })
+const props = withDefaults(defineProps<{ cts: any[], updates: any, title?: string, sub?: string, all?: boolean }>(), { title: 'Containers' })
+const emit = defineEmits<{ action: [string, any] }>()
+
+/** pending package updates for one container, or null when the agent could not look */
+const pending = (vmid: number) => props.updates?.cts?.[vmid]?.count ?? null
+const hostPending = computed(() => props.updates?.host?.count ?? 0)
+const totalPending = computed(() => (props.all ? hostPending.value : 0)
+  + props.cts.reduce((s, c) => s + (pending(c.vmid) ?? 0), 0))
 </script>
 
 <template>
   <Panel id="containers" :title="title" :sub="sub">
+    <template #actions>
+      <button
+        v-if="all" class="btn" :class="{ primary: totalPending }"
+        :title="`apt update && apt upgrade on the pve host and every running container (${totalPending} package updates pending)`"
+        @click="emit('action', 'apt_upgrade_all', {})"
+      >
+        ⟳ Update everything<span v-if="totalPending" class="pill warn">{{ totalPending }}</span>
+      </button>
+      <button
+        v-if="all" class="btn" :class="{ primary: hostPending }" title="apt upgrade on the pve host itself"
+        @click="emit('action', 'apt_upgrade', { target: 'host' })"
+      >
+        ⟳ Host<span v-if="hostPending" class="pill warn">{{ hostPending }}</span>
+      </button>
+    </template>
+
     <div class="scroll-x">
       <table>
         <thead>
-          <tr><th>ID</th><th>Name</th><th>CPU</th><th>Memory</th><th>Disk</th><th class="num">Uptime</th><th class="num">Updates</th></tr>
+          <tr><th>ID</th><th>Name</th><th>CPU</th><th>Memory</th><th>Disk</th><th class="num">Uptime</th><th class="num">Updates</th><th /></tr>
         </thead>
         <tbody>
           <tr v-for="c in cts" :key="c.vmid">
@@ -34,10 +57,18 @@ withDefaults(defineProps<{ cts: any[], updates: any, title?: string, sub?: strin
             </td>
             <td class="num muted">{{ c.status === 'running' ? duration(c.uptime) : c.status }}</td>
             <td class="num">
-              <span v-if="updates?.cts?.[c.vmid]" :class="updates.cts[c.vmid].count ? 'warn' : 'faint'" :title="updates.cts[c.vmid].packages.join(', ')">
-                {{ updates.cts[c.vmid].count }}
+              <span v-if="pending(c.vmid) != null" :class="pending(c.vmid) ? 'warn' : 'faint'" :title="updates.cts[c.vmid].packages.join(', ')">
+                {{ pending(c.vmid) }}
               </span>
               <span v-else class="faint">–</span>
+            </td>
+            <td class="num">
+              <button
+                class="btn ghost small" :class="{ warn: pending(c.vmid) }"
+                :disabled="c.status !== 'running'"
+                :title="c.status === 'running' ? `apt update && apt upgrade in CT ${c.vmid} ${c.name}` : 'container is not running'"
+                @click="emit('action', 'apt_upgrade', { target: c.vmid })"
+              >⟳ Update</button>
             </td>
           </tr>
         </tbody>
@@ -47,10 +78,11 @@ withDefaults(defineProps<{ cts: any[], updates: any, title?: string, sub?: strin
 </template>
 
 <style scoped>
-table { min-width: 680px; }
+table { min-width: 760px; }
 .name { display: flex; align-items: center; gap: 8px; }
-.w { width: 16%; }
+.w { width: 15%; }
 .mini { height: 4px; background: var(--track); border-radius: 2px; overflow: hidden; margin-bottom: 3px; max-width: 140px; }
 .mini i { display: block; height: 100%; background: var(--accent); }
 .mini i.warn { background: var(--warn); } .mini i.bad { background: var(--bad); }
+.btn .pill { padding: 0 6px; font-size: 10.5px; }
 </style>
