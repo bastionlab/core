@@ -2,6 +2,7 @@
 useHead({ title: 'Deals · pve' })
 
 const selected = ref<number | null>(null)
+const shipping = ref<'all' | 'pickup' | 'ship'>('all')
 const hideDown = ref(true)
 
 // The feed is filtered in CT 107, not in the browser: with several searches a
@@ -13,16 +14,28 @@ const pending = ref(false)
 async function load() {
   pending.value = true
   try {
-    d.value = await $fetch('/api/deals', { query: { search: selected.value ?? undefined, limit: 120 } })
+    d.value = await $fetch('/api/deals', {
+      query: {
+        search: selected.value ?? undefined,
+        shipping: shipping.value === 'all' ? undefined : shipping.value,
+        limit: 120,
+      },
+    })
     error.value = null
   } catch (e: any) { error.value = e } finally { pending.value = false }
 }
 usePoll(load, 20000)
-watch(selected, load)
+watch([selected, shipping], load)
 
 const searches = computed(() => d.value?.searches ?? [])
 const st = computed(() => d.value?.status)
 const busyItem = ref('')
+
+const SHIP = [
+  { v: 'all' as const, label: 'Alle' },
+  { v: 'pickup' as const, label: '🚗 Abholen' },
+  { v: 'ship' as const, label: '📦 Versand' },
+]
 
 const tabs = computed(() => [
   { id: null as number | null, name: 'All', hits: searches.value.reduce((n: number, s: any) => n + (s.hits ?? 0), 0), enabled: true },
@@ -98,10 +111,15 @@ function onChanged() {
           :class="{ on: selected === t.id, off: !t.enabled }"
           @click="selected = t.id"
         >{{ t.name }} <span class="n">{{ t.hits }}</span></button>
+
+        <div class="seg">
+          <button v-for="o in SHIP" :key="o.v" :class="{ on: shipping === o.v }" @click="shipping = o.v">{{ o.label }}</button>
+        </div>
       </div>
 
       <div v-if="!feed.length" class="muted pad">
-        <template v-if="selected !== null">Nothing matched this search yet.</template>
+        <template v-if="shipping !== 'all'">Nothing here that is {{ shipping === 'pickup' ? 'pickup-only' : 'shippable' }}.</template>
+        <template v-else-if="selected !== null">Nothing matched this search yet.</template>
         <template v-else>
           Nothing yet. A search only starts pushing from its second poll — the first one just seeds
           what is already online so you do not get 25 notifications at once.
@@ -130,6 +148,10 @@ function onChanged() {
 .tab.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
 .tab.off { opacity: .55; }
 .tab .n { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
+.seg { margin-left: auto; display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--panel-2); }
+.seg button { padding: 4px 12px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.seg button:hover { color: var(--text); }
+.seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 14px; margin-bottom: 16px; }
 @media (max-width: 560px) { .cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
 </style>
