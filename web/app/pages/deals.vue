@@ -20,6 +20,7 @@ async function load() {
         search: selected.value ?? undefined,
         shipping: shipping.value === 'all' ? undefined : shipping.value,
         show: showRejected.value ? 'all' : 'passed',
+        hideDown: hideDown.value,
         limit: 120,
       },
     })
@@ -27,7 +28,7 @@ async function load() {
   } catch (e: any) { error.value = e } finally { pending.value = false }
 }
 usePoll(load, 20000)
-watch([selected, shipping, showRejected], load)
+watch([selected, shipping, showRejected, hideDown], load)
 
 const searches = computed(() => d.value?.searches ?? [])
 const st = computed(() => d.value?.status)
@@ -39,16 +40,21 @@ const SHIP = [
   { v: 'ship' as const, label: '📦 Versand' },
 ]
 
+// counts come from the server under the exact filters in force, so a tab's
+// number always equals the number of cards clicking it produces
+const counts = computed(() => d.value?.counts ?? { per_search: {}, total: 0 })
 const tabs = computed(() => [
-  { id: null as number | null, name: 'All', hits: searches.value.reduce((n: number, s: any) => n + (s.hits ?? 0), 0), enabled: true },
-  ...searches.value.map((s: any) => ({ id: s.id, name: s.name, hits: s.hits, enabled: !!s.enabled })),
+  { id: null as number | null, name: 'All', hits: counts.value.total, enabled: true },
+  ...searches.value.map((s: any) => ({
+    id: s.id,
+    name: s.name,
+    hits: counts.value.per_search?.[String(s.id)] ?? 0,
+    enabled: !!s.enabled,
+  })),
 ])
 
-const feed = computed(() => {
-  const list = d.value?.feed ?? []
-  return hideDown.value ? list.filter((i: any) => i.verdict !== 'down') : list
-})
-const hidden = computed(() => (d.value?.feed ?? []).length - feed.value.length)
+const feed = computed(() => d.value?.feed ?? [])
+const hidden = computed(() => (hideDown.value ? counts.value.thumbed_down ?? 0 : 0))
 
 // the poller writes every 8s; anything older than two minutes means it is not running
 const pollerOk = computed(() => st.value?.last_poll && Date.now() / 1000 - st.value.last_poll < 120)
