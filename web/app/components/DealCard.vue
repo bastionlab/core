@@ -32,7 +32,8 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
       <div class="meta small muted">
         <span v-if="item.district">{{ item.district }}</span>
         <span v-if="item.distance_km != null">{{ item.distance_km.toFixed(0) }} km</span>
-        <span v-if="item.shipping" class="pill">📦 Versand</span>
+        <!-- shipped is the derived meaning: KA's own flag is set by nearby sellers too -->
+        <span v-if="item.shipped" class="pill">📦 Versand</span>
         <span :class="{ accent: fresh }">{{ when }}</span>
       </div>
 
