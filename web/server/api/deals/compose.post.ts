@@ -20,9 +20,10 @@ const SCHEMA = {
     maxPrice: { type: ['integer', 'null'] },
     radius: { type: 'integer' },
     shipping: { type: 'string', enum: ['any', 'ship', 'pickup'] },
+    intent: { type: 'string' },
     note: { type: 'string' },
   },
-  required: ['name', 'keyword', 'terms', 'exclude', 'minPrice', 'maxPrice', 'radius', 'shipping', 'note'],
+  required: ['name', 'keyword', 'terms', 'exclude', 'minPrice', 'maxPrice', 'radius', 'shipping', 'intent', 'note'],
 }
 
 const SYSTEM = `Du baust Suchfilter fuer Kleinanzeigen.de. Aus einer Beschreibung in Alltagssprache machst du ein Filter-Objekt. Antworte NUR mit JSON.
@@ -45,6 +46,12 @@ Denke konkret an DIESE Produktkategorie. Alles klein. 4-10 Eintraege.
 Niemals Zustands- oder Wertungswoerter ausschliessen (nicht "neu", nicht "gebraucht"), die stehen in fast jeder guten Anzeige.
 
 minPrice / maxPrice: ganze Euro oder null. Nie 0 schreiben, dann null.
+intent: ein bis zwei deutsche Saetze, die beschreiben, was WIRKLICH als Treffer zaehlt.
+Hier gehoeren harte Bedingungen hinein, die Stichwoerter nicht ausdruecken koennen:
+Mindestgroessen ("mindestens 6 TB", "mindestens 27 Zoll"), ausgeschlossene Bauformen
+(keine Gehaeuse, keine Komplett-PCs, kein Zubehoer). Schreibe Zahlen immer als
+"mindestens N TB" oder "maximal N GB", nie als Bereich.
+
 radius: km um Berlin, Standard 10.
 shipping: "pickup" nur bei Abholung, "ship" wenn verschickt werden soll, sonst "any".
 note: ein kurzer deutscher Satz zu deinen Annahmen.
@@ -52,10 +59,10 @@ note: ein kurzer deutscher Satz zu deinen Annahmen.
 BEISPIELE
 
 Eingabe: gebrauchte 27 zoll monitore, am besten wqhd, nur abholen, maximal 150 euro
-{"name":"monitor","keyword":"monitor 27 zoll","terms":["27 zoll","27\\"","wqhd","1440p","qhd"],"exclude":["halterung","vesa","kabel","standfuss","defekt","kaputt","ersatzteil","tv","fernseher"],"minPrice":null,"maxPrice":150,"radius":10,"shipping":"pickup","note":"27-Zoll-Monitore bis 150 EUR, nur Abholung in Berlin."}
+{"name":"monitor","keyword":"monitor 27 zoll","terms":["27 zoll","27\\"","wqhd","1440p","qhd"],"exclude":["halterung","vesa","kabel","standfuss","defekt","kaputt","ersatzteil","tv","fernseher"],"minPrice":null,"maxPrice":150,"radius":10,"shipping":"pickup","intent":"Monitor mit mindestens 27 Zoll, moeglichst WQHD. Keine Halterungen, keine Kabel, keine Fernseher.","note":"27-Zoll-Monitore bis 150 EUR, nur Abholung in Berlin."}
 
 Eingabe: airpods pro, gerne auch verschickt, so bis 120
-{"name":"airpods","keyword":"airpods pro","terms":["airpods pro","airpods","pro 2"],"exclude":["huelle","case only","nur case","ladecase","ersatz","links","rechts","einzeln","replica","nachbau","defekt"],"minPrice":30,"maxPrice":120,"radius":10,"shipping":"ship","note":"AirPods Pro bis 120 EUR, Versand erlaubt; Mindestpreis gegen Faelschungen."}`
+{"name":"airpods","keyword":"airpods pro","terms":["airpods pro","airpods","pro 2"],"exclude":["huelle","case only","nur case","ladecase","ersatz","links","rechts","einzeln","replica","nachbau","defekt"],"minPrice":30,"maxPrice":120,"radius":10,"shipping":"ship","intent":"Vollstaendige AirPods Pro, beide Ohrhoerer plus Ladecase. Keine Einzelteile, keine Nachbauten, kein Zubehoer.","note":"AirPods Pro bis 120 EUR, Versand erlaubt; Mindestpreis gegen Faelschungen."}`
 
 /**
  * Words that appear in perfectly good listings. A small model likes to put
@@ -111,6 +118,7 @@ export default defineEventHandler(async (event) => {
     maxPrice: price(out.maxPrice),
     radius: Math.min(Math.max(Number(out.radius) || 10, 0), 200),
     shipping: ['any', 'ship', 'pickup'].includes(out.shipping) ? out.shipping : 'any',
+    intent: String(out.intent ?? '').trim().slice(0, 600),
     note: String(out.note ?? '').trim().slice(0, 300),
     model: MODEL,
   }

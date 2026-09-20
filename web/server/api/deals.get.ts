@@ -1,10 +1,10 @@
 /** the whole deals page in one call: poller health, the saved searches and the feed */
 export default defineEventHandler(async (event) => {
-  const { search, limit, verdict, shipping } = getQuery(event)
+  const { search, limit, verdict, shipping, show } = getQuery(event)
   const [status, searches, feed] = await Promise.all([
     deals(event, '/status'),
     deals(event, '/searches'),
-    deals(event, '/feed', { query: { limit: Number(limit) || 60, search: search || undefined, verdict: verdict || undefined, shipping: shipping || undefined } }),
+    deals(event, '/feed', { query: { limit: Number(limit) || 60, search: search || undefined, verdict: verdict || undefined, shipping: shipping || undefined, show: show || 'passed' } }),
   ])
   return { status, searches, feed }
 })

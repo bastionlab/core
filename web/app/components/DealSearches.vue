@@ -8,7 +8,7 @@ const SHIPPING = [
   { v: 'ship', label: 'nur Versand' },
 ]
 
-const blank = () => ({ name: '', keyword: '', terms: '', exclude: '', minPrice: '', maxPrice: '', radius: '10', shipping: 'any' })
+const blank = () => ({ name: '', keyword: '', terms: '', exclude: '', minPrice: '', maxPrice: '', radius: '10', shipping: 'any', intent: '' })
 /** null = closed, 'new' = adding, a number = editing that search */
 const editing = ref<'new' | number | null>(null)
 const form = reactive(blank())
@@ -34,6 +34,7 @@ function openEdit(s: any) {
     minPrice: sp.min_price ?? '',
     maxPrice: sp.max_price ?? '',
     radius: String(sp.radius_km ?? 10),
+    intent: sp.intent ?? '',
     // "only" is the old spelling of "ship"
     shipping: sp.shipping === 'only' ? 'ship' : (sp.shipping ?? 'any'),
   })
@@ -44,6 +45,10 @@ async function act(action: string, body: Record<string, any> = {}) {
   err.value = ''
   try {
     const r: any = await $fetch('/api/deals/action', { method: 'POST', body: { action, ...body } })
+    if (action === 'rejudge' && r) {
+      note.value = `KI: ${r.passed} behalten, ${r.filtered} aussortiert`
+      setTimeout(() => (note.value = ''), 8000)
+    }
     emit('changed')
     return r ?? true
   } catch (e: any) {
@@ -51,6 +56,8 @@ async function act(action: string, body: Record<string, any> = {}) {
     return null
   } finally { busy.value = '' }
 }
+
+const note = ref('')
 
 // --- ask the local model to fill the form ---------------------------------
 const wish = ref('')
@@ -75,7 +82,6 @@ async function compose() {
   } finally { composing.value = false }
 }
 
-const note = ref('')
 async function submit() {
   const isNew = editing.value === 'new'
   const r = await act(isNew ? 'add' : 'edit', isNew ? { ...form } : { id: editing.value, ...form })
@@ -130,6 +136,11 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
           </select>
         </label>
       </div>
+      <div class="row one">
+        <label>Worauf kommt es wirklich an? <span class="hint">die KI prüft jedes Inserat dagegen — leer lassen = nur Stichwörter</span>
+          <textarea v-model="form.intent" rows="2" placeholder="NAS-Festplatte mit mindestens 6 TB. Keine leeren Gehäuse, keine SSD." />
+        </label>
+      </div>
       <div class="row end">
         <span class="small muted">
           <template v-if="editing === 'new'">First poll only seeds — you get pushes from the next one on.</template>
@@ -154,11 +165,17 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
           <template v-if="s.spec?.exclude?.length"> · not: {{ s.spec.exclude.join(', ') }}</template>
           <template v-if="s.spec?.shipping && s.spec.shipping !== 'any'"> · {{ shipLabel(s.spec) }}</template>
         </div>
+        <div v-if="s.spec?.intent" class="small accent ell">✦ {{ s.spec.intent }}</div>
         <div v-if="s.last_error" class="small bad">{{ s.last_error }}</div>
       </div>
       <span class="small muted when">{{ s.last_polled_at ? ago(s.last_polled_at) : 'never' }}</span>
       <a class="btn ghost" :href="s.url" target="_blank" rel="noopener" title="Open this search on Kleinanzeigen">↗</a>
       <button class="btn ghost" title="Edit" @click="openEdit(s)">✎</button>
+      <button
+        v-if="s.spec?.intent" class="btn ghost" :disabled="!!busy"
+        title="Alle gespeicherten Inserate neu von der KI prüfen lassen"
+        @click="act('rejudge', { id: s.id, all: true })"
+      >{{ busy === 'rejudge' + s.id ? '✦…' : '✦' }}</button>
       <button class="btn ghost" :disabled="!!busy" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? 'Pause' : 'Resume' }}</button>
       <button class="btn ghost danger" :disabled="!!busy" @click="remove(s)">✕</button>
     </div>
@@ -174,6 +191,10 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
 .new { display: flex; flex-direction: column; gap: 8px; padding: 10px; margin-bottom: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .row.narrow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.row.one { grid-template-columns: 1fr; }
+textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; color: var(--text); font: inherit; font-size: 13px; resize: vertical; }
+.hint { text-transform: none; opacity: .7; }
+.accent { color: var(--accent); }
 .row.end { display: flex; align-items: center; gap: 10px; }
 .row.end .btn:first-of-type { margin-left: auto; }
 label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); min-width: 0; }

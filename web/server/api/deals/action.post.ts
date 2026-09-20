@@ -3,7 +3,7 @@
  * action name is validated here and every argument is rebuilt rather than
  * forwarded, so nothing the browser sends reaches CT 107 unchecked.
  */
-const ACTIONS = ['add', 'edit', 'enable', 'disable', 'delete', 'feedback'] as const
+const ACTIONS = ['add', 'edit', 'enable', 'disable', 'delete', 'feedback', 'rejudge'] as const
 type Action = typeof ACTIONS[number]
 
 const str = (v: any, max = 120) => String(v ?? '').trim().slice(0, max)
@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
       max_price: num(body.maxPrice),
       radius_km: Math.min(Math.max(num(body.radius) ?? 10, 0), 200),
       shipping,
+      intent: str(body.intent, 600),
     }
     if (action === 'add') return deals(event, '/searches', { method: 'POST', body: spec })
     const editId = num(body.id)
@@ -49,5 +50,7 @@ export default defineEventHandler(async (event) => {
 
   const id = num(body.id)
   if (!id) throw createError({ statusCode: 400, statusMessage: 'missing search id' })
+  if (action === 'rejudge')
+    return deals(event, `/searches/${id}/rejudge`, { method: 'POST', query: { all: !!body.all } })
   return deals(event, `/searches/${id}/${action}`, { method: 'POST' })
 })

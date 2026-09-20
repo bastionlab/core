@@ -4,6 +4,7 @@ useHead({ title: 'Deals · pve' })
 const selected = ref<number | null>(null)
 const shipping = ref<'all' | 'pickup' | 'ship'>('all')
 const hideDown = ref(true)
+const showRejected = ref(false)
 
 // The feed is filtered in CT 107, not in the browser: with several searches a
 // shared row limit would let a busy search crowd a quiet one out of its own tab.
@@ -18,6 +19,7 @@ async function load() {
       query: {
         search: selected.value ?? undefined,
         shipping: shipping.value === 'all' ? undefined : shipping.value,
+        show: showRejected.value ? 'all' : 'passed',
         limit: 120,
       },
     })
@@ -25,7 +27,7 @@ async function load() {
   } catch (e: any) { error.value = e } finally { pending.value = false }
 }
 usePoll(load, 20000)
-watch([selected, shipping], load)
+watch([selected, shipping, showRejected], load)
 
 const searches = computed(() => d.value?.searches ?? [])
 const st = computed(() => d.value?.status)
@@ -85,7 +87,7 @@ function onChanged() {
         <div class="stats">
           <Stat label="Searches" :value="`${st.enabled}/${st.searches}`" />
           <Stat label="Seen 24h" :value="st.seen_24h" />
-          <Stat label="Matches" :value="st.matches" />
+          <Stat label="Von KI aussortiert" :value="st.filtered ?? 0" />
           <Stat label="Last poll" :value="st.last_poll ? ago(st.last_poll) : 'never'" :tone="pollerOk ? 'ok' : 'bad'" />
         </div>
         <div v-if="st.queued" class="small muted q">{{ st.queued }} waiting to be pushed to Telegram</div>
@@ -102,7 +104,8 @@ function onChanged() {
           {{ feed.length }} listing{{ feed.length === 1 ? '' : 's' }}
           <template v-if="hidden"> · {{ hidden }} hidden</template>
         </span>
-        <label class="small muted tgl"><input v-model="hideDown" type="checkbox"> hide 👎</label>
+        <label class="small muted tgl"><input v-model="showRejected" type="checkbox"> Aussortierte zeigen</label>
+        <label class="small muted tgl2"><input v-model="hideDown" type="checkbox"> hide 👎</label>
       </h2>
 
       <div class="tabs">
@@ -118,7 +121,10 @@ function onChanged() {
       </div>
 
       <div v-if="!feed.length" class="muted pad">
-        <template v-if="shipping !== 'all'">Nothing here that is {{ shipping === 'pickup' ? 'pickup-only' : 'shippable' }}.</template>
+        <template v-if="st.filtered && !showRejected">
+          Nothing got past the AI filter here. Tick „Aussortierte zeigen“ to see what it dropped and why.
+        </template>
+        <template v-else-if="shipping !== 'all'">Nothing here that is {{ shipping === 'pickup' ? 'pickup-only' : 'shippable' }}.</template>
         <template v-else-if="selected !== null">Nothing matched this search yet.</template>
         <template v-else>
           Nothing yet. A search only starts pushing from its second poll — the first one just seeds
@@ -139,6 +145,7 @@ function onChanged() {
 .pad { padding: 60px 0; text-align: center; }
 .sec { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--muted); margin: 22px 0 10px; display: flex; gap: 10px; align-items: baseline; }
 .sec .small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.tgl2 { text-transform: none; letter-spacing: 0; font-weight: 400; display: flex; align-items: center; gap: 5px; cursor: pointer; }
 .tgl { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; display: flex; align-items: center; gap: 5px; cursor: pointer; }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .q { margin-top: 8px; }
