@@ -18,13 +18,13 @@ const err = ref('')
 function openNew() {
   editing.value = editing.value === 'new' ? null : 'new'
   Object.assign(form, blank())
-  err.value = ''; wish.value = ''; composed.value = ''
+  err.value = ''; wish.value = ''; composed.value = ''; steps.value = []; preview.value = []
 }
 
 function openEdit(s: any) {
   if (editing.value === s.id) { editing.value = null; return }
   editing.value = s.id
-  err.value = ''; wish.value = ''; composed.value = ''
+  err.value = ''; wish.value = ''; composed.value = ''; steps.value = []; preview.value = []
   const sp = s.spec ?? {}
   Object.assign(form, {
     name: s.name,
@@ -64,21 +64,77 @@ const wish = ref('')
 const composing = ref(false)
 const composed = ref('')
 
+const steps = ref<{ text: string, tone?: string }[]>([])
+const preview = ref<any[]>([])
+
+function apply(f: any) {
+  const keepName = form.name
+  Object.assign(form, {
+    name: keepName || f.name,
+    keyword: f.keyword,
+    terms: (f.terms ?? []).join(', '),
+    exclude: (f.exclude ?? []).join(', '),
+    minPrice: f.minPrice ?? '',
+    maxPrice: f.maxPrice ?? '',
+    radius: String(f.radius ?? 10),
+    shipping: f.shipping ?? 'any',
+    intent: f.intent ?? '',
+  })
+}
+
+/** The loop drafts a filter, runs it on Kleinanzeigen, compares the real hits
+ *  against what you asked for, and corrects itself. Streamed, because it takes
+ *  a while and watching it reason is most of the reassurance. */
 async function compose() {
   if (!wish.value.trim() || composing.value) return
   composing.value = true
   err.value = ''
+  composed.value = ''
+  steps.value = []
+  preview.value = []
   try {
-    const r: any = await $fetch('/api/deals/compose', { method: 'POST', body: { prompt: wish.value } })
-    const { note: why, model, ...fields } = r
-    // keep a name the user already typed; everything else is the model's suggestion
-    Object.assign(form, fields, form.name ? { name: form.name } : {})
-    form.minPrice = fields.minPrice ?? ''
-    form.maxPrice = fields.maxPrice ?? ''
-    form.radius = String(fields.radius)
-    composed.value = why
+    const res = await fetch('/api/deals/compose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: wish.value }),
+    })
+    if (!res.ok || !res.body) throw new Error(`compose failed (${res.status})`)
+    const reader = res.body.getReader()
+    const dec = new TextDecoder()
+    let buf = ''
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += dec.decode(value, { stream: true })
+      const lines = buf.split('\n')
+      buf = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.trim()) continue
+        const e = JSON.parse(line)
+        if (e.step === 'drafted') { apply(e.form); steps.value.push({ text: `Entwurf: „${e.form.keyword}"` }) }
+        else if (e.step === 'probing') steps.value.push({ text: `Testlauf ${e.round} auf Kleinanzeigen…` })
+        else if (e.step === 'probed') {
+          const last = steps.value[steps.value.length - 1]
+          if (last) last.text = `Testlauf ${e.round}: ${e.found} Anzeigen, ${e.kept} passen`
+        }
+        else if (e.step === 'checking') steps.value.push({ text: 'Abgleich mit deiner Beschreibung…' })
+        else if (e.step === 'verdict') {
+          const last = steps.value[steps.value.length - 1]
+          const tone = e.ok === true ? 'ok' : e.ok === false ? 'warn' : ''
+          if (last) { last.text = e.problem || (e.ok ? 'Passt.' : 'Wird nachgebessert.'); last.tone = tone }
+          if (e.changed?.length) steps.value.push({ text: `Angepasst: ${e.changed.join(', ')}`, tone: 'warn' })
+        }
+        else if (e.step === 'done') {
+          apply(e.form)
+          preview.value = e.preview ?? []
+          composed.value = e.form.note || ''
+        }
+        else if (e.step === 'reverted') steps.value.push({ text: e.problem, tone: 'ok' })
+        else if (e.step === 'error') err.value = e.message
+      }
+    }
   } catch (e: any) {
-    err.value = e?.statusMessage || e?.message || 'the model could not be reached'
+    err.value = e?.message || 'the model could not be reached'
   } finally { composing.value = false }
 }
 
@@ -116,6 +172,23 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
           {{ composing ? 'Denkt…' : 'Ausfüllen' }}
         </button>
       </div>
+      <div v-if="steps.length" class="trace small">
+        <div v-for="(st, n) in steps" :key="n" class="stepline" :class="st.tone">
+          <span class="bul">{{ n === steps.length - 1 && composing ? '◌' : '·' }}</span>{{ st.text }}
+        </div>
+      </div>
+
+      <div v-if="preview.length" class="preview">
+        <div class="small muted">So sähe der Feed aus ({{ preview.length }} Treffer im Testlauf):</div>
+        <div class="pv">
+          <a v-for="p in preview" :key="p.url" :href="p.url" target="_blank" rel="noopener" class="pvi">
+            <img v-if="p.image_url" :src="p.image_url" :alt="p.title" loading="lazy">
+            <span class="pvt">{{ p.title }}</span>
+            <span class="pvp">{{ p.price_eur == null ? 'VB' : p.price_eur.toLocaleString('de-DE') + ' €' }}</span>
+          </a>
+        </div>
+      </div>
+
       <div v-if="composed" class="small muted why">✦ {{ composed }} — bitte kurz prüfen, dann speichern.</div>
 
       <div class="row">
@@ -188,6 +261,18 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
 .wish { flex: 1; border: 0; background: transparent; padding: 3px 0; font-size: 13px; }
 .wish:focus { outline: none; }
 .why { padding-top: 2px; }
+.trace { display: flex; flex-direction: column; gap: 2px; padding: 6px 2px 2px; }
+.stepline { color: var(--muted); line-height: 1.45; }
+.stepline.ok { color: var(--ok); }
+.stepline.warn { color: var(--warn); }
+.bul { display: inline-block; width: 14px; opacity: .6; }
+.preview { padding: 4px 2px; }
+.pv { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin-top: 6px; }
+.pvi { display: flex; flex-direction: column; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 6px; color: var(--text); }
+.pvi:hover { border-color: var(--accent); text-decoration: none; }
+.pvi img { width: 100%; aspect-ratio: 4/3; object-fit: cover; border-radius: 4px; }
+.pvt { font-size: 11.5px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pvp { font-size: 12px; font-weight: 700; }
 .new { display: flex; flex-direction: column; gap: 8px; padding: 10px; margin-bottom: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .row.narrow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
