@@ -1,6 +1,6 @@
 <script setup lang="ts">
-const props = defineProps<{ searches: any[], selected: number | null }>()
-const emit = defineEmits<{ (e: 'select', id: number | null): void, (e: 'changed'): void }>()
+defineProps<{ searches: any[] }>()
+const emit = defineEmits<{ (e: 'changed'): void }>()
 
 const open = ref(false)
 const busy = ref('')
@@ -58,15 +58,6 @@ const remove = (s: any) => confirm(`Delete "${s.name}" and its matches?`) && act
 
     <div v-if="err" class="small bad pad">{{ err }}</div>
 
-    <div class="chips">
-      <button class="chip" :class="{ on: selected === null }" @click="emit('select', null)">All</button>
-      <button
-        v-for="s in searches" :key="s.id" class="chip"
-        :class="{ on: selected === s.id, off: !s.enabled }"
-        @click="emit('select', s.id)"
-      >{{ s.name }} <span class="muted">{{ s.hits }}</span></button>
-    </div>
-
     <div v-for="s in searches" :key="'r' + s.id" class="row-item">
       <span class="dot" :class="s.last_error ? 'bad' : s.enabled ? 'ok' : ''" />
       <div class="min">
@@ -90,10 +81,6 @@ const remove = (s: any) => confirm(`Delete "${s.name}" and its matches?`) && act
 .row.end .btn { margin-left: auto; }
 label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); min-width: 0; }
 input, select { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; color: var(--text); font: inherit; font-size: 13px; min-width: 0; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-.chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
-.chip.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
-.chip.off { opacity: .5; text-decoration: line-through; }
 .row-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
 .row-item + .row-item { border-top: 1px solid var(--line); }
 .min { flex: 1; min-width: 0; }
