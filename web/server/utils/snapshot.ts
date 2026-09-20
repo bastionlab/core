@@ -118,7 +118,7 @@ Current Ollama catalog (checked 2026-09-19; MoE = mixture-of-experts, total/acti
 export const PLACES_HOST = `
 ## Where things live on this machine
 Proxmox host "pve" at 192.168.1.50, one NVMe (system + local-lvm) and the ZFS pools "tank" (data, mounted /tank) and "backup" (mounted /backup, holds vzdump images and syncoid replicas of tank).
-Containers: CT 101 immich (photos, /tank/fotos → /mnt/fotos), CT 102 jf (Jellyfin), CT 103 musik (Audiobookshelf; the container is still named musik, music hosting was dropped), CT 104 dash (this dashboard, Nuxt on 127.0.0.1:3000, published by tailscale serve), CT 105 ai (Ollama + Open WebUI + SearXNG, RTX 3060 passed through, models on a 150 GB NVMe volume at /models), CT 106 dl (the VPN-isolated download stack), CT 200-299 dev boxes.
+Containers: CT 101 immich (photos, /tank/fotos → /mnt/fotos), CT 102 jf (Jellyfin), CT 103 books (Audiobookshelf; renamed from music on 2026-09-20 when music hosting was dropped), CT 104 dash (this dashboard, Nuxt on 127.0.0.1:3000, published by tailscale serve), CT 105 ai (Ollama + Open WebUI + SearXNG, RTX 3060 passed through, models on a 150 GB NVMe volume at /models), CT 106 dl (the VPN-isolated download stack), CT 200-299 dev boxes.
 Everything is reachable on the LAN (192.168.1.0/24) and through Tailscale; nothing is forwarded from the router.
 `
 
@@ -128,7 +128,7 @@ One tree on the host: /tank/medien on the ZFS pool "tank". Every app sees a slic
 - /tank/medien/filme — films. Jellyfin (CT 102) sees it as /mnt/filme, Radarr (CT 106) writes it as /data/filme.
 - /tank/medien/serien — series. Jellyfin /mnt/serien, Sonarr /data/serien.
 - /tank/medien/anime — anime. Jellyfin /mnt/anime, second Sonarr root /data/anime.
-- /tank/medien/hoerbuecher — audiobooks (own ZFS dataset). Audiobookshelf (CT 103) /mnt/hoerbuecher, LazyLibrarian /data/hoerbuecher.
+- /tank/medien/hoerbuecher — audiobooks (a plain directory like the others; the old ZFS dataset was destroyed). Audiobookshelf (CT 103 "books") /mnt/hoerbuecher, LazyLibrarian /data/hoerbuecher.
 - /tank/medien/downloads — qBittorrent's incomplete + finished downloads, /data/downloads in CT 106.
 The whole tree is one mount inside CT 106 (/mnt/medien → /data), so the *arr apps hardlink a finished download into the library instead of copying it: the library copy and the seeding torrent are the same bytes on disk. That is why the apparent size is much larger than the ZFS "used".
 The download stack runs as docker containers in CT 106 "dl"; qBittorrent, Prowlarr and FlareSolverr share gluetun's network namespace, so they are only reachable while the VPN tunnel is up, and their configs live in /opt/media/<app> in that container.
