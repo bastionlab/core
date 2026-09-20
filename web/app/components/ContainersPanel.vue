@@ -1,9 +1,9 @@
 <script setup lang="ts">
-defineProps<{ cts: any[], updates: any }>()
+withDefaults(defineProps<{ cts: any[], updates: any, title?: string, sub?: string }>(), { title: 'Containers' })
 </script>
 
 <template>
-  <Panel id="containers" title="Containers">
+  <Panel id="containers" :title="title" :sub="sub">
     <div class="scroll-x">
       <table>
         <thead>

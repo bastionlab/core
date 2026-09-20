@@ -1,3 +1,5 @@
+import { ago, duration, pct } from './format'
+
 export interface Alert { level: 'bad' | 'warn', text: string, section: string }
 
 const H = 3600, D = 86400

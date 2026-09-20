@@ -16,5 +16,6 @@ export default defineNuxtConfig({
   runtimeConfig: {
     agentUrl: 'http://192.168.1.50:7070', // NUXT_AGENT_URL
     agentToken: '', // NUXT_AGENT_TOKEN
+    ollamaUrl: 'http://192.168.1.55:11434', // NUXT_OLLAMA_URL
   },
 })
