@@ -18,13 +18,13 @@ const err = ref('')
 function openNew() {
   editing.value = editing.value === 'new' ? null : 'new'
   Object.assign(form, blank())
-  err.value = ''
+  err.value = ''; wish.value = ''; composed.value = ''
 }
 
 function openEdit(s: any) {
   if (editing.value === s.id) { editing.value = null; return }
   editing.value = s.id
-  err.value = ''
+  err.value = ''; wish.value = ''; composed.value = ''
   const sp = s.spec ?? {}
   Object.assign(form, {
     name: s.name,
@@ -52,6 +52,29 @@ async function act(action: string, body: Record<string, any> = {}) {
   } finally { busy.value = '' }
 }
 
+// --- ask the local model to fill the form ---------------------------------
+const wish = ref('')
+const composing = ref(false)
+const composed = ref('')
+
+async function compose() {
+  if (!wish.value.trim() || composing.value) return
+  composing.value = true
+  err.value = ''
+  try {
+    const r: any = await $fetch('/api/deals/compose', { method: 'POST', body: { prompt: wish.value } })
+    const { note: why, model, ...fields } = r
+    // keep a name the user already typed; everything else is the model's suggestion
+    Object.assign(form, fields, form.name ? { name: form.name } : {})
+    form.minPrice = fields.minPrice ?? ''
+    form.maxPrice = fields.maxPrice ?? ''
+    form.radius = String(fields.radius)
+    composed.value = why
+  } catch (e: any) {
+    err.value = e?.statusMessage || e?.message || 'the model could not be reached'
+  } finally { composing.value = false }
+}
+
 const note = ref('')
 async function submit() {
   const isNew = editing.value === 'new'
@@ -76,6 +99,19 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
     </template>
 
     <form v-if="editing !== null" class="new" @submit.prevent="submit">
+      <div class="ask">
+        <span class="spark">✦</span>
+        <input
+          v-model="wish" :disabled="composing" class="wish"
+          placeholder="Sag einfach was du suchst — „gebrauchte 27 zoll monitore, nur abholen, max 150“"
+          @keydown.enter.prevent="compose"
+        >
+        <button class="btn" type="button" :disabled="composing || !wish.trim()" @click="compose">
+          {{ composing ? 'Denkt…' : 'Ausfüllen' }}
+        </button>
+      </div>
+      <div v-if="composed" class="small muted why">✦ {{ composed }} — bitte kurz prüfen, dann speichern.</div>
+
       <div class="row">
         <label>Name<input v-model="form.name" placeholder="rennrad" required></label>
         <label>Search words<input v-model="form.keyword" placeholder="Rennrad Carbon" required></label>
@@ -130,6 +166,11 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
 </template>
 
 <style scoped>
+.ask { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--accent); border-radius: 8px; background: var(--panel); }
+.ask .spark { color: var(--accent); font-size: 14px; }
+.wish { flex: 1; border: 0; background: transparent; padding: 3px 0; font-size: 13px; }
+.wish:focus { outline: none; }
+.why { padding-top: 2px; }
 .new { display: flex; flex-direction: column; gap: 8px; padding: 10px; margin-bottom: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .row.narrow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
