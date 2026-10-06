@@ -15,7 +15,7 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
 </script>
 
 <template>
-  <article class="card" :class="{ down: item.verdict === 'down', filtered: item.passed === 0 }">
+  <article class="card" :class="{ down: item.verdict === 'down', filtered: item.passed === 0, reserved: item.status === 'reserved' }">
     <a :href="item.url" target="_blank" rel="noopener" class="shot">
       <img v-if="item.image_url" :src="item.image_url" :alt="item.title" loading="lazy">
       <div v-else class="noshot">🏷️</div>
@@ -25,6 +25,8 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
       <div class="head">
         <a :href="item.url" target="_blank" rel="noopener" class="title">{{ item.title }}</a>
         <span v-if="item.passed === 0" class="pill bad" title="von der KI aussortiert">✦</span>
+        <!-- the poller re-opens listings; sold ones are dropped server-side, reserved ones may still fall through -->
+        <span v-if="item.status === 'reserved'" class="pill warn" title="Der Verkäufer hat es reserviert">Reserviert</span>
       </div>
 
       <div class="price">{{ price }}</div>
@@ -54,6 +56,8 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
 .card { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; min-width: 0; }
 .card.down { opacity: .45; }
 .card.filtered { opacity: .6; }
+.card.reserved { opacity: .6; }
+.pill.warn { color: var(--warn); background: var(--warn-soft); white-space: nowrap; }
 .why { line-height: 1.3; }
 .shot { display: block; aspect-ratio: 4 / 3; background: var(--panel-2); }
 .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
