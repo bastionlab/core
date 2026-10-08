@@ -13,17 +13,13 @@ const when = computed(() => ago(props.item.posted_at ?? props.item.first_seen_at
 const fresh = computed(() => (Date.now() / 1000 - (props.item.posted_at ?? 0)) < 3600)
 const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? null : v)
 
-// same text as the Telegram "Nachricht kopieren" button (deals app/notify.py inquiry)
-const inquiry = computed(() => {
-  let t = String(props.item.title ?? '').replace(/\s+/g, ' ').trim()
-  if (t.length > 120) t = t.slice(0, 119).trimEnd() + '…'
-  return `Hallo, ist „${t}“ noch verfügbar?`
-})
+// same text as the Telegram "Nachricht kopieren" button (deals app/notify.py INQUIRY)
+const inquiry = 'Hallo, ist es noch verfügbar?'
 const copied = ref(false)
 // the <a> opens the ad natively (no popup blocker); the click only puts the message on the clipboard
 async function ask() {
   try {
-    await navigator.clipboard.writeText(inquiry.value)
+    await navigator.clipboard.writeText(inquiry)
     copied.value = true
     setTimeout(() => { copied.value = false }, 2500)
   } catch {}
