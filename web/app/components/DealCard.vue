@@ -12,6 +12,22 @@ const price = computed(() => {
 const when = computed(() => ago(props.item.posted_at ?? props.item.first_seen_at))
 const fresh = computed(() => (Date.now() / 1000 - (props.item.posted_at ?? 0)) < 3600)
 const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? null : v)
+
+// same text as the Telegram "Nachricht kopieren" button (deals app/notify.py inquiry)
+const inquiry = computed(() => {
+  let t = String(props.item.title ?? '').replace(/\s+/g, ' ').trim()
+  if (t.length > 120) t = t.slice(0, 119).trimEnd() + '…'
+  return `Hallo, ist „${t}“ noch verfügbar?`
+})
+const copied = ref(false)
+// the <a> opens the ad natively (no popup blocker); the click only puts the message on the clipboard
+async function ask() {
+  try {
+    await navigator.clipboard.writeText(inquiry.value)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2500)
+  } catch {}
+}
 </script>
 
 <template>
@@ -44,6 +60,8 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
       <div class="foot">
         <span class="pill">{{ item.search_name }}</span>
         <div class="votes">
+          <a class="btn ghost" :class="{ on: copied }" :href="item.url" target="_blank" rel="noopener"
+             :title="copied ? 'Kopiert – in Kleinanzeigen einfügen' : inquiry" @click="ask">{{ copied ? '✓' : '💬' }}</a>
           <button class="btn ghost" :class="{ on: item.verdict === 'up' }" :disabled="busy" title="Good match" @click="vote('up')">👍</button>
           <button class="btn ghost" :class="{ on: item.verdict === 'down' }" :disabled="busy" title="Not what I want" @click="vote('down')">👎</button>
         </div>
