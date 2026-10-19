@@ -39,6 +39,9 @@ async function ask() {
         <span v-if="item.passed === 0" class="pill bad" title="von der KI aussortiert">✦</span>
         <!-- the poller re-opens listings; sold ones are dropped server-side, reserved ones may still fall through -->
         <span v-if="item.status === 'reserved'" class="pill warn" title="Der Verkäufer hat es reserviert">Reserviert</span>
+        <!-- account younger than NEW_SELLER_DAYS when first seen: the poller never pushes these -->
+        <span v-if="item.new_seller" class="pill bad"
+              :title="'Konto aktiv seit ' + new Date(item.seller_since * 1000).toLocaleDateString('de-DE')">⚠ Neues Konto – Phishing?</span>
       </div>
 
       <div class="price">{{ price }}</div>
