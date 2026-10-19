@@ -89,7 +89,9 @@ async function submit() {
   if (!r) return
   note.value = isNew
     ? `Gespeichert · Suchbegriffe: ${(r.spec?.keywords ?? []).join(', ')}. Die Portale werden in den nächsten Minuten durchsucht.`
-    : `Gespeichert${r.rejudge ? ` · ${r.rejudge} Treffer werden neu bewertet` : ''}`
+    : ['Gespeichert · sofort neu sortiert',
+       r.rejudge ? `${r.rejudge} Treffer warten auf die KI` : '',
+       r.repoll ? 'Portale werden neu durchsucht' : ''].filter(Boolean).join(' · ')
   editing.value = null
   setTimeout(() => (note.value = ''), 12000)
 }
