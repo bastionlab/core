@@ -9,7 +9,11 @@ const emit = defineEmits<{
 const n = computed(() => props.note)
 
 const title = ref('')
-watch(() => [n.value.id, n.value.title], () => { title.value = n.value.title }, { immediate: true })
+const titleBox = ref<HTMLTextAreaElement>()
+// a textarea so a long title wraps instead of scrolling sideways (narrow on a phone); Enter still just saves
+function growTitle() { const el = titleBox.value; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px` } }
+watch(() => [n.value.id, n.value.title], () => { title.value = n.value.title; nextTick(growTitle) }, { immediate: true })
+onMounted(growTitle)
 function saveTitle() { if (title.value.trim() !== n.value.title) emit('patch', { title: title.value.trim() }) }
 
 const editing = ref(false)
@@ -67,7 +71,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); document.body.
         <select class="kind" :value="n.kind" title="kind" @change="emit('patch', { kind: ($event.target as HTMLSelectElement).value })">
           <option v-for="k in NOTE_KINDS" :key="k.id" :value="k.id">{{ k.icon }} {{ k.label.replace(/s$/, '') }}</option>
         </select>
-        <input v-model="title" class="title" placeholder="Title" @blur="saveTitle" @keydown.enter="($event.target as HTMLInputElement).blur()">
+        <textarea ref="titleBox" v-model="title" class="title" rows="1" placeholder="Title" @input="growTitle" @blur="saveTitle" @keydown.enter.prevent="($event.target as HTMLTextAreaElement).blur()" />
         <button type="button" class="btn ghost x" title="close (Esc)" @click="emit('close')">✕</button>
       </header>
 
@@ -126,7 +130,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); document.body.
         <button type="button" class="btn ghost" @click="emit('patch', { state: n.state === 'archived' ? 'active' : 'archived' })">🗄️ {{ n.state === 'archived' ? 'Unarchive' : 'Archive' }}</button>
         <button type="button" class="btn ghost" @click="copy">{{ copied ? 'Copied' : '📋 Copy' }}</button>
         <span class="sp" />
-        <button type="button" class="btn danger" :class="{ armed }" @click="del">{{ armed ? 'Really delete?' : 'Delete' }}</button>
+        <button type="button" class="btn danger" :class="{ armed }" @click="del">{{ armed ? 'Sure?' : 'Delete' }}</button>
       </footer>
     </div>
   </div>
@@ -135,9 +139,9 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); document.body.
 <style scoped>
 .scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .55); display: flex; justify-content: center; align-items: flex-start; padding: 5vh 16px; overflow-y: auto; }
 .sheet { width: 100%; max-width: 760px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px; padding: 16px 20px 14px; display: flex; flex-direction: column; gap: 12px; }
-header { display: flex; align-items: center; gap: 8px; }
+header { display: flex; align-items: flex-start; gap: 8px; }
 .kind { padding: 5px 6px; font-size: 12.5px; }
-.title { flex: 1; min-width: 0; border: 0 !important; background: transparent !important; font-size: 19px !important; font-weight: 650; padding: 4px 2px; }
+.title { flex: 1; min-width: 0; border: 0 !important; background: transparent !important; font-size: 19px !important; font-weight: 650; line-height: 1.3; padding: 4px 2px; resize: none; overflow: hidden; }
 .x { font-size: 15px; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .topic { width: 130px; padding: 2px 10px; font-size: 12px !important; border-radius: 999px !important; color: var(--accent) !important; background: var(--accent-soft) !important; border-color: transparent !important; }
@@ -168,6 +172,18 @@ footer .btn.ghost.on { color: var(--accent); background: transparent; }
 @media (max-width: 640px) {
   .scrim { padding: 0; }
   .sheet { min-height: 100dvh; border-radius: 0; border: 0; padding: 12px 14px calc(16px + env(safe-area-inset-bottom)); }
+  .sheet { gap: 14px; }
+  /* kind + ✕ on top, the title gets the full width below */
+  header { flex-wrap: wrap; align-items: center; }
+  .x { margin-left: auto; }
+  .title { order: 3; flex-basis: 100%; font-size: 21px !important; padding: 0 2px; }
   .when { margin-left: 0; flex-basis: 100%; }
+  .tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tools .btn { justify-content: center; padding: 8px 10px; font-size: 13.5px; }
+  .rel { max-width: 100%; }
+  /* one even row of actions, pinned to the bottom of the sheet */
+  footer { margin-top: auto; flex-wrap: nowrap; gap: 4px; }
+  footer .sp { display: none; }
+  footer .btn { flex: 1; min-width: 0; justify-content: center; padding: 8px 4px; font-size: 12.5px; white-space: nowrap; }
 }
 </style>

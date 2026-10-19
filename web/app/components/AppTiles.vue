@@ -45,9 +45,8 @@ defineProps<{ services: any[] }>()
 .app { position: relative; }
 @media (max-width: 640px) {
   .apps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .app { flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px; }
-  .icon { width: 38px; height: 38px; font-size: 19px; }
-  .body { width: 100%; }
-  .app .dot { position: absolute; top: 14px; right: 14px; }
+  .app { gap: 10px; padding: 10px; }
+  .icon { width: 34px; height: 34px; font-size: 17px; border-radius: 9px; }
+  .app .dot { position: absolute; top: 8px; right: 8px; }
 }
 </style>

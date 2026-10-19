@@ -124,6 +124,11 @@ function onChanged() {
 .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 2px 12px; }
 .strip b { color: var(--text); font-weight: 600; }
 .strip .ref { margin-left: auto; padding: 2px 8px; }
+/* phone: the stats wrap, ↻ stays top right instead of dropping onto a line of its own */
+@media (max-width: 640px) {
+  .strip { position: relative; padding-right: 34px; gap: 4px 12px; }
+  .strip .ref { position: absolute; top: -3px; right: 0; }
+}
 .srch { margin-top: 14px; }
 .sec { flex-wrap: wrap; }
 .views { margin-left: auto; display: flex; flex-wrap: wrap; gap: 2px; font-weight: 400; }
