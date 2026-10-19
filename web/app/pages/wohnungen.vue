@@ -75,6 +75,7 @@ function onChanged() {
       <div v-for="e in st.errors" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>
 
       <FlatSearches :searches="searches" @changed="onChanged" />
+      <FlatProfile class="prof" />
 
       <h2 class="sec">
         Wohnungen
@@ -112,6 +113,7 @@ function onChanged() {
 .strip .ref { margin-left: auto; padding: 2px 8px; }
 .sec { flex-wrap: wrap; }
 .tgl { margin-left: auto; font-weight: 400; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.prof { margin-top: 14px; }
 .q { margin: -6px 2px 10px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }

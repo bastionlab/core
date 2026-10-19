@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 
 /** call the deals API in CT 107; it owns the SQLite file, we only ever read it or post a search */
-export async function deals<T = any>(event: H3Event, path: string, opts: { method?: 'GET' | 'POST', body?: any, query?: any } = {}) {
+export async function deals<T = any>(event: H3Event, path: string, opts: { method?: 'GET' | 'POST', body?: any, query?: any, timeout?: number } = {}) {
   const { dealsUrl, dealsToken } = useRuntimeConfig(event)
   try {
     return await $fetch<T>(path, { baseURL: dealsUrl, headers: { Authorization: `Bearer ${dealsToken}` }, timeout: 15_000, ...opts })

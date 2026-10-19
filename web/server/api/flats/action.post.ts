@@ -2,7 +2,7 @@
  * The write half of the Wohnungen page. Same pattern as deals/action: the
  * action is allowlisted and every argument rebuilt, nothing is forwarded as-is.
  */
-const ACTIONS = ['add', 'edit', 'enable', 'disable', 'delete', 'feedback'] as const
+const ACTIONS = ['add', 'edit', 'enable', 'disable', 'delete', 'feedback', 'profile', 'message'] as const
 type Action = typeof ACTIONS[number]
 
 const str = (v: any, max = 120) => String(v ?? '').trim().slice(0, max)
@@ -46,6 +46,18 @@ export default defineEventHandler(async (event) => {
     return deals(event, '/flats/feedback', {
       method: 'POST',
       body: { search_id: num(body.searchId), source: str(body.source, 32), source_id: str(body.sourceId, 32), verdict },
+    })
+  }
+
+  if (action === 'profile')
+    return deals(event, '/flats/profile', { method: 'POST', body: { text: String(body.text ?? '').slice(0, 4000) } })
+
+  if (action === 'message') {
+    // qwen writes it in ~5 s when warm; a cold model load can take a minute
+    return deals(event, '/flats/message', {
+      method: 'POST',
+      body: { source: str(body.source, 32), source_id: str(body.sourceId, 32), fresh: !!body.fresh },
+      timeout: 120_000,
     })
   }
 

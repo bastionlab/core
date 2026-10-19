@@ -20,6 +20,32 @@ const fresh = computed(() => (Date.now() / 1000 - (props.item.posted_at ?? 0)) <
 const channels = computed(() => (props.item.contact?.channels ?? []).filter((c: any) => c.type === 'email' || c.type === 'phone'))
 const phoneText = (v: string) => v.replace(/^\+49/, '0')
 const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? null : v)
+
+// 💬: a draft written in CT 107 from the "Über uns" profile, cached there per flat
+const msg = reactive({ open: false, loading: false, text: '', missing: [] as string[], err: '', copied: false })
+async function draft(fresh = false) {
+  msg.open = true; msg.loading = true; msg.err = ''
+  try {
+    const r = await $fetch<any>('/api/flats/action', {
+      method: 'POST', body: { action: 'message', source: props.item.source, sourceId: props.item.source_id, fresh },
+    })
+    msg.text = r.text; msg.missing = r.missing ?? []
+  } catch (e: any) { msg.err = e?.data?.statusMessage || e?.statusMessage || e?.message } finally { msg.loading = false }
+}
+function toggleMsg() {
+  if (msg.open) { msg.open = false; return }
+  if (msg.text) msg.open = true
+  else draft()
+}
+const ta = ref<HTMLTextAreaElement | null>(null)
+async function copy() {
+  try { await navigator.clipboard.writeText(msg.text) } catch {
+    // plain http or an old browser: the selection route still works inside a click
+    ta.value?.select(); document.execCommand('copy')
+  }
+  msg.copied = true
+  setTimeout(() => { msg.copied = false }, 2500)
+}
 </script>
 
 <template>
@@ -67,8 +93,24 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
       <div class="small muted bd">{{ breakdown }}</div>
       <div class="small" :class="fresh ? 'accent' : 'muted'">{{ when }}</div>
       <div class="votes">
+        <button class="btn ghost" :class="{ on: msg.open }" title="Nachricht an den Anbieter" @click="toggleMsg">💬</button>
         <button class="btn ghost" :class="{ on: item.verdict === 'up' }" :disabled="busy" title="Interessant" @click="vote('up')">👍</button>
         <button class="btn ghost" :class="{ on: item.verdict === 'down' }" :disabled="busy" title="Nicht für mich" @click="vote('down')">👎</button>
+      </div>
+    </div>
+
+    <div v-if="msg.open" class="msg">
+      <div v-if="msg.loading" class="small muted">✦ schreibt eine Nachricht für diese Anzeige…</div>
+      <div v-else-if="msg.err" class="small bad">{{ msg.err }}</div>
+      <template v-else>
+        <textarea ref="ta" v-model="msg.text" rows="14" class="ta" />
+        <div v-if="msg.missing.length" class="small warn">Anzeige fragt nach, steht nicht im Profil: {{ msg.missing.join(', ') }}</div>
+      </template>
+      <div class="msgbar">
+        <button class="btn ghost" :disabled="msg.loading" title="neu schreiben" @click="draft(true)">↻ neu</button>
+        <!-- the <a> opens the ad natively (no popup blocker); the click also puts the text on the clipboard -->
+        <a v-if="msg.text && !msg.loading" :href="item.url" target="_blank" rel="noopener" class="btn" @click="copy">Kopieren &amp; Anzeige öffnen</a>
+        <button class="btn primary" :disabled="!msg.text || msg.loading" @click="copy">{{ msg.copied ? '✓ kopiert' : 'Kopieren' }}</button>
       </div>
     </div>
   </article>
@@ -93,6 +135,9 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
 .warm.est { color: var(--warn); }
 .bd { max-width: 190px; line-height: 1.3; }
 .accent { color: var(--accent); font-weight: 600; }
+.msg { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+.msg .ta { width: 100%; box-sizing: border-box; padding: 10px 12px; line-height: 1.45; resize: vertical; }
+.msgbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .votes { margin-top: auto; display: flex; gap: 2px; }
 .votes .btn { padding: 3px 6px; font-size: 13px; }
 .votes .btn.on { background: var(--accent-soft); }
