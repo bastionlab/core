@@ -1,18 +1,29 @@
 <script setup lang="ts">
 const props = defineProps<{ b: any, now: number }>()
+const emit = defineEmits<{ action: [string, any] }>()
 const age = (t?: number | null, max = 26 * 3600) => (!t ? 'warn' : props.now - t > max ? 'bad' : 'ok')
 </script>
 
 <template>
   <Panel id="backups" title="Backups" :sub="`vzdump daily ${b.vzdumpJobs[0]?.schedule ?? '–'} → ${b.vzdumpJobs[0]?.storage ?? '–'}`">
+    <template #actions>
+      <button
+        class="btn" :disabled="b.busy?.length"
+        :title="b.busy?.length ? b.busy.join('\n') : 'vzdump every container now, snapshot mode — nothing is stopped'"
+        @click="emit('action', 'backup_all', {})"
+      >
+        ⤓ Back up all<span v-if="b.busy?.length" class="pill warn">busy</span>
+      </button>
+    </template>
     <table>
-      <thead><tr><th>Container</th><th>Last vzdump</th><th class="num">Size</th><th class="num">Kept</th></tr></thead>
+      <thead><tr><th>Container</th><th>Last vzdump</th><th class="num">Size</th><th class="num">Kept</th><th /></tr></thead>
       <tbody>
         <tr v-for="v in b.vzdump" :key="v.vmid">
           <td><span class="dot" :class="age(v.time)" /> &nbsp;{{ v.vmid }} <span class="muted">{{ v.name }}</span></td>
           <td :class="age(v.time) === 'ok' ? '' : age(v.time)">{{ v.time ? ago(v.time, now) : 'never' }}</td>
           <td class="num muted">{{ bytes(v.size) }}</td>
           <td class="num muted">{{ v.count }}</td>
+          <td class="num"><button class="btn ghost small" :disabled="b.busy?.length" title="vzdump this container now" @click="emit('action', 'backup_ct', { vmid: v.vmid })">⤓</button></td>
         </tr>
       </tbody>
     </table>

@@ -59,6 +59,8 @@ async function loadLog() {
     if (atBottom) nextTick(() => el && (el.scrollTop = el.scrollHeight))
   } catch {}
 }
+const full = ref(false)
+
 let timer: any
 onMounted(() => { loadLog(); timer = setInterval(() => !document.hidden && loadLog(), 3000) })
 onUnmounted(() => clearInterval(timer))
@@ -155,8 +157,13 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
           <span class="dot" :class="p.cc?.running ? 'ok' : ''" /> Claude
         </button>
         <code class="faint small mono attach" :title="`copy: ${attach}`" @click="copy(attach)">⧉ {{ session }}</code>
+        <button v-if="live" class="tab fs" title="open full screen and type into it" @click="full = true">⛶</button>
       </div>
       <pre ref="logEl" :class="{ empty: !logText }">{{ logText || (live ? '…' : `nothing running — press ${tab === 'claude' ? '✦ Claude' : '▶ Preview'}`) }}</pre>
+      <TermFull
+        v-if="full" :vmid="box.vmid" :path="p.path" :target="tab === 'claude' ? 'cc' : 'preview'" :title="`${p.name} · ${session}`"
+        @close="full = false; loadLog()"
+      />
     </div>
   </div>
 </template>
@@ -195,11 +202,18 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
 .tab { display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 6px; cursor: pointer; }
 .tab:hover { color: var(--text); background: var(--panel-2); }
 .tab.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.fs { font-size: 14px; padding: 2px 8px; }
 .attach { margin-left: auto; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 pre { margin: 0; padding: 10px 12px; height: 280px; overflow: auto; font: 12px/1.5 var(--mono); color: #d5d9e0; white-space: pre-wrap; word-break: break-all; }
 pre.empty { color: #5f6775; display: grid; place-items: center; text-align: center; }
 @media (max-width: 900px) {
   .proj { grid-template-columns: minmax(0, 1fr); }
-  pre { height: 200px; }
+  pre { height: 260px; }
+}
+@media (max-width: 640px) {
+  .proj { padding: 10px; gap: 10px; }
+  pre { height: 55vh; font-size: 11px; padding: 8px; }
+  pre.empty { height: 90px; }
+  .ph .pill:last-child { margin-left: 0; }
 }
 </style>

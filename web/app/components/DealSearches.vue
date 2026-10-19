@@ -193,7 +193,7 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
 
       <div class="row">
         <label>Name<input v-model="form.name" placeholder="rennrad" required></label>
-        <label>Search words<input v-model="form.keyword" placeholder="Rennrad Carbon" required></label>
+        <label>Search words<input v-model="form.keyword" placeholder="rtx 3060, rtx 3090" title="Kleinanzeigen needs every word to appear — use several short keywords, comma-separated; each is polled separately" required></label>
       </div>
       <div class="row">
         <label>Must contain one of<input v-model="form.terms" placeholder="rennrad, gravel (blank = the search words)"></label>

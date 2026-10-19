@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""media-rm — delete one series or film from the media stack, everywhere, in one go.
+
+  media-rm series <sonarr id> [torrent hash …]
+  media-rm movie  <radarr id> [torrent hash …]
+  media-rm season <sonarr id> <season,season…> [torrent hash …]
+
+1. Sonarr/Radarr deletes the entry with its files and adds a list exclusion (so Seerr or a list does not
+   grab it again). Their MediaBrowser connection fires on delete, which makes Jellyfin drop it.
+2. qBittorrent removes the given torrents with their data — the seeding copies are hardlinks of the
+   library files, so the space only comes back once both are gone.
+
+The season form keeps the series: it unmonitors the given seasons (and their episodes, so Sonarr does
+not fetch them again), deletes their episode files — Jellyfin is told through onEpisodeFileDelete — and
+leaves the series monitored so new episodes of the running season keep coming.
+
+Only hashes that the item's own *arr history names are touched: a hash on the command line that the
+history does not vouch for is skipped, not deleted. API keys come from the agent's media_keys()
+(read out of CT 106 here) and are never part of the argv the dashboard shows.
+"""
+import json, re, sys, urllib.error, urllib.request
+from pathlib import Path
+from urllib.parse import urlencode
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import agent  # noqa: E402  (helpers only — the server starts under __main__)
+
+
+def say(*a):
+    print(*a, flush=True)
+
+
+def arr_send(method, app, path, body=None, **query):
+    port, ver = agent.ARR[app]
+    headers = {"X-Api-Key": agent.media_keys()[app]}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(f"http://{agent.MEDIA_IP}:{port}/api/{ver}/{path}?{urlencode(query)}",
+                                 data=None if body is None else json.dumps(body).encode(),
+                                 headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=120) as r:
+        return r.status
+
+
+def arr_delete(app, path, **query):
+    return arr_send("DELETE", app, path, **query)
+
+
+def qb_post(path, **form):
+    agent.qb("app/version")  # logs in / refreshes the cookie
+    port, _ = agent.QB
+    req = urllib.request.Request(f"http://{agent.MEDIA_IP}:{port}/api/v2/{path}", data=urlencode(form).encode(),
+                                 headers={"Cookie": agent._qb_sid[0], "Referer": f"http://{agent.MEDIA_IP}:{port}"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return r.status
+
+
+def remove_seasons(plan):
+    """unmonitor first, then delete — so nothing can re-grab the seasons in between"""
+    sid, seasons = plan["id"], set(plan["seasons"])
+    series = agent.arr("sonarr", f"series/{sid}")
+    for se in series["seasons"]:
+        if se["seasonNumber"] in seasons:
+            se["monitored"] = False
+    arr_send("PUT", "sonarr", f"series/{sid}", series)
+    eps = [e["id"] for e in agent.arr("sonarr", "episode", seriesId=sid) or [] if e["seasonNumber"] in seasons]
+    if eps:
+        arr_send("PUT", "sonarr", "episode/monitor", {"episodeIds": eps, "monitored": False})
+    say(f"sonarr: season {', '.join(map(str, sorted(seasons)))} unmonitored ({len(eps)} episode(s)), "
+        f"the series itself stays monitored")
+    files = [f["id"] for f in agent.arr("sonarr", "episodefile", seriesId=sid) or [] if f["seasonNumber"] in seasons]
+    if files:
+        say(f"sonarr: deleting {len(files)} episode file(s) …")
+        arr_send("DELETE", "sonarr", "episodefile/bulk", {"episodeFileIds": files})
+    else:
+        say("sonarr: no episode files on disk for those seasons")
+    left = [f for f in agent.arr("sonarr", "episodefile", seriesId=sid) or [] if f["seasonNumber"] in seasons]
+    if left:
+        sys.exit(f"sonarr still lists {len(left)} file(s) of those seasons — check its UI")
+    say("sonarr: done — Jellyfin is told through its MediaBrowser connection")
+
+
+def main():
+    if len(sys.argv) < 3 or sys.argv[1] not in ("series", "movie", "season"):
+        sys.exit(__doc__)
+    kind, item_id = sys.argv[1], sys.argv[2]
+    seasons = None
+    if kind == "season":
+        if len(sys.argv) < 4 or not re.fullmatch(r"\d+(,\d+)*", sys.argv[3]):
+            sys.exit("season needs a comma-separated list of season numbers")
+        kind, seasons, asked = "series", sys.argv[3], sys.argv[4:]
+    else:
+        asked = sys.argv[3:]
+    asked = [h.lower() for h in asked]
+    if any(not re.fullmatch(r"[0-9a-f]{40}", h) for h in asked):
+        sys.exit("torrent hashes must be 40 hex characters")
+
+    plan = agent.media_plan(kind, item_id, seasons)  # re-checked now, not trusted from when the button was drawn
+    vouched = {t["hash"]: t for t in plan["torrents"]}
+    title = plan["title"] + (f" ({plan['year']})" if plan.get("year") else "")
+    app = plan["app"]
+    if plan["seasons"]:
+        title = f"{title} season {', '.join(map(str, plan['seasons']))}"
+        say(f"{title} — {plan['files']} file(s), {agent._gb(plan['size'])}")
+        try:
+            remove_seasons(plan)
+        except urllib.error.HTTPError as e:
+            sys.exit(f"{app} refused: HTTP {e.code} {e.read()[:300].decode(errors='replace')}")
+        for t in plan.get("shared") or []:
+            say(f"qBittorrent: {t['name']} also covers a season you keep — left seeding")
+    else:
+        say(f"{title} — {plan['files']} file(s), {agent._gb(plan['size'])} in {plan['path']}")
+        path = f"series/{plan['id']}" if kind == "series" else f"movie/{plan['id']}"
+        say(f"{app}: deleting the entry and its files, adding a list exclusion …")
+        try:
+            arr_delete(app, path, deleteFiles="true", addImportListExclusion="true")
+        except urllib.error.HTTPError as e:
+            sys.exit(f"{app} refused: HTTP {e.code} {e.read()[:300].decode(errors='replace')}")
+        say(f"{app}: done — Jellyfin is told through its MediaBrowser connection")
+
+    hashes = [h for h in asked if h in vouched]
+    for h in set(asked) - set(hashes):
+        say(f"qBittorrent: skipping {h[:8]} — {app}'s history for this item does not name it")
+    for h in [h for h in vouched if h not in asked]:
+        say(f"qBittorrent: {vouched[h]['name']} also belongs to it but was not in the approved list — left alone")
+    if hashes:
+        say(f"qBittorrent: removing {len(hashes)} torrent(s) with their data "
+            f"({agent._gb(sum(vouched[h]['size'] for h in hashes))}) …")
+        for h in hashes:
+            say(f"  - {vouched[h]['name']}")
+        try:
+            qb_post("torrents/delete", hashes="|".join(hashes), deleteFiles="true")
+        except urllib.error.HTTPError as e:
+            sys.exit(f"qBittorrent refused: HTTP {e.code} — the library files are already gone, "
+                     f"remove the torrents in the qBittorrent UI")
+        left = {t["hash"].lower() for t in (agent.qb("torrents/info") or [])} & set(hashes)
+        if left:
+            sys.exit(f"qBittorrent still lists {len(left)} of them — check its UI")
+        say("qBittorrent: done")
+    else:
+        say("qBittorrent: nothing of it is seeding")
+    say(f"{title} is gone.")
+
+
+if __name__ == "__main__":
+    main()

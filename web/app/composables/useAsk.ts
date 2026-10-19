@@ -25,7 +25,10 @@ export function useAskSettings() {
     } catch {}
     if (!all.value) refreshModels()
   })
-  watch(models, (m) => { if (m?.length && !m.some(x => x.name === model.value)) model.value = m[0].name }, { immediate: true })
+  // default to the model that is held in VRAM (instant first token), not to the largest one
+  watch(models, (m) => {
+    if (m?.length && !m.some(x => x.name === model.value)) model.value = (m.find(x => x.warm) ?? m[0]).name
+  }, { immediate: true })
   watch([model, think, web], () => {
     try {
       localStorage.setItem('ask.model', model.value)

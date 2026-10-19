@@ -4,7 +4,7 @@
 Serves JSON to the dashboard CT only (source IP + bearer token). It never runs caller-supplied
 commands: previews go through `pv` inside a CT tagged `dev`, for a project path that `pv ls` listed.
 """
-import json, os, re, shlex, subprocess, threading, time, urllib.error, urllib.request
+import base64, fcntl, json, os, pty, re, secrets, select, shlex, signal, struct, subprocess, termios, threading, time, urllib.error, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -102,7 +102,17 @@ def host():
         "temps": temps,
         "pveVersion": st.get("pveversion"),
         "kernel": os.uname().release,
+        "shutdown": scheduled_shutdown(),
     }
+
+
+def scheduled_shutdown():
+    """a pending `shutdown +N` — systemd-logind writes USEC= and MODE= here until it fires or is cancelled"""
+    try:
+        kv = dict(l.split("=", 1) for l in Path("/run/systemd/shutdown/scheduled").read_text().split() if "=" in l)
+        return {"at": int(kv["USEC"]) // 1_000_000, "mode": kv.get("MODE", "poweroff")}
+    except Exception:
+        return None
 
 
 def gpu():
@@ -186,6 +196,7 @@ def backups(cts):
                    for c in cts],
         "vzdumpJobs": [{"schedule": j.get("schedule"), "enabled": j.get("enabled", 1), "storage": j.get("storage"),
                         "all": j.get("all")} for j in jobs],
+        "busy": backup_busy(),
         "sanoid": {**unit("sanoid.service"),
                    "datasets": [{"name": k, **v} for k, v in sorted(snaps.items()) if k.startswith("tank")]},
         "syncoid": {**unit("syncoid.service"),
@@ -452,9 +463,14 @@ def queue_items(kind, records, torrents):
             else (r.get("artist") or {}).get("artistName") or r.get("quality", {}).get("quality", {}).get("name")
         out.append({
             "kind": kind, "id": r.get("id"), "title": title, "sub": sub, "release": r.get("title"),
+            # a season pack is one torrent behind one queue row per episode
+            "hash": str(r.get("downloadId", "")).lower() or None,
             "status": r.get("status"), "state": r.get("trackedDownloadState"), "client": r.get("downloadClient"),
             "size": size, "left": left, "progress": round(100 * (size - left) / size, 1) if size else 0,
             "eta": r.get("timeleft"), "speed": t.get("dlspeed"), "seeds": t.get("num_seeds"),
+            # how long since any byte arrived - the difference between slow and dead
+            "idleHours": round((time.time() - t["last_activity"]) / 3600, 1)
+                         if t.get("last_activity") else None,
             "ratio": round(t.get("ratio", 0), 2) if t.get("ratio") is not None else None,
             "torrentState": t.get("state"),
             "messages": [m.get("messages", [m.get("title")])[0] for m in (r.get("statusMessages") or [])][:3],
@@ -463,15 +479,22 @@ def queue_items(kind, records, torrents):
     return out
 
 
+# a finished torrent stays in qBittorrent to seed; the *arr queues drop an item
+# at import, so these have to be filtered out by hand or books never leave the list
+SEEDING_STATES = {"uploading", "stalledUP", "queuedUP", "pausedUP", "stoppedUP",
+                  "forcedUP", "checkingUP"}
+
+
 def bare_torrents(torrents, category, kind):
     """downloads with no *arr queue behind them (LazyLibrarian works this way)"""
     return [{
-        "kind": kind, "id": h[:8], "title": t.get("name"), "sub": t.get("category"), "release": t.get("name"),
+        "kind": kind, "id": h[:8], "hash": h, "title": t.get("name"), "sub": t.get("category"), "release": t.get("name"),
         "status": t.get("state"), "state": None, "client": "qBittorrent",
         "size": t.get("size"), "left": t.get("amount_left"), "progress": round(100 * t.get("progress", 0), 1),
         "eta": None, "speed": t.get("dlspeed"), "seeds": t.get("num_seeds"),
         "ratio": round(t.get("ratio", 0), 2), "torrentState": t.get("state"), "messages": [], "error": None,
-    } for h, t in torrents.items() if t.get("category") == category]
+    } for h, t in torrents.items()
+        if t.get("category") == category and t.get("state") not in SEEDING_STATES]
 
 
 @cached(300)
@@ -530,17 +553,32 @@ def library():
     return out
 
 
+@cached(20)
+def watchdog():
+    """qb-watchdog.py in CT 106 leaves its last verdict in a file; this is the only
+    channel it has, so a missing or stale file is itself worth showing."""
+    raw = sh("pct", "exec", str(MEDIA_CT), "--", "cat",
+             "/opt/media/qbittorrent/watchdog-report.json", timeout=15)
+    try:
+        report = json.loads(raw)
+    except Exception:
+        return None
+    report["age"] = max(0, int(time.time()) - int(report.get("ts") or 0))
+    return report
+
+
 @cached(15)
 def media():
-    torrents = {}
+    torrents, qb_error = {}, None
     try:
         torrents = {t["hash"].lower(): t for t in (qb("torrents/info") or [])}
-    except Exception:
-        pass
+    except Exception as e:
+        # without this the queue still lists every row but with no speeds, and the page claims nothing is moving
+        qb_error = str(e)[:200] or type(e).__name__
 
     def q(app, kind, **extra):
         try:
-            r = arr(app, "queue", pageSize=100, **extra)
+            r = arr(app, "queue", pageSize=1000, **extra)
             return queue_items(kind, (r or {}).get("records"), torrents)
         except Exception as e:
             return [{"kind": kind, "error": str(e)[:200], "title": f"{app} queue unavailable"}]
@@ -549,6 +587,7 @@ def media():
         "vpn": POOL.submit(vpn),
         "library": POOL.submit(library),
         "sizes": POOL.submit(media_sizes),
+        "watchdog": POOL.submit(watchdog),
         "movies": POOL.submit(q, "radarr", "movies", includeMovie="true"),
         "series": POOL.submit(q, "sonarr", "series", includeSeries="true", includeEpisode="true"),
     }
@@ -562,10 +601,120 @@ def media():
               "books": bare_torrents(torrents, "lazylibrarian", "books")}
     active = [t for t in torrents.values() if t.get("dlspeed") or t.get("state") in ("downloading", "stalledDL", "metaDL")]
     return {"time": int(time.time()), "vpn": res["vpn"], "library": res["library"], "sizes": res["sizes"],
-            "queues": queues,
-            "torrents": {"total": len(torrents), "downloading": len(active),
+            "queues": queues, "watchdog": res["watchdog"],
+            "torrents": {"error": qb_error, "total": len(torrents), "downloading": len(active),
                          "seeding": sum(1 for t in torrents.values() if t.get("state", "").endswith(("UP", "uploading"))),
                          "errored": [t["name"][:80] for t in torrents.values() if "error" in t.get("state", "").lower()][:5]}}
+
+
+@cached(60)
+def media_items():
+    """everything the library holds, for the Remove picker — one row per series or film"""
+    out = []
+    for s in arr("sonarr", "series") or []:
+        st = s.get("statistics") or {}
+        out.append({"kind": "series", "id": s["id"], "title": s["title"], "year": s.get("year"),
+                    "group": "anime" if "/anime" in (s.get("rootFolderPath") or s.get("path") or "") else "series",
+                    "path": s.get("path"), "size": st.get("sizeOnDisk") or 0, "files": st.get("episodeFileCount") or 0,
+                    "seasons": [{"n": se["seasonNumber"], "monitored": se.get("monitored", False),
+                                 "files": (se.get("statistics") or {}).get("episodeFileCount") or 0,
+                                 "size": (se.get("statistics") or {}).get("sizeOnDisk") or 0}
+                                for se in s.get("seasons") or []]})
+    for m in arr("radarr", "movie") or []:
+        out.append({"kind": "movie", "id": m["id"], "title": m["title"], "year": m.get("year"), "group": "movie",
+                    "path": m.get("path"), "size": m.get("sizeOnDisk") or 0, "files": 1 if m.get("hasFile") else 0})
+    return sorted(out, key=lambda x: (x["title"].lower(), x["year"] or 0))
+
+
+def _seasons(seasons):
+    """"1,2" / [1, 2] -> [1, 2]; None or empty -> None (the whole item)"""
+    if seasons in (None, "", []):
+        return None
+    try:
+        out = sorted({int(x) for x in (seasons.split(",") if isinstance(seasons, str) else seasons)})
+    except (TypeError, ValueError):
+        raise ValueError("seasons must be numbers")
+    return out or None
+
+
+def media_plan(kind, item_id, seasons=None):
+    """what removing one series/film touches: the *arr entry with its files, and every torrent in qBittorrent
+    that its history says it grabbed or imported from. The library files and the seeding copies are hardlinks
+    of the same bytes, so the space only comes back once both are gone.
+
+    With seasons (series only) the entry stays: only those seasons' episode files go, the seasons are
+    unmonitored so Sonarr does not fetch them again, and the series keeps monitoring new episodes. Only
+    torrents whose every episode lies in those seasons are removed — a pack that also covers a kept season
+    stays (it would only stop seeding; the kept library files are separate hardlinks either way)."""
+    if kind not in ("series", "movie"):
+        raise ValueError("kind must be series or movie")
+    try:
+        item_id = int(item_id)
+    except (TypeError, ValueError):
+        raise ValueError("id must be a number")
+    seasons = _seasons(seasons)
+    if seasons and kind != "series":
+        raise ValueError("only series have seasons")
+    item = next((x for x in media_items() if x["kind"] == kind and x["id"] == item_id), None)
+    if not item:
+        invalidate("media_items")
+        item = next((x for x in media_items() if x["kind"] == kind and x["id"] == item_id), None)
+    if not item:
+        raise ValueError(f"no {kind} with id {item_id} in {'Sonarr' if kind == 'series' else 'Radarr'}")
+    app, hist = ("sonarr", arr("sonarr", "history/series", seriesId=item_id)) if kind == "series" \
+        else ("radarr", arr("radarr", "history/movie", movieId=item_id))
+    torrents = {t["hash"].lower(): t for t in (qb("torrents/info") or [])}
+
+    def held(hs):
+        return [{"hash": h, "name": torrents[h]["name"], "size": torrents[h].get("size") or 0,
+                 "state": torrents[h].get("state")} for h in sorted(hs) if h in torrents]
+
+    if not seasons:
+        hashes = {str(r["downloadId"]).lower() for r in hist or [] if r.get("downloadId")}
+        t = held(hashes)
+        return {**item, "app": app, "seasons": None, "torrents": t, "torrentSize": sum(x["size"] for x in t)}
+
+    known = {se["n"]: se for se in item["seasons"]}
+    if missing := [n for n in seasons if n not in known]:
+        raise ValueError(f"{item['title']} has no season {', '.join(map(str, missing))}")
+    ep_season = {e["id"]: e["seasonNumber"] for e in arr("sonarr", "episode", seriesId=item_id) or []}
+    by_hash = {}
+    for r in hist or []:
+        if r.get("downloadId"):
+            by_hash.setdefault(str(r["downloadId"]).lower(), set()).add(ep_season.get(r.get("episodeId")))
+    only = {h for h, ss in by_hash.items() if ss and ss <= set(seasons)}
+    shared = {h for h, ss in by_hash.items() if h not in only and ss & set(seasons)}
+    t = held(only)
+    return {**item, "app": app, "seasons": seasons,
+            "files": sum(known[n]["files"] for n in seasons), "size": sum(known[n]["size"] for n in seasons),
+            "latest": max((n for n in known if n > 0), default=None),
+            "torrents": t, "torrentSize": sum(x["size"] for x in t), "shared": held(shared)}
+
+
+def _gb(n):
+    return f"{n / 2**30:.1f} GB" if n >= 2**30 else f"{n / 2**20:.0f} MB"
+
+
+MEDIA_RM = "/root/dashboard/agent/media-rm"
+
+
+def a_media_remove(args):
+    """Destructive and final — unlike project_remove there is no trash. Only the Media page's Remove panel
+    offers it (behind two confirmations); it is deliberately not in the Ask bar's action catalog.
+    With seasons it removes only those seasons of a series and keeps the series (and its new episodes)."""
+    p = media_plan(str(args.get("kind", "")), args.get("id"), args.get("seasons"))
+    what = f"{p['title']}" + (f" ({p['year']})" if p.get("year") else "")
+    files = f"{p['files']} episode file(s)" if p["kind"] == "series" else ("the film file" if p["files"] else "no file on disk")
+    tor = f", and {len(p['torrents'])} torrent(s) in qBittorrent with their data" if p["torrents"] else ""
+    hashes = [t["hash"] for t in p["torrents"]]
+    if p["seasons"]:
+        ss = ", ".join(map(str, p["seasons"]))
+        desc = (f"DELETE season {ss} of {what} for good: {files} ({_gb(p['size'])}){tor}. "
+                f"Those seasons are unmonitored; the series stays in Sonarr and keeps getting new episodes")
+        return desc, ["python3", MEDIA_RM, "season", str(p["id"]), ",".join(map(str, p["seasons"])), *hashes], 600
+    desc = (f"DELETE {what} for good: {files} ({_gb(p['size'])}) from {p['path']}{tor}. "
+            f"{p['app'].capitalize()} stops tracking it and adds a list exclusion so it is not grabbed again")
+    return desc, ["python3", MEDIA_RM, p["kind"], str(p["id"]), *hashes], 600
 
 
 # --- dev previews ------------------------------------------------------------
@@ -617,6 +766,120 @@ def claude_code(action, vmid, path, profile="noven"):
     if profile not in ("noven", "work"):
         raise ValueError("profile must be noven or work")
     return json.loads(pv(vmid, "cc", path, profile, "--json", timeout=60))
+
+
+# --- full-screen terminal: a real `tmux attach` on a pty, streamed to the browser ---------
+# Only ever attaches to a project's own preview / Claude session (names come from `pv ls`), as max.
+# Closing detaches the client; the tmux session keeps running.
+TERMS = {}
+TERMS_LOCK = threading.Lock()
+TERM_BUF = 1 << 20          # keep at most 1 MiB of output for reconnects
+TERM_IDLE = 90              # seconds without a stream reader before the client is detached
+DEFAULT_SIZE = {"preview": (200, 50), "cc": (220, 50)}  # what pv creates; restored on close
+
+
+def _winsize(fd, cols, rows):
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+
+
+def _dims(cols, rows):
+    cols, rows = int(cols), int(rows)
+    if not (20 <= cols <= 500 and 5 <= rows <= 200):
+        raise ValueError("bad terminal size")
+    return cols, rows
+
+
+class Term:
+    def __init__(self, vmid, session, target, cols, rows):
+        self.vmid, self.session, self.target = vmid, session, target
+        self.buf, self.base = bytearray(), 0   # base = stream offset of buf[0]
+        self.cond = threading.Condition()
+        self.alive, self.readers, self.seen = True, 0, time.time()
+        pid, fd = pty.fork()
+        if pid == 0:
+            os.execvp("pct", ["pct", "exec", str(vmid), "--", "env", "TERM=xterm-256color", "LANG=C.UTF-8",
+                              "runuser", "-u", "max", "--", "tmux", "attach", "-t", session])
+        self.pid, self.fd = pid, fd
+        _winsize(fd, cols, rows)
+        threading.Thread(target=self._pump, daemon=True).start()
+
+    def _pump(self):
+        while True:
+            try:
+                data = os.read(self.fd, 65536)
+            except OSError:
+                data = b""
+            with self.cond:
+                if not data:
+                    self.alive = False
+                    self.cond.notify_all()
+                    return
+                self.buf += data
+                if len(self.buf) > TERM_BUF:
+                    cut = len(self.buf) - TERM_BUF
+                    del self.buf[:cut]
+                    self.base += cut
+                self.cond.notify_all()
+
+    def write(self, data: bytes):
+        os.write(self.fd, data)
+
+    def close(self):
+        try:
+            os.kill(self.pid, signal.SIGTERM)
+            os.waitpid(self.pid, 0)
+        except (ProcessLookupError, ChildProcessError):
+            pass
+        try:
+            os.close(self.fd)
+        except OSError:
+            pass
+        # hand the window back its usual size, and let the next attach resize it again
+        w, h = DEFAULT_SIZE[self.target]
+        subprocess.run(["pct", "exec", str(self.vmid), "--", "runuser", "-u", "max", "--", "tmux",
+                        "resize-window", "-t", self.session, "-x", str(w), "-y", str(h), ";",
+                        "set-window-option", "-t", self.session, "window-size", "latest"],
+                       capture_output=True, timeout=15)
+
+
+def term_open(vmid, path, target, cols, rows):
+    checked_project(vmid, path)
+    if target not in ("preview", "cc"):
+        raise ValueError("target must be preview or cc")
+    cols, rows = _dims(cols, rows)
+    p = next(p for p in json.loads(pv(vmid, "ls", "--json")) if p["path"] == path)
+    session = p["cc"]["session"] if target == "cc" else p["session"]
+    alive = p["cc"]["running"] if target == "cc" else (p["running"] or p.get("exited") is not None)
+    if not alive:
+        raise ValueError(f"{session} is not running")
+    tid = secrets.token_urlsafe(18)
+    with TERMS_LOCK:
+        TERMS[tid] = Term(vmid, session, target, cols, rows)
+    return {"id": tid, "session": session}
+
+
+def term_get(tid):
+    t = TERMS.get(str(tid))
+    if not t:
+        raise ValueError("terminal is closed")
+    return t
+
+
+def term_close(tid):
+    with TERMS_LOCK:
+        t = TERMS.pop(str(tid), None)
+    if t:
+        t.close()
+    return {"closed": bool(t)}
+
+
+def term_reaper():
+    while True:
+        time.sleep(15)
+        now = time.time()
+        for tid, t in list(TERMS.items()):
+            if (not t.alive) or (t.readers == 0 and now - t.seen > TERM_IDLE):
+                threading.Thread(target=term_close, args=(tid,), daemon=True).start()
 
 
 def _gh_user():
@@ -710,11 +973,48 @@ def _pct(vmid, *cmd):
     return ["pct", "exec", str(vmid), "--", *cmd]
 
 
+def backup_busy():
+    """reasons a vzdump should not start right now. Snapshot mode does not stop or freeze anything, but only one
+    vzdump runs at a time, it takes a lock on each guest, and it competes with an upgrade for disk I/O."""
+    out = []
+    tasks = js("pvesh", "get", "/nodes/pve/tasks", "--source", "active", "--output-format", "json", default=[]) or []
+    for t in tasks:
+        if t.get("type") in ("vzdump", "vzrestore", "vzsnapshot", "vzrollback", "vzmigrate"):
+            out.append(f"a {t['type']} task is already running ({t.get('id') or 'all guests'}, started by {t.get('user')})")
+    if not any("vzdump" in r for r in out) and subprocess.run(["pgrep", "-x", "vzdump"], capture_output=True).returncode == 0:
+        out.append("a vzdump process is already running")
+    for conf in sorted(Path("/etc/pve/lxc").glob("*.conf")):
+        m = re.search(r"^lock:\s*(\S+)", conf.read_text().split("\n[", 1)[0], re.M)
+        if m:
+            out.append(f"CT {conf.stem} is locked ({m[1]})")
+    with JOBS_LOCK:
+        for j in JOBS.values():
+            if j["done"] is None and j["action"] in ("backup_ct", "backup_all", "apt_upgrade", "apt_upgrade_all"):
+                out.append(f"dashboard job still running: {j['desc']}")
+    return out
+
+
+def _backup_ok():
+    busy = backup_busy()
+    if busy:
+        raise ValueError("not now — " + "; ".join(busy))
+
+
+VZDUMP = ["--storage", "vzdump", "--mode", "snapshot", "--compress", "zstd", "--notes-template", "{{guestname}} (dashboard)"]
+
+
 def a_backup_ct(args):
     c = _ct(args)
-    return f"back up CT {c['vmid']} {c['name']} (vzdump, snapshot mode)", [
-        "vzdump", str(c["vmid"]), "--storage", "vzdump", "--mode", "snapshot", "--compress", "zstd",
-        "--notes-template", "{{guestname}} (dashboard)"], 3 * 3600
+    _backup_ok()
+    return f"back up CT {c['vmid']} {c['name']} (vzdump, snapshot mode)", ["vzdump", str(c["vmid"]), *VZDUMP], 3 * 3600
+
+
+def a_backup_all(args):
+    """every guest, one after the other, like the nightly job. Snapshot mode: nothing is stopped or paused;
+    bind mounts (the media and photo libraries on tank) are not part of it — sanoid/syncoid cover those."""
+    _backup_ok()
+    n = len(cts())
+    return f"back up all {n} containers now (vzdump, snapshot mode — services keep running)", ["vzdump", "--all", "1", *VZDUMP], 4 * 3600
 
 
 def a_ct_start(args):
@@ -730,6 +1030,25 @@ def a_ct_shutdown(args):
 def a_ct_reboot(args):
     c = _ct(args, running=True)
     return f"reboot CT {c['vmid']} {c['name']}", ["pct", "reboot", str(c["vmid"]), "--timeout", "90"], 300
+
+
+def a_host_shutdown(args):
+    """power the whole machine off one minute from now — every container and the dashboard itself go with it.
+    The minute is the undo window (host_shutdown_cancel). Not offered to the Ask model."""
+    busy = backup_busy()
+    if busy:
+        raise ValueError("not now — " + "; ".join(busy))
+    if scheduled_shutdown():
+        raise ValueError("a shutdown is already scheduled")
+    n = sum(1 for c in cts() if c["status"] == "running")
+    return (f"power off the pve host in 1 minute ({n} running containers are shut down first)",
+            ["shutdown", "-P", "+1", "powered off from the dashboard"], 60)
+
+
+def a_host_shutdown_cancel(args):
+    if not scheduled_shutdown():
+        raise ValueError("no shutdown is scheduled")
+    return "cancel the scheduled shutdown", ["shutdown", "-c"], 60
 
 
 def a_service_restart(args):
@@ -855,6 +1174,38 @@ def a_github_publish(args):
             ["python3", GH_NEW, "publish", str(vmid), path, name, vis], 1800)
 
 
+def a_project_remove(args):
+    """Destructive, so the description the owner reads on the Run button must be exact: it names the box,
+    the project and whether anything would be lost. `pv rm` itself refuses unpushed work unless forced,
+    and moves the project to ~/.pv-trash rather than deleting it."""
+    vmid, path, box = _dev_project(args)
+    short = path.rstrip("/").rsplit("/", 1)[-1]
+    force = bool(args.get("force"))
+    bits = []
+    try:
+        pr = next((x for x in json.loads(pv(vmid, "ls", "--json")) if x["path"] == path), None)
+        g = (pr or {}).get("git") or {}
+        if g.get("dirty"):
+            bits.append(f"{g['dirty']} uncommitted change(s)")
+        if not g.get("repo"):
+            bits.append("no GitHub remote")
+        elif g.get("ahead"):
+            bits.append(f"{g['ahead']} unpushed commit(s)")
+    except Exception:
+        pass
+    # A model asked to "delete X" sets force=true by reflex, so the Run button — the only thing the owner
+    # actually reads — has to say what forcing costs, in front, instead of a parenthesis at the end.
+    if force and bits:
+        desc = (f"FORCE: remove {short} from {box} (CT {vmid}) although it has {' and '.join(bits)} — "
+                f"that work exists nowhere else and would live on only as the ~/.pv-trash copy")
+    elif force:
+        desc = f"remove the project {short} from {box} (CT {vmid}) (clean and pushed) — it is moved to ~/.pv-trash, not deleted"
+    else:
+        state = f" ({', '.join(bits)}, so this will be refused — push it first)" if bits else " (clean and pushed)"
+        desc = f"remove the project {short} from {box} (CT {vmid}){state} — it is moved to ~/.pv-trash, not deleted"
+    return desc, _pct(vmid, PV, "rm", path, *(["--force"] if force else [])), 600
+
+
 MODEL_RE = re.compile(r"^[a-zA-Z0-9][\w.:/-]{0,80}$")
 
 
@@ -893,12 +1244,13 @@ def a_newdev(args):
 
 
 ACTIONS = {
-    "backup_ct": a_backup_ct, "ct_start": a_ct_start, "ct_shutdown": a_ct_shutdown, "ct_reboot": a_ct_reboot,
+    "backup_ct": a_backup_ct, "backup_all": a_backup_all, "ct_start": a_ct_start, "ct_shutdown": a_ct_shutdown, "ct_reboot": a_ct_reboot,
     "service_restart": a_service_restart, "apt_upgrade": a_apt_upgrade,
     "apt_upgrade_all": a_apt_upgrade_all, "zfs_scrub": a_zfs_scrub,
     "unit_start": a_unit_start, "ollama_pull": a_ollama_pull, "ollama_stop": a_ollama_stop, "newdev": a_newdev,
     "git_push": a_git_push, "git_fetch": a_git_fetch, "project_new": a_project_new,
-    "github_publish": a_github_publish,
+    "github_publish": a_github_publish, "project_remove": a_project_remove,
+    "media_remove": a_media_remove, "host_shutdown": a_host_shutdown, "host_shutdown_cancel": a_host_shutdown_cancel,
 }
 
 JOBS, JOBS_LOCK = {}, threading.Lock()
@@ -927,7 +1279,7 @@ def _run_job(job, argv, timeout):
         job["rc"] = -1
     finally:
         job["done"] = int(time.time())
-        invalidate("updates", "ct_ports", "overview")
+        invalidate("updates", "ct_ports", "overview", "media_items", "media", "media_sizes")
 
 
 def start_action(name, args):
@@ -993,12 +1345,18 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, media())
             if u.path == "/github/repos":
                 return self._send(200, github_repos())
+            if u.path == "/media/items":
+                return self._send(200, media_items())
+            if u.path == "/media/plan":
+                return self._send(200, media_plan(q.get("kind"), q.get("id"), q.get("seasons")))
             if u.path == "/cc/log":
                 return self._send(200, claude_code("log", int(q["vmid"]), q["path"]))
             if u.path == "/preview/log":
                 return self._send(200, preview("log", int(q["vmid"]), q["path"]))
             if u.path == "/action/status":
                 return self._send(200, job_status(q["id"]))
+            if u.path == "/term/stream":
+                return self._term_stream(term_get(q["id"]), int(q.get("from", 0)))
             self._send(404, {"error": "not found"})
         except (ValueError, KeyError) as e:
             self._send(400, {"error": str(e)})
@@ -1016,6 +1374,21 @@ class H(BaseHTTPRequestHandler):
             if m:
                 return self._send(200, claude_code(m[1], int(body["vmid"]), str(body["path"]),
                                                    str(body.get("profile", "noven"))))
+            if u.path == "/term/open":
+                return self._send(200, term_open(int(body["vmid"]), str(body["path"]), str(body["target"]),
+                                                 body.get("cols", 80), body.get("rows", 24)))
+            if u.path == "/term/input":
+                data = body.get("data", "")
+                if not isinstance(data, str) or len(data) > 65536:
+                    raise ValueError("bad input")
+                term_get(body["id"]).write(data.encode())
+                return self._send(200, {"ok": True})
+            if u.path == "/term/resize":
+                t = term_get(body["id"])
+                _winsize(t.fd, *_dims(body["cols"], body["rows"]))
+                return self._send(200, {"ok": True})
+            if u.path == "/term/close":
+                return self._send(200, term_close(body["id"]))
             if u.path == "/action/check":
                 return self._send(200, {"desc": check_action(str(body.get("name")), body.get("args"))})
             if u.path == "/action/run":
@@ -1024,12 +1397,46 @@ class H(BaseHTTPRequestHandler):
         except (ValueError, KeyError) as e:
             self._send(400, {"error": str(e)})
 
+    def _term_stream(self, t, pos):
+        """server-sent events: `data:` = base64 of the pty output from byte offset `pos`, `event: end` when it exits"""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+        t.readers += 1
+        try:
+            while True:
+                with t.cond:
+                    if pos - t.base >= len(t.buf) and t.alive:
+                        t.cond.wait(15)
+                    start = max(pos - t.base, 0)
+                    chunk = bytes(t.buf[start:])
+                    pos = t.base + len(t.buf)
+                    alive = t.alive
+                    t.seen = time.time()
+                if chunk:
+                    self.wfile.write(f"id: {pos}\ndata: {base64.b64encode(chunk).decode()}\n\n".encode())
+                elif alive:
+                    self.wfile.write(b": ping\n\n")
+                if not alive:
+                    self.wfile.write(b"event: end\ndata: \n\n")
+                    self.wfile.flush()
+                    return
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            t.readers -= 1
+            t.seen = time.time()
+
     def log_message(self, fmt, *args):
         if not self.path.startswith(("/overview", "/projects", "/media", "/preview/log", "/cc/log",
-                                     "/action/status", "/github/repos")):
+                                     "/action/status", "/term/", "/github/repos", "/media/items", "/media/plan")):
             super().log_message(fmt, *args)
 
 
 if __name__ == "__main__":
     cpu_percent()
+    threading.Thread(target=term_reaper, daemon=True).start()
     ThreadingHTTPServer((BIND, PORT), H).serve_forever()

@@ -23,6 +23,9 @@ export async function aiModels(event: H3Event) {
       return {
         name: m.name, size: m.size, uncensored: UNCENSORED.test(m.name), family: m.details?.family, params: m.details?.parameter_size, quant: m.details?.quantization_level,
         loaded: l ? { size: l.size, vram: l.size_vram, until: l.expires_at, ctx: l.context_length } : null,
+        // keep_alive -1 gives an expiry centuries out: this is the model the warm-model timer holds in
+        // VRAM, so it answers instantly and is what the Ask box should default to
+        warm: !!l && Date.parse(l.expires_at) - Date.now() > 24 * 3600_000,
       }
     })
     .sort((a: any, b: any) => b.size - a.size)

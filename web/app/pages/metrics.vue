@@ -14,7 +14,7 @@ const updates = computed(() => (o.value?.updates?.host?.count ?? 0)
   <div>
     <AskPanel
       scope="metrics" placeholder="Ask about the machine…"
-      :examples="['How is my server doing?', 'Anything I should fix or update?', 'What is using the GPU?', 'Which local models can I run well?']"
+      :examples="['How is my server doing?', 'Back up all services now', 'Anything I should fix or update?', 'What is using the GPU?', 'Which local models can I run well?']"
       @refresh="refresh"
     />
 
@@ -35,13 +35,13 @@ const updates = computed(() => (o.value?.updates?.host?.count ?? 0)
       </div>
 
       <div class="grid cols-3">
-        <HostPanel :host="o.host" :updates="o.updates" />
+        <HostPanel :host="o.host" :updates="o.updates" :busy="o.backups?.busy" @action="(n, a) => run(n, a, refresh)" />
         <GpuPanel :gpu="o.gpu" :cts="o.cts" />
         <StoragePanel :pools="o.pools" :datasets="o.datasets" :smart="o.smart" />
       </div>
 
       <div class="grid cols-2">
-        <BackupsPanel :b="o.backups" :now="now" />
+        <BackupsPanel :b="o.backups" :now="now" @action="(n, a) => run(n, a, refresh)" />
         <TailnetPanel :t="o.tailnet" :now="now" />
       </div>
 

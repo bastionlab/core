@@ -11,6 +11,7 @@ const ALL: Scope[] = ['home', 'media', 'dev', 'metrics', 'chat']
 const CATALOG: { scopes: Scope[], line: string }[] = [
   { scopes: ALL, line: 'service_restart — args: service, one of dash, ollama, open-webui, searxng, immich, immich-ml, jellyfin, audiobookshelf, seerr, qbittorrent, prowlarr, radarr, sonarr, lazylibrarian, bazarr, gluetun, subgen. Restarting gluetun rotates the VPN server; media-vpn-sync re-attaches the clients.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'backup_ct — args: vmid. vzdump backup of one container.' },
+  { scopes: ['home', 'metrics', 'chat'], line: 'backup_all — no args. vzdump backup of EVERY container now, one after the other (snapshot mode: nothing is stopped or paused, takes a few minutes). Propose this for "back up everything / all services"; use backup_ct for one container. It refuses on its own while another backup, restore or upgrade is running — if the snapshot lists anything under "Busy", say so instead of proposing.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'ct_start / ct_shutdown / ct_reboot — args: vmid. Container power state.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'apt_upgrade — args: target, either "host" or a container id. Runs apt update && apt upgrade.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'apt_upgrade_all — no args. Upgrades packages on the pve host AND in every running container, one after the other. Propose this when the owner wants everything updated; use apt_upgrade for a single target.' },
@@ -21,6 +22,7 @@ const CATALOG: { scopes: Scope[], line: string }[] = [
   { scopes: ['dev', 'chat'], line: 'git_push — args: vmid (the dev box), path (the project path), message (optional). With a message it commits everything first; without one it only pushes commits that already exist.' },
   { scopes: ['dev', 'chat'], line: 'git_fetch — args: vmid, path. Fetches from GitHub so ahead/behind is current.' },
   { scopes: ['dev', 'chat'], line: 'project_new — args: vmid, name, repo (optional git@github.com:owner/name), github (optional true), visibility (private or public, default private). With repo it clones that repo into ~/Projects/GitHub/<name>. With github: true it scaffolds the project AND creates the GitHub repo for it, then pushes. With neither it only scaffolds locally.' },
+  { scopes: ['dev', 'chat'], line: 'project_remove — args: vmid, path, force (optional). Removes a project from a dev box: stops its preview and Claude session and moves the folder to ~/.pv-trash, so it is recoverable and nothing on GitHub is touched. It refuses on its own if the project has uncommitted or unpushed work. Leave force out: "delete it", "it was just a test" or "I do not need it" is NOT permission to force. Pass force: true only after the owner has been told what is unpushed and has said in this conversation that that work can be lost. This is the action for "delete/remove/get rid of <project>"; never propose git_push for that.' },
   { scopes: ['dev', 'chat'], line: 'github_publish — args: vmid, path, name (optional, defaults to the folder name), visibility (private or public, default private). For a project that exists but has no remote: creates the GitHub repo and pushes it there. Never propose it for a project that already has one.' },
 ]
 
@@ -37,7 +39,7 @@ export function actionTool(scope: Scope = 'metrics') {
         'The "action" argument must be exactly one of these names, with nothing added, and "args" carries its arguments:',
         ...lines,
         'Example call: {"action": "service_restart", "args": {"service": "radarr"}, "why": "it is not responding"}',
-        'Nothing destructive exists: no deleting containers, models, snapshots or datasets. If the owner asks for that, explain the command instead.',
+        'Nothing else destructive exists: no deleting containers, models, snapshots or datasets, and nothing that touches GitHub repos. If the owner asks for one of those, say in one line that you have no action for it and give the exact command once.',
       ].join('\n'),
       parameters: {
         type: 'object',

@@ -43,7 +43,7 @@ const topics = computed(() => [
       ? [
           { text: vpnOk.value ? 'VPN ok' : 'VPN needs a look', tone: vpnOk.value ? 'ok' : 'bad' },
           { text: `${downloading.value} downloading` },
-          { text: `${bytes(m.value.sizes?.used)} library` },
+          { text: `${bytes(m.value.sizes?.used)} on disk` },
         ]
       : [{ text: 'loading…' }],
   },
@@ -81,7 +81,7 @@ const topics = computed(() => [
   {
     to: '/chat', icon: '✦', name: 'Chat', hue: 25,
     line: 'Talk to the local models with history, web search and actions.',
-    chips: [{ text: 'granite · qwen3.6', tone: 'accent' }],
+    chips: [{ text: 'qwen3.5 · qwen3.6', tone: 'accent' }],
   },
 ])
 </script>

@@ -58,7 +58,7 @@ const dirty = computed(() => all.value.filter((p: any) => p.git?.dirty || p.git?
 .summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .pad { padding: 40px 0; text-align: center; }
 .box { margin-bottom: 16px; }
-.projects { display: grid; grid-template-columns: repeat(auto-fit, minmax(820px, 1fr)); gap: 12px; }
+.projects { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(820px, 100%), 1fr)); gap: 12px; }
 .two { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 @media (max-width: 900px) { .two { grid-template-columns: minmax(0, 1fr); } }
 </style>

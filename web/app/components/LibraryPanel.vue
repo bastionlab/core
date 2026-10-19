@@ -12,10 +12,18 @@ const cards = computed(() => [
   { icon: '🎧', name: 'Audiobooks', have: l.value.books?.total, of: null, unit: 'books',
     size: props.sizes?.dirs?.hoerbuecher, note: l.value.books?.wanted ? `${l.value.books.wanted} wanted` : 'nothing wanted', app: 'LazyLibrarian' },
 ])
-const dirs = computed(() => Object.entries(props.sizes?.dirs ?? {}).map(([name, size]) => ({ name, size: size as number })).sort((a, b) => b.size - a.size))
+/** downloads/ is almost entirely hardlinks of the library dirs, so it is not a slice of its own —
+ *  showing it next to anime/filme/serien reads as double the disk that is actually in use. */
+const all = computed(() => Object.entries(props.sizes?.dirs ?? {}).map(([name, size]) => ({ name, size: size as number })))
+const dirs = computed(() => all.value.filter(d => d.name !== 'downloads').sort((a, b) => b.size - a.size))
 const colors = ['var(--accent)', '#b36bdb', '#2fa8a0', '#d9822b', '#c94f7c', '#6b8e23']
+const libraries = computed(() => dirs.value.reduce((s, d) => s + d.size, 0))
+const downloads = computed(() => all.value.find(d => d.name === 'downloads')?.size ?? 0)
 const apparent = computed(() => props.sizes?.apparent ?? 0)
-const saved = computed(() => Math.max(0, apparent.value - (props.sizes?.used ?? 0)))
+const used = computed(() => props.sizes?.used ?? 0)
+/** what the downloads dir costs beyond the library copies it is hardlinked to */
+const unique = computed(() => Math.max(0, used.value - libraries.value))
+const saved = computed(() => Math.max(0, apparent.value - used.value))
 </script>
 
 <template>
@@ -34,9 +42,9 @@ const saved = computed(() => Math.max(0, apparent.value - (props.sizes?.used ?? 
       </div>
     </div>
 
-    <h3>Disk <span class="muted small">tank/medien</span></h3>
+    <h3>Disk <span class="muted small">tank/medien · {{ bytes(used) }} used</span></h3>
     <div class="bar">
-      <span v-for="(d, i) in dirs" :key="d.name" :style="{ width: pct(d.size, apparent) + '%', background: colors[i % colors.length] }" :title="`${d.name}: ${bytes(d.size)}`" />
+      <span v-for="(d, i) in dirs" :key="d.name" :style="{ width: pct(d.size, libraries) + '%', background: colors[i % colors.length] }" :title="`${d.name}: ${bytes(d.size)}`" />
     </div>
     <div class="legend">
       <span v-for="(d, i) in dirs" :key="d.name" class="small">
@@ -44,8 +52,10 @@ const saved = computed(() => Math.max(0, apparent.value - (props.sizes?.used ?? 
       </span>
     </div>
     <div class="faint small foot">
-      {{ bytes(apparent) }} of files, but only <b>{{ bytes(sizes?.used) }}</b> on disk — finished downloads are hardlinked into the library,
-      so seeding costs nothing ({{ bytes(saved) }} saved). {{ bytes(sizes?.avail) }} free.
+      {{ bytes(libraries) }} of library (all of it above, anime included), plus {{ bytes(unique) }} of downloads that are not yet
+      hardlinked in — <b>{{ bytes(used) }}</b> on disk in total. The downloads dir looks like {{ bytes(downloads) }} of files but is the
+      same bytes as the library copies, which is why {{ bytes(apparent) }} of files fit in {{ bytes(used) }} ({{ bytes(saved) }} saved).
+      {{ bytes(sizes?.avail) }} free.
     </div>
   </Panel>
 </template>

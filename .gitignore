@@ -1,1 +1,3 @@
 agent/token
+__pycache__/
+*.pyc

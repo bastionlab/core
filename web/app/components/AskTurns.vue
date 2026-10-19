@@ -17,11 +17,13 @@ const emit = defineEmits<{ run: [Proposal] }>()
       <details v-if="t.r" class="reason small muted"><summary>reasoning{{ t.busy && !t.a ? '…' : '' }}</summary><div class="pre">{{ t.r }}</div></details>
       <div v-if="t.a" class="a" v-html="md(t.a)" />
       <div v-else-if="t.busy && !t.r" class="muted small">thinking… (first answer loads the model, can take ~20 s)</div>
-      <div v-for="(p, j) in t.proposals" :key="'p' + j" class="proposal" :class="p.state">
+      <div v-for="(p, j) in t.proposals" :key="'p' + j" class="proposal" :class="[p.state, { danger: p.desc?.startsWith('FORCE:') }]">
         <div class="head">
           <span class="what"><b>{{ p.desc }}</b></span>
           <span v-if="p.state === 'idle'" class="btns">
-            <button class="btn primary small" @click="emit('run', p)">Run</button>
+            <button class="btn primary small" :class="{ danger: p.desc?.startsWith('FORCE:') }" @click="emit('run', p)">
+              {{ p.desc?.startsWith('FORCE:') ? 'Run anyway' : 'Run' }}
+            </button>
             <button class="btn ghost small" @click="p.state = 'dismissed'">Dismiss</button>
           </span>
           <span v-else class="pill" :class="{ ok: p.state === 'done', bad: p.state === 'failed' }">
@@ -55,6 +57,10 @@ const emit = defineEmits<{ run: [Proposal] }>()
 .proposal.done { border-left-color: var(--ok); }
 .proposal.failed { border-left-color: var(--bad); }
 .proposal.dismissed { opacity: .55; }
+/* a proposal that would destroy work the owner cannot get back is not an ordinary one */
+.proposal.danger { border-color: var(--bad); border-left-color: var(--bad); }
+.proposal.danger .what { color: var(--bad); }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
 .proposal .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .proposal .btns { margin-left: auto; display: flex; gap: 6px; }
 .proposal .btn.small { padding: 3px 10px; font-size: 12px; }
