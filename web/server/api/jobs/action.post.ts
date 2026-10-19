@@ -37,7 +37,6 @@ export default defineEventHandler(async (event) => {
       levels: only(body.levels, LEVELS),
       min_salary: num(body.minSalary),
       langs: only(body.langs, ['de', 'en'] as const),
-      no_german: !!body.noGerman,
       no_agency: body.noAgency !== false,
       exclude: list(body.exclude),
       exclude_companies: list(body.excludeCompanies),

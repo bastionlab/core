@@ -20,7 +20,7 @@ const LANGS = [{ v: 'de', label: 'Deutsch' }, { v: 'en', label: 'Englisch' }]
 const blank = () => ({
   name: '', wish: '', keywords: '', modes: ['onsite', 'hybrid', 'remote'] as string[], place: 'Berlin', radius: '25',
   employment: [] as string[], permanentOnly: false, levels: [] as string[], minSalary: '', langs: [] as string[],
-  noGerman: false, noAgency: true, exclude: '', excludeCompanies: '', maxAge: '14', minFit: '60', sources: [] as string[],
+  noAgency: true, exclude: '', excludeCompanies: '', maxAge: '14', minFit: '60', sources: [] as string[],
 })
 /** null = closed, 'new' = adding, a number = editing that search */
 const editing = ref<'new' | number | null>(null)
@@ -48,7 +48,7 @@ function openEdit(s: any) {
     name: s.name, wish: sp.wish ?? '', keywords: (sp.keywords ?? []).join(', '),
     modes: [...(sp.modes ?? [])], place: sp.place ?? '', radius: String(sp.radius_km ?? 25),
     employment: [...(sp.employment ?? [])], permanentOnly: !!sp.permanent_only, levels: [...(sp.levels ?? [])],
-    minSalary: sp.min_salary ?? '', langs: [...(sp.langs ?? [])], noGerman: !!sp.no_german, noAgency: sp.no_agency !== false,
+    minSalary: sp.min_salary ?? '', langs: [...(sp.langs ?? [])], noAgency: sp.no_agency !== false,
     exclude: (sp.exclude ?? []).join(', '), excludeCompanies: (sp.exclude_companies ?? []).join(', '),
     maxAge: String(sp.max_age_days ?? 14), minFit: String(sp.min_fit ?? 60), sources: [...(sp.sources ?? [])],
   })
@@ -170,7 +170,6 @@ function summary(sp: any) {
       </div>
       <label class="chk"><input v-model="form.noAgency" type="checkbox"> Personalvermittlung &amp; Zeitarbeit aussortieren</label>
       <label class="chk"><input v-model="form.permanentOnly" type="checkbox"> nur unbefristet</label>
-      <label class="chk"><input v-model="form.noGerman" type="checkbox"> Stellen aussortieren, die gutes Deutsch verlangen</label>
 
       <button type="button" class="btn ghost more" @click="more = !more">{{ more ? '▾' : '▸' }} Ausschlüsse &amp; Portale</button>
       <template v-if="more">
