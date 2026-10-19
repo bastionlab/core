@@ -64,10 +64,10 @@ watch(() => [props.mode, props.lat, props.lon, props.radius, props.bbox], draw, 
 .map { height: 260px; border-radius: 8px; border: 1px solid var(--line); overflow: hidden; background: var(--panel-2); z-index: 0; }
 .map.picking { cursor: crosshair; }
 .map :deep(.leaflet-container) { font: inherit; }
-.map :deep(.leaflet-control-attribution) { font-size: 10px; }
+.map :deep(.leaflet-control-attribution) { font-size: 10px; background: rgba(10, 12, 16, .7); color: var(--muted); }
+.map :deep(.leaflet-control-attribution a) { color: var(--muted); }
+.map :deep(.leaflet-bar) { border: 1px solid var(--line-2); box-shadow: none; }
+.map :deep(.leaflet-bar a) { background: var(--panel-2); color: var(--text); border-bottom-color: var(--line-2); }
 /* the same dark as the rest of the page instead of a white slab */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .map :deep(.leaflet-tile-pane) { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
-}
-:root[data-theme="dark"] .map :deep(.leaflet-tile-pane) { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
+.map :deep(.leaflet-tile-pane) { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
 </style>

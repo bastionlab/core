@@ -25,75 +25,70 @@ const running = computed(() => (o.value?.cts ?? []).filter((c: any) => c.status 
 const updates = computed(() => (o.value?.updates?.host?.count ?? 0)
   + Object.values(o.value?.updates?.cts ?? {}).reduce((s: number, u: any) => s + (u?.count ?? 0), 0))
 
-/** the glance band right under the header — the whole house in eight numbers */
+/** the glance band — the house in a handful of numbers */
 const band = computed(() => [
-  { label: 'Containers', value: o.value ? `${running.value}/${o.value.cts.length}` : '–' },
-  { label: 'CPU', value: o.value ? `${o.value.host.cpu ?? '–'}%` : '–', tone: (o.value?.host?.cpu ?? 0) > 85 ? 'warn' : '' },
+  { label: 'CPU', value: o.value ? `${Math.round(o.value.host.cpu ?? 0)}%` : '–', tone: (o.value?.host?.cpu ?? 0) > 85 ? 'warn' : '' },
   { label: 'RAM', value: o.value ? `${pct(o.value.host.mem.used, o.value.host.mem.total).toFixed(0)}%` : '–' },
   { label: 'GPU', value: o.value?.gpu ? `${o.value.gpu.util ?? 0}%` : '–' },
-  { label: 'Downloading', value: m.value ? downloading.value : '–' },
-  { label: 'Previews', value: boxes.value ? previews.value : '–', tone: previews.value ? 'ok' : '' },
+  { label: 'Containers', value: o.value ? `${running.value}/${o.value.cts.length}` : '–', tone: o.value && running.value < o.value.cts.length ? 'warn' : '' },
   { label: 'Updates', value: o.value ? updates.value : '–', tone: updates.value ? 'warn' : '' },
   { label: 'Uptime', value: o.value ? duration(o.value.host.uptime) : '–' },
 ])
+const health = computed(() => {
+  if (!o.value) return { tone: '', text: 'Loading…' }
+  const bad = list.value.filter(a => a.level === 'bad').length
+  if (bad) return { tone: 'bad', text: `${bad} problem${bad > 1 ? 's' : ''}` }
+  if (list.value.length) return { tone: 'warn', text: `${list.value.length} to check` }
+  return { tone: 'ok', text: 'All good' }
+})
 
 const topics = computed(() => [
   {
-    to: '/media', icon: '🍿', name: 'Media', hue: 285,
-    line: 'Downloads, the VPN tunnel and what is in the library.',
+    to: '/media', icon: 'media', name: 'Media',
     chips: m.value
       ? [
-          { text: vpnOk.value ? 'VPN ok' : 'VPN needs a look', tone: vpnOk.value ? 'ok' : 'bad' },
-          { text: `${downloading.value} downloading` },
-          { text: `${bytes(m.value.sizes?.used)} on disk` },
+          { text: vpnOk.value ? 'VPN ok' : 'VPN!', tone: vpnOk.value ? 'ok' : 'bad' },
+          ...(downloading.value ? [{ text: `${downloading.value} ↓`, tone: 'accent' }] : []),
+          { text: bytes(m.value.sizes?.used) },
         ]
-      : [{ text: 'loading…' }],
+      : [],
   },
   {
-    to: '/dev', icon: '⌨️', name: 'Dev', hue: 210,
-    line: 'Projects on the dev boxes, previews, GitHub and Claude Code.',
+    to: '/dev', icon: 'dev', name: 'Dev',
     chips: boxes.value
       ? [
           { text: `${projects.value.length} projects` },
-          { text: `${previews.value} previews`, tone: previews.value ? 'ok' : '' },
-          { text: `${claudes.value} Claude`, tone: claudes.value ? 'accent' : '' },
+          ...(previews.value ? [{ text: `${previews.value} running`, tone: 'ok' }] : []),
+          ...(claudes.value ? [{ text: `${claudes.value} Claude`, tone: 'accent' }] : []),
         ]
-      : [{ text: 'loading…' }],
+      : [],
   },
   {
-    to: '/deals', icon: '🏷️', name: 'Deals', hue: 95,
-    line: 'Kleinanzeigen finds in Berlin, pushed to Telegram the moment they appear.',
+    to: '/deals', icon: 'deals', name: 'Deals',
     chips: deals.value
       ? [
           { text: `${deals.value.status?.enabled ?? 0} searches` },
-          { text: `${dealsFresh.value} new today`, tone: dealsFresh.value ? 'accent' : '' },
+          ...(dealsFresh.value ? [{ text: `${dealsFresh.value} new`, tone: 'accent' }] : []),
         ]
-      : [{ text: 'loading…' }],
+      : [],
   },
   {
-    to: '/wohnungen', icon: '🔑', name: 'Wohnungen', hue: 30,
-    line: 'Rental flats from Kleinanzeigen and inberlinwohnen, read by the local AI, checked on Warmmiete.',
+    to: '/wohnungen', icon: 'key', name: 'Wohnungen',
     chips: flats.value
       ? [
-          { text: `${flats.value.status?.enabled ?? 0} searches` },
-          { text: `${flatsFresh.value} new today`, tone: flatsFresh.value ? 'accent' : '' },
+          { text: `${flats.value.status?.enabled ?? 0} Suchen` },
+          ...(flatsFresh.value ? [{ text: `${flatsFresh.value} neu`, tone: 'accent' }] : []),
         ]
-      : [{ text: 'loading…' }],
+      : [],
   },
   {
-    to: '/metrics', icon: '📊', name: 'Metrics', hue: 150,
-    line: 'Host, GPU, storage, backups, ports — and the update buttons.',
+    to: '/metrics', icon: 'metrics', name: 'Metrics',
     chips: o.value
       ? [
-          { text: list.value.length ? `${list.value.length} alerts` : 'no alerts', tone: list.value.some(a => a.level === 'bad') ? 'bad' : list.value.length ? 'warn' : 'ok' },
-          { text: `${updates.value} updates`, tone: updates.value ? 'warn' : '' },
+          ...(list.value.length ? [{ text: `${list.value.length} alerts`, tone: list.value.some(a => a.level === 'bad') ? 'bad' : 'warn' }] : []),
+          ...(updates.value ? [{ text: `${updates.value} updates`, tone: 'warn' }] : [{ text: 'up to date' }]),
         ]
-      : [{ text: 'loading…' }],
-  },
-  {
-    to: '/chat', icon: '✦', name: 'Chat', hue: 25,
-    line: 'Talk to the local models with history, web search and actions.',
-    chips: [{ text: 'qwen3.5 · qwen3.6', tone: 'accent' }],
+      : [],
   },
 ])
 </script>
@@ -106,34 +101,32 @@ const topics = computed(() => [
       @refresh="refresh"
     />
 
-    <AlertsBar :items="list" />
     <div v-if="error && !o" class="bad pad">Could not reach the agent: {{ error.statusMessage || error.message }}</div>
 
     <div class="band">
+      <div class="cell health" :class="health.tone">
+        <span class="dot" :class="health.tone" />
+        <b>{{ health.text }}</b>
+      </div>
       <div v-for="b in band" :key="b.label" class="cell">
-        <span class="small muted">{{ b.label }}</span>
+        <span class="lbl">{{ b.label }}</span>
         <b :class="b.tone">{{ b.value }}</b>
       </div>
     </div>
+    <AlertsBar :items="list" />
 
-    <h2 class="sec">
-      Apps
-      <span class="muted small">{{ apps.length }} services{{ down ? ` · ${down} down` : ' · all up' }}</span>
-    </h2>
+    <h2 class="sec">Apps <span v-if="down" class="bad small">{{ down }} down</span></h2>
     <AppTiles v-if="apps.length" :services="apps" />
 
-    <h2 class="sec">Sections <span class="muted small">everything else the dashboard can do</span></h2>
+    <h2 class="sec">Sections</h2>
     <div class="topics">
-      <NuxtLink v-for="t in topics" :key="t.to" :to="t.to" class="topic" :style="{ '--h': t.hue }">
-        <span class="glyph">{{ t.icon }}</span>
-        <span class="head">
-          <span class="name">{{ t.name }}</span>
-          <span class="go">→</span>
-        </span>
-        <span class="small muted line">{{ t.line }}</span>
+      <NuxtLink v-for="t in topics" :key="t.to" :to="t.to" class="topic">
+        <span class="ti"><Icon :name="t.icon" :size="18" /></span>
+        <span class="name">{{ t.name }}</span>
         <span class="chips">
           <span v-for="c in t.chips" :key="c.text" class="pill" :class="c.tone">{{ c.text }}</span>
         </span>
+        <Icon name="arrow" :size="16" class="go" />
       </NuxtLink>
     </div>
   </div>
@@ -141,36 +134,47 @@ const topics = computed(() => [
 
 <style scoped>
 .pad { padding: 60px 0; text-align: center; }
-.sec { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--muted); margin: 24px 0 12px; display: flex; gap: 10px; align-items: baseline; }
-.sec .small { text-transform: none; letter-spacing: 0; font-weight: 400; }
 
 .band {
-  display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px;
+  display: grid; grid-template-columns: 1.4fr repeat(6, minmax(0, 1fr)); gap: 0;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden;
 }
-.cell { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.cell + .cell { border-left: 1px solid var(--line); padding-left: 10px; }
-.cell b { font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell { display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; padding: 14px 16px; }
+.cell + .cell { border-left: 1px solid var(--line); }
+.lbl { font-size: 12px; color: var(--faint); }
+.cell b { font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.health { flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; }
+.health.ok { background: linear-gradient(90deg, var(--ok-soft), transparent); }
+.health.warn { background: linear-gradient(90deg, var(--warn-soft), transparent); }
+.health.bad { background: linear-gradient(90deg, var(--bad-soft), transparent); }
+.health b { font-size: 16px; }
 
-.topics { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.topics { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
 .topic {
-  position: relative; display: flex; flex-direction: column; gap: 6px; overflow: hidden;
-  padding: 16px; border-radius: 14px; color: var(--text);
-  background: linear-gradient(160deg, color-mix(in srgb, hsl(var(--h) 70% 55%) 9%, var(--panel)), var(--panel) 65%);
-  border: 1px solid var(--line); transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 14px;
+  border-radius: var(--radius); color: var(--text); background: var(--panel); border: 1px solid var(--line);
+  transition: border-color .15s, background .15s;
 }
-.topic:hover {
-  text-decoration: none; transform: translateY(-3px);
-  border-color: color-mix(in srgb, hsl(var(--h) 70% 55%) 45%, var(--line));
-  box-shadow: 0 10px 24px -14px hsl(var(--h) 70% 40% / .7);
-}
-.glyph { position: absolute; right: -6px; top: -10px; font-size: 64px; opacity: .1; pointer-events: none; }
-.head { display: flex; align-items: center; gap: 8px; }
-.name { font-weight: 600; font-size: 16px; }
-.go { margin-left: auto; color: var(--muted); }
-.line { min-height: 2.6em; }
-.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
+.topic:hover { text-decoration: none; border-color: var(--line-2); background: var(--panel-2); }
+.ti { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--panel-2); color: var(--muted); flex: none; }
+.topic:hover .ti { color: var(--accent); }
+.name { font-weight: 600; }
+.chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; margin-left: auto; min-width: 0; }
+.go { color: var(--faint); }
 
-@media (max-width: 1100px) { .band { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 14px; } .cell:nth-child(4n + 1) { border-left: 0; padding-left: 0; } }
-@media (max-width: 640px) { .band { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cell:nth-child(odd) { border-left: 0; padding-left: 0; } .cell:nth-child(4n + 1) { border-left: 0; } }
+@media (max-width: 1100px) {
+  .band { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .health { grid-column: 1 / -1; border-bottom: 1px solid var(--line); }
+  .cell:nth-child(2), .cell:nth-child(6) { border-left: 0; }
+  .cell:nth-child(n + 6) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 640px) {
+  .band { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cell { padding: 11px 12px; }
+  .cell:nth-child(6) { border-left: 1px solid var(--line); }
+  .cell:nth-child(5) { border-left: 0; }
+  .cell:nth-child(n + 5) { border-top: 1px solid var(--line); }
+  .cell b { font-size: 16px; }
+  .topics { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+}
 </style>

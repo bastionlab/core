@@ -4,82 +4,100 @@ usePoll(refresh, 5000)
 
 const route = useRoute()
 const nav = [
-  { to: '/', icon: '🏠', label: 'Apps' },
-  { to: '/media', icon: '🍿', label: 'Media' },
-  { to: '/dev', icon: '⌨️', label: 'Dev' },
-  { to: '/deals', icon: '🏷️', label: 'Deals' },
-  { to: '/wohnungen', icon: '🔑', label: 'Wohnungen' },
-  { to: '/metrics', icon: '📊', label: 'Metrics' },
-  { to: '/chat', icon: '✦', label: 'Chat' },
+  { to: '/', icon: 'home', label: 'Home' },
+  { to: '/media', icon: 'media', label: 'Media' },
+  { to: '/dev', icon: 'dev', label: 'Dev' },
+  { to: '/deals', icon: 'deals', label: 'Deals' },
+  { to: '/wohnungen', icon: 'key', label: 'Wohnungen', short: 'Wohnen' },
+  { to: '/metrics', icon: 'metrics', label: 'Metrics' },
+  { to: '/chat', icon: 'chat', label: 'Chat' },
 ]
 const problems = computed(() => alerts(o.value).filter(a => a.level === 'bad').length)
-
-// theme: auto → dark → light
-const theme = ref<'auto' | 'dark' | 'light'>('auto')
-onMounted(() => { try { theme.value = (localStorage.getItem('theme') as any) || 'auto' } catch {} })
-watchEffect(() => {
-  if (import.meta.server) return
-  if (theme.value === 'auto') document.documentElement.removeAttribute('data-theme')
-  else document.documentElement.setAttribute('data-theme', theme.value)
-  try { localStorage.setItem('theme', theme.value) } catch {}
-})
-const cycle = () => (theme.value = theme.value === 'auto' ? 'dark' : theme.value === 'dark' ? 'light' : 'auto')
 
 const tick = ref(Date.now())
 let t: any
 onMounted(() => (t = setInterval(() => (tick.value = Date.now()), 1000)))
 onUnmounted(() => clearInterval(t))
 const stale = computed(() => updated.value > 0 && tick.value - updated.value > 20000)
+const state = computed(() => (error.value ? 'bad' : stale.value ? 'warn' : 'ok'))
+const stateText = computed(() => (error.value ? 'agent unreachable' : stale.value ? 'stale' : 'live'))
 </script>
 
 <template>
-  <div class="wrap">
-    <header class="top">
+  <div class="shell">
+    <aside class="side">
       <NuxtLink to="/" class="brand">
-        <span class="logo">🖥️</span>
-        <div>
-          <h1>pve</h1>
-          <div class="muted small">{{ o?.cts?.filter((c: any) => c.status === 'running').length ?? '–' }} of {{ o?.cts?.length ?? '–' }} containers up</div>
-        </div>
+        <span class="logo">pve</span>
+        <span class="dot" :class="state" :title="stateText" />
       </NuxtLink>
-
       <nav>
         <NuxtLink v-for="n in nav" :key="n.to" :to="n.to" :class="{ on: route.path === n.to }">
-          <span class="i">{{ n.icon }}</span><span class="l">{{ n.label }}</span>
+          <Icon :name="n.icon" class="i" /><span class="l">{{ n.label }}</span><span class="l short">{{ n.short ?? n.label }}</span>
           <span v-if="n.to === '/metrics' && problems" class="badge">{{ problems }}</span>
         </NuxtLink>
       </nav>
-
-      <div class="right small">
-        <span v-if="error" class="pill bad">agent unreachable</span>
-        <span v-else-if="stale" class="pill warn">stale</span>
-        <span class="muted" :title="updated ? new Date(updated).toLocaleString() : ''"><span class="dot" :class="error ? 'bad' : stale ? 'warn' : 'ok'" /> live</span>
-        <button class="btn ghost" :title="`theme: ${theme}`" @click="cycle">{{ theme === 'auto' ? '◐' : theme === 'dark' ? '☾' : '☀' }}</button>
+      <div class="foot small faint" :title="updated ? new Date(updated).toLocaleString() : ''">
+        {{ o?.cts?.filter((c: any) => c.status === 'running').length ?? '–' }}/{{ o?.cts?.length ?? '–' }} up · {{ stateText }}
       </div>
-    </header>
+    </aside>
 
-    <slot />
+    <main class="wrap">
+      <div v-if="state !== 'ok'" class="banner small" :class="state">{{ error ? 'Agent unreachable — data may be old' : 'Data is stale' }}</div>
+      <slot />
+    </main>
   </div>
 </template>
 
 <style scoped>
-.top { display: flex; align-items: center; gap: 20px; margin-bottom: 18px; flex-wrap: wrap; }
-.brand { display: flex; align-items: center; gap: 12px; color: var(--text); }
+.shell { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
+.side {
+  position: sticky; top: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column; gap: 18px;
+  padding: 22px 12px 16px; border-right: 1px solid var(--line); background: var(--bg);
+}
+.brand { display: flex; align-items: center; gap: 10px; padding: 0 10px; color: var(--text); }
 .brand:hover { text-decoration: none; }
-.logo { font-size: 24px; width: 42px; height: 42px; display: grid; place-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
-h1 { margin: 0; font-size: 20px; line-height: 1.1; }
-nav { display: flex; gap: 4px; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
-nav a { display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 7px; color: var(--muted); font-size: 13px; }
-nav a:hover { color: var(--text); text-decoration: none; background: var(--panel-2); }
-nav a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.badge { background: var(--bad); color: #fff; border-radius: 999px; font-size: 10px; padding: 0 5px; line-height: 15px; }
-.right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-.right .dot { width: 6px; height: 6px; margin-right: 4px; vertical-align: middle; }
-@media (max-width: 760px) {
-  .top { gap: 12px; }
-  nav { width: 100%; order: 3; justify-content: space-between; }
-  nav a { padding: 6px 9px; }
-  nav .l { display: none; }
-  nav .i { font-size: 15px; }
+.logo { font-weight: 700; font-size: 19px; letter-spacing: -.02em; }
+nav { display: flex; flex-direction: column; gap: 2px; }
+nav a { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: var(--muted); font-size: 14px; }
+nav a:hover { color: var(--text); text-decoration: none; background: var(--panel); }
+nav a.on { color: var(--text); background: var(--panel-2); font-weight: 500; }
+nav a.on .i { color: var(--accent); }
+.i { color: var(--faint); }
+nav a:hover .i { color: var(--muted); }
+.short { display: none; }
+.badge { margin-left: auto; background: var(--bad); color: #fff; border-radius: 999px; font-size: 10px; font-weight: 600; padding: 0 6px; line-height: 16px; }
+.foot { margin-top: auto; padding: 0 10px; }
+.banner { padding: 7px 12px; border-radius: 8px; margin-bottom: 14px; }
+.banner.bad { background: var(--bad-soft); color: var(--bad); }
+.banner.warn { background: var(--warn-soft); color: var(--warn); }
+
+@media (max-width: 900px) and (min-width: 641px) {
+  .shell { grid-template-columns: 64px minmax(0, 1fr); }
+  .side { padding: 18px 8px; align-items: center; }
+  .brand { padding: 0; flex-direction: column; gap: 6px; }
+  .logo { font-size: 15px; }
+  nav a { justify-content: center; padding: 10px; }
+  .l, .foot { display: none; }
+  .badge { position: absolute; top: 3px; right: 3px; padding: 0 4px; font-size: 9px; line-height: 13px; }
+}
+
+@media (max-width: 640px) {
+  .shell { display: block; --tabbar: calc(58px + env(safe-area-inset-bottom)); }
+  .side {
+    position: fixed; z-index: 50; top: auto; bottom: 0; left: 0; right: 0; height: auto;
+    padding: 0 4px env(safe-area-inset-bottom); flex-direction: row; gap: 0;
+    border-right: 0; border-top: 1px solid var(--line);
+    background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  }
+  .brand, .foot { display: none; }
+  nav { flex-direction: row; flex: 1; justify-content: space-around; gap: 0; }
+  nav a { flex: 1; flex-direction: column; gap: 2px; padding: 8px 0 7px; font-size: 10px; border-radius: 0; background: none !important; }
+  nav a.on { color: var(--accent); }
+  .i { width: 21px; height: 21px; }
+  nav a.on .i { color: var(--accent); }
+  .l:not(.short) { display: none; }
+  .short { display: block; }
+  .l { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { position: absolute; top: 4px; left: calc(50% + 6px); padding: 0 4px; font-size: 9px; line-height: 14px; }
 }
 </style>

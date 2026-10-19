@@ -4,8 +4,7 @@ const { data: m, error, pending, refresh } = useMedia()
 usePoll(refresh, 8000)
 
 const q = computed(() => m.value?.queues ?? {})
-const video = computed(() => [...(q.value.movies ?? []), ...(q.value.series ?? [])])
-const busy = computed(() => new Set(Object.values(q.value).flat().filter((i: any) => (i?.speed ?? 0) > 0).map((i: any) => i.hash ?? i.id)).size)
+const queue = computed(() => [...(q.value.movies ?? []), ...(q.value.series ?? []), ...(q.value.books ?? [])])
 </script>
 
 <template>
@@ -16,47 +15,31 @@ const busy = computed(() => new Set(Object.values(q.value).flat().filter((i: any
       @refresh="refresh"
     />
 
-    <div v-if="!m && pending" class="muted pad">Loading the download stack…</div>
+    <div v-if="!m && pending" class="muted pad">Loading…</div>
     <div v-else-if="error && !m" class="bad pad">Could not read the media stack: {{ error.statusMessage || error.message }}</div>
 
     <template v-if="m">
       <div class="grid cols-2">
-        <VpnPanel :vpn="m.vpn" />
+        <VpnPanel :vpn="m.vpn" :torrents="m.torrents" />
         <LibraryPanel :library="m.library" :sizes="m.sizes" />
       </div>
 
-      <h2 class="sec">Downloading <span class="muted small">{{ m.torrents?.error ? `qBittorrent unreadable (${m.torrents.error}) — speeds unknown` : busy ? `${busy} downloading right now` : 'nothing moving right now' }}</span></h2>
       <div class="grid cols-2">
-        <QueuePanel id="q-video" title="Films & series" :items="video" empty="No films or episodes queued" />
-        <QueuePanel id="q-books" title="Audiobooks" :items="q.books ?? []" empty="Nothing queued in LazyLibrarian" />
+        <QueuePanel id="q-all" title="Queue" :items="queue" empty="Nothing queued" />
+        <WatchdogPanel :w="m.watchdog" />
       </div>
 
-      <div class="grid cols-2"><Panel title="Torrents" :sub="`${m.torrents?.total ?? 0} in qBittorrent`">
-        <div class="stats">
-          <Stat label="Downloading" :value="m.torrents?.downloading ?? 0" />
-          <Stat label="Seeding" :value="m.torrents?.seeding ?? 0" />
-          <Stat label="Down" :value="`${bytes(m.vpn?.speed?.down)}/s`" />
-          <Stat label="Up" :value="`${bytes(m.vpn?.speed?.up)}/s`" />
-        </div>
-        <div v-if="m.torrents?.errored?.length" class="small bad err">
-          <div v-for="e in m.torrents.errored" :key="e">errored: {{ e }}</div>
-        </div>
-      </Panel>
-      <WatchdogPanel :w="m.watchdog" /></div>
-
-      <h2 class="sec">Clean up <span class="muted small">delete a series or film everywhere: library, torrents, Jellyfin</span></h2>
-      <div class="grid cols-2"><MediaRemove @removed="refresh" /></div>
-
-      <h2 class="sec">The apps behind it <span class="muted small">admin UIs, LAN only, no login</span></h2>
-      <ServicesPanel :services="m.services ?? []" />
+      <div class="grid cols-2">
+        <MediaRemove @removed="refresh" />
+        <Panel title="Admin apps" fold="closed">
+          <ServicesPanel :services="m.services ?? []" list />
+        </Panel>
+      </div>
     </template>
   </div>
 </template>
 
 <style scoped>
 .pad { padding: 60px 0; text-align: center; }
-.sec { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--muted); margin: 22px 0 10px; display: flex; gap: 10px; align-items: baseline; }
-.sec .small { text-transform: none; letter-spacing: 0; font-weight: 400; }
-.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.err { margin-top: 10px; }
+.grid { align-items: start; }
 </style>

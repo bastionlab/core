@@ -85,31 +85,24 @@ function onChanged() {
     </div>
 
     <template v-if="d">
-      <Panel title="Hunter" :sub="pollerOk ? 'polling' : 'poller looks stopped'">
-        <template #actions>
-          <button class="btn ghost" :disabled="pending" @click="load">↻</button>
-        </template>
-        <div class="stats">
-          <Stat label="Searches" :value="`${st.enabled}/${st.searches}`" />
-          <Stat label="Seen 24h" :value="st.seen_24h" />
-          <Stat label="Von KI aussortiert" :value="st.filtered ?? 0" />
-          <Stat label="Last poll" :value="st.last_poll ? ago(st.last_poll) : 'never'" :tone="pollerOk ? 'ok' : 'bad'" />
-        </div>
-        <div v-if="st.queued" class="small muted q">{{ st.queued }} waiting to be pushed to Telegram</div>
-        <div v-for="e in st.errors" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>
-      </Panel>
-
-      <div class="grid">
-        <DealSearches :searches="searches" @changed="onChanged" />
+      <div class="strip small">
+        <span class="dot" :class="pollerOk ? 'ok' : 'bad'" />
+        <span :class="pollerOk ? 'muted' : 'bad'" :title="st.last_poll ? new Date(st.last_poll * 1000).toLocaleString() : ''">
+          {{ pollerOk ? 'polling' : 'poller stopped' }}<template v-if="st.last_poll"> · {{ ago(st.last_poll) }}</template>
+        </span>
+        <span class="muted"><b>{{ st.seen_24h }}</b> seen 24h</span>
+        <span class="muted" title="von der KI aussortiert"><b>{{ st.filtered ?? 0 }}</b> aussortiert</span>
+        <span v-if="st.queued" class="muted"><b>{{ st.queued }}</b> → Telegram</span>
+        <button class="btn ghost ref" :disabled="pending" title="refresh" @click="load">↻</button>
       </div>
+      <div v-for="e in st.errors" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>
+
+      <DealSearches :searches="searches" @changed="onChanged" />
 
       <h2 class="sec">
         Feed
-        <span class="muted small">
-          {{ feed.length }} listing{{ feed.length === 1 ? '' : 's' }}
-          <template v-if="hidden"> · {{ hidden }} aussortiert</template>
-        </span>
-        <label class="small muted tgl"><input v-model="showRejected" type="checkbox"> Aussortierte zeigen</label>
+        <span class="muted small">{{ feed.length }}<template v-if="hidden"> · {{ hidden }} aussortiert</template></span>
+        <label class="small muted tgl"><input v-model="showRejected" type="checkbox"> Aussortierte</label>
       </h2>
 
       <div class="tabs">
@@ -126,14 +119,10 @@ function onChanged() {
 
       <div v-if="!feed.length" class="muted pad">
         <template v-if="hidden && !showRejected">
-          Everything here is aussortiert (AI, reserviert or 👎). Tick „Aussortierte zeigen“ to see it.
+          Alles aussortiert.
         </template>
-        <template v-else-if="shipping !== 'all'">Nothing here that is {{ shipping === 'pickup' ? 'pickup-only' : 'shippable' }}.</template>
-        <template v-else-if="selected !== null">Nothing matched this search yet.</template>
-        <template v-else>
-          Nothing yet. A search only starts pushing from its second poll — the first one just seeds
-          what is already online so you do not get 25 notifications at once.
-        </template>
+        <template v-else-if="shipping !== 'all'">Nichts {{ shipping === 'pickup' ? 'zum Abholen' : 'mit Versand' }}.</template>
+        <template v-else>Noch nichts.</template>
       </div>
       <div v-else class="cards">
         <DealCard
@@ -146,22 +135,22 @@ function onChanged() {
 </template>
 
 <style scoped>
-.pad { padding: 60px 0; text-align: center; }
-.sec { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--muted); margin: 22px 0 10px; display: flex; gap: 10px; align-items: baseline; }
-.sec .small { text-transform: none; letter-spacing: 0; font-weight: 400; }
-.tgl { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; display: flex; align-items: center; gap: 5px; cursor: pointer; }
-.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.q { margin-top: 8px; }
-.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-.tab { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.pad { padding: 48px 0; text-align: center; }
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 2px 12px; }
+.strip b { color: var(--text); font-weight: 600; }
+.strip .ref { margin-left: auto; padding: 2px 8px; }
+.tgl { margin-left: auto; font-weight: 400; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.q { margin: -6px 2px 10px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; align-items: center; }
+.tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
 .tab:hover { color: var(--text); }
 .tab.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
 .tab.off { opacity: .55; }
 .tab .n { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
 .seg { margin-left: auto; display: flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--panel-2); }
-.seg button { padding: 4px 12px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.seg button { padding: 5px 12px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
 .seg button:hover { color: var(--text); }
 .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 14px; margin-bottom: 16px; }
-@media (max-width: 560px) { .cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 12px; margin-bottom: 16px; }
+@media (max-width: 560px) { .seg { margin-left: 0; } .cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
 </style>

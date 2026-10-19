@@ -7,10 +7,8 @@ usePoll(refresh, 5000)
 const { jobs, run, dismiss } = useActions()
 const act = (name: string, args: any) => run(name, args, refresh)
 
-const all = computed(() => (boxes.value ?? []).flatMap(b => b.projects ?? []))
-const previews = computed(() => all.value.filter((p: any) => p.running).length)
-const claudes = computed(() => all.value.filter((p: any) => p.cc?.running).length)
-const dirty = computed(() => all.value.filter((p: any) => p.git?.dirty || p.git?.ahead).length)
+const count = (box: any, f: (p: any) => any) => (box.projects ?? []).filter(f).length
+const copy = (s: string) => navigator.clipboard?.writeText(s)
 </script>
 
 <template>
@@ -21,27 +19,27 @@ const dirty = computed(() => all.value.filter((p: any) => p.git?.dirty || p.git?
       @refresh="refresh"
     />
 
-    <div class="summary">
-      <span class="pill">{{ all.length }} projects</span>
-      <span class="pill" :class="previews ? 'ok' : ''">{{ previews }} previews running</span>
-      <span class="pill" :class="claudes ? 'accent' : ''">{{ claudes }} Claude sessions</span>
-      <span class="pill" :class="dirty ? 'warn' : ''">{{ dirty }} with unpushed work</span>
-    </div>
-
     <JobList :jobs="jobs" @dismiss="dismiss" />
 
     <div v-if="!boxes && pending" class="muted pad">Loading dev boxes…</div>
-    <Panel v-for="box in boxes ?? []" :key="box.vmid" :title="box.name" :sub="`CT ${box.vmid} · ${box.ip}`" class="box">
-      <template #actions>
-        <code class="faint small">ssh max@{{ box.name }}</code>
-        <button class="btn ghost small" @click="refresh">↻</button>
-      </template>
+    <section v-for="box in boxes ?? []" :key="box.vmid" class="box">
+      <h2 class="sec">
+        {{ box.name }}
+        <span class="faint small">CT {{ box.vmid }} · {{ box.projects?.length ?? 0 }} projects</span>
+        <span class="tail">
+          <span v-if="count(box, p => p.running)" class="pill ok">{{ count(box, p => p.running) }} running</span>
+          <span v-if="count(box, p => p.cc?.running)" class="pill accent">{{ count(box, p => p.cc?.running) }} Claude</span>
+          <span v-if="count(box, p => p.git?.dirty || p.git?.ahead)" class="pill warn">{{ count(box, p => p.git?.dirty || p.git?.ahead) }} unpushed</span>
+          <button class="btn ghost small" :title="`ssh max@${box.name} — copy`" @click="copy(`ssh max@${box.name}`)">ssh</button>
+          <button class="btn ghost small" title="refresh" @click="refresh">↻</button>
+        </span>
+      </h2>
       <div v-if="box.error" class="small bad">{{ box.error }}</div>
       <div class="projects">
         <ProjectCard v-for="p in box.projects" :key="p.path" :box="box" :p="p" @refresh="refresh" @action="act" />
       </div>
-      <div v-if="!box.projects?.length && !box.error" class="faint small">No projects yet — clone a repo or create one below.</div>
-    </Panel>
+      <div v-if="!box.projects?.length && !box.error" class="faint small">No projects yet.</div>
+    </section>
 
     <div class="grid two">
       <GithubPanel :boxes="boxes ?? []" @action="act" />
@@ -49,16 +47,17 @@ const dirty = computed(() => all.value.filter((p: any) => p.git?.dirty || p.git?
     </div>
 
     <div v-if="o" class="grid">
-      <ContainersPanel title="Dev containers" sub="LXC boxes tagged dev" :cts="o.cts.filter((c: any) => c.tags?.includes('dev'))" :updates="o.updates" @action="act" />
+      <ContainersPanel title="Dev containers" :cts="o.cts.filter((c: any) => c.tags?.includes('dev'))" :updates="o.updates" @action="act" />
     </div>
   </div>
 </template>
 
 <style scoped>
-.summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
 .pad { padding: 40px 0; text-align: center; }
-.box { margin-bottom: 16px; }
-.projects { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(820px, 100%), 1fr)); gap: 12px; }
-.two { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.box { margin-bottom: 22px; }
+.box .sec { margin-top: 8px; flex-wrap: wrap; }
+.tail { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 400; }
+.projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(350px, 100%), 1fr)); gap: 10px; }
+.two { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
 @media (max-width: 900px) { .two { grid-template-columns: minmax(0, 1fr); } }
 </style>

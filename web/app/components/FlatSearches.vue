@@ -133,9 +133,9 @@ function summary(sp: any) {
 </script>
 
 <template>
-  <Panel title="Suchen" :sub="`${props.searches.length} gespeichert`">
+  <Panel title="Suchen">
     <template #actions>
-      <button class="btn" @click="openNew">{{ editing === 'new' ? 'Abbrechen' : '+ Neue Suche' }}</button>
+      <button class="btn" @click="openNew">{{ editing === 'new' ? 'Abbrechen' : '+ Neu' }}</button>
     </template>
 
     <form v-if="editing !== null" class="new" @submit.prevent="submit">
@@ -176,7 +176,7 @@ function summary(sp: any) {
       <div v-if="form.mode === 'city' && where?.full" class="small muted">Gesucht wird in: {{ where.full }}</div>
 
       <div class="row narrow">
-        <label>Warmmiete bis €<input v-model="form.maxWarm" type="number" min="0" step="10" placeholder="1200"></label>
+        <label title="Angabe im Inserat, sonst Kalt + NK + Heizung; fehlt etwas, wird geschätzt und markiert.">Warmmiete bis €<input v-model="form.maxWarm" type="number" min="0" step="10" placeholder="1200"></label>
         <label>Zimmer ab<input v-model="form.minRooms" type="number" min="0" step="0.5"></label>
         <label>Zimmer bis<input v-model="form.maxRooms" type="number" min="0" step="0.5"></label>
         <label>m² ab<input v-model="form.minArea" type="number" min="0"></label>
@@ -193,9 +193,6 @@ function summary(sp: any) {
       <label class="chk"><input v-model="form.allowTemporary" type="checkbox"> WG-Zimmer und Zwischenmiete nicht aussortieren</label>
 
       <div class="row end">
-        <span class="small muted">
-          Warmmiete = Angabe im Inserat, sonst Kalt + NK + Heizung; fehlt etwas, wird geschätzt und markiert.
-        </span>
         <button class="btn ghost" type="button" @click="editing = null">Abbrechen</button>
         <button class="btn primary" :disabled="!!busy">
           {{ busy ? 'Speichert…' : editing === 'new' ? 'Suche anlegen' : 'Speichern' }}
@@ -207,20 +204,21 @@ function summary(sp: any) {
     <div v-if="note" class="small muted pad">{{ note }}</div>
 
     <div v-if="!props.searches.length && editing === null" class="small muted pad">
-      Noch keine Suche. Leg eine an — Ort oder Pin, Budget, Zimmer.
+      Noch keine Suche.
     </div>
-    <div v-for="s in props.searches" :key="s.id" class="row-item" :class="{ editing: editing === s.id }">
+    <div v-for="s in props.searches" :key="s.id" class="row-item" :class="{ editing: editing === s.id, off: !s.enabled }">
       <span class="dot" :class="s.last_error ? 'bad' : s.enabled ? 'ok' : ''" />
-      <div class="min">
-        <b>{{ s.name }}</b>
-        <div class="small muted ell">{{ summary(s.spec ?? {}) }}</div>
-        <div v-if="s.last_error" class="small bad">{{ s.last_error }}</div>
+      <div class="min" :title="summary(s.spec ?? {})">
+        <div class="ell"><b>{{ s.name }}</b><span class="small muted kw">{{ summary(s.spec ?? {}) }}</span></div>
+        <div v-if="s.last_error" class="small bad ell">{{ s.last_error }}</div>
       </div>
-      <span class="small muted when">{{ s.last_polled_at ? ago(s.last_polled_at) : 'noch nie' }}</span>
-      <a v-if="s.url" class="btn ghost" :href="s.url" target="_blank" rel="noopener" title="Diese Suche auf Kleinanzeigen öffnen">↗</a>
-      <button class="btn ghost" title="Bearbeiten" @click="openEdit(s)">✎</button>
-      <button class="btn ghost" :disabled="!!busy" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? 'Pause' : 'Weiter' }}</button>
-      <button class="btn ghost danger" :disabled="!!busy" @click="remove(s)">✕</button>
+      <span class="small faint when">{{ s.last_polled_at ? ago(s.last_polled_at) : 'noch nie' }}</span>
+      <div class="acts">
+        <a v-if="s.url" class="btn ghost ic" :href="s.url" target="_blank" rel="noopener" title="Auf Kleinanzeigen öffnen">↗</a>
+        <button class="btn ghost ic" title="Bearbeiten" @click="openEdit(s)">✎</button>
+        <button class="btn ghost ic" :disabled="!!busy" :title="s.enabled ? 'Pausieren' : 'Weiter'" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? '❙❙' : '▶' }}</button>
+        <button class="btn ghost ic danger" :disabled="!!busy" title="Löschen" @click="remove(s)">✕</button>
+      </div>
     </div>
   </Panel>
 </template>
@@ -233,7 +231,7 @@ function summary(sp: any) {
 .row.end .btn:first-of-type { margin-left: auto; }
 label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); min-width: 0; }
 label.chk { flex-direction: row; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; }
-input, select { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; color: var(--text); font: inherit; font-size: 13px; min-width: 0; }
+.new input, .new select, .new textarea { background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 8px; color: var(--text); font: inherit; font-size: 13px; min-width: 0; }
 .slider { padding: 0; accent-color: var(--accent); }
 .inl { display: flex; gap: 6px; }
 .inl input { flex: 1; }
@@ -241,7 +239,11 @@ input, select { background: var(--panel); border: 1px solid var(--line); border-
 .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); }
 .seg button { flex: 1; padding: 5px 10px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
 .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.row-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+.row-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.row-item.off { opacity: .6; }
+.kw { margin-left: 8px; }
+.acts { display: flex; flex: none; }
+.ic { width: 30px; height: 30px; padding: 0; font-size: 13px; }
 .row-item + .row-item { border-top: 1px solid var(--line); }
 .row-item.editing { background: var(--accent-soft); border-radius: 7px; padding-inline: 8px; }
 .min { flex: 1; min-width: 0; }
@@ -252,5 +254,6 @@ input, select { background: var(--panel); border: 1px solid var(--line); border-
   .row.narrow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .row.end { flex-wrap: wrap; }
   .when { display: none; }
+  .new input, .new select, .new textarea { font-size: 16px; }
 }
 </style>

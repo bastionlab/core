@@ -61,35 +61,28 @@ function onChanged() {
     </div>
 
     <template v-if="d">
-      <Panel title="Wohnungsjagd" :sub="!st.searches ? 'keine Suche' : !st.last_poll ? 'erster Lauf…' : pollerOk ? 'sucht' : 'Poller scheint zu stehen'">
-        <template #actions>
-          <button class="btn ghost" :disabled="pending" @click="load">↻</button>
-        </template>
-        <div class="stats">
-          <Stat label="Suchen" :value="`${st.enabled}/${st.searches}`" />
-          <Stat label="Neu 24h" :value="st.seen_24h" />
-          <Stat label="Von KI gelesen" :value="st.read_by_ai" />
+      <div class="strip small">
+        <span class="dot" :class="!st.last_poll ? '' : pollerOk ? 'ok' : 'bad'" />
+        <span :class="!st.last_poll || pollerOk ? 'muted' : 'bad'">
           <!-- the first cycle walks all of inberlinwohnen before any search counts as polled -->
-          <Stat label="Letzter Lauf" :value="st.last_poll ? ago(st.last_poll) : st.searches ? 'läuft…' : 'nie'" :tone="!st.last_poll ? '' : pollerOk ? 'ok' : 'bad'" />
-        </div>
-        <div v-if="sources" class="small muted q">Online: {{ sources }}</div>
-        <div v-for="e in st.errors" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>
-      </Panel>
-
-      <div class="grid">
-        <FlatSearches :searches="searches" @changed="onChanged" />
+          {{ !st.searches ? 'keine Suche' : !st.last_poll ? 'erster Lauf…' : pollerOk ? `sucht · ${ago(st.last_poll)}` : `steht · ${ago(st.last_poll)}` }}
+        </span>
+        <span class="muted"><b>{{ st.seen_24h }}</b> neu 24h</span>
+        <span class="muted"><b>{{ st.read_by_ai }}</b> von KI gelesen</span>
+        <span v-if="sources" class="faint src">{{ sources }}</span>
+        <button class="btn ghost ref" :disabled="pending" title="neu laden" @click="load">↻</button>
       </div>
+      <div v-for="e in st.errors" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>
+
+      <FlatSearches :searches="searches" @changed="onChanged" />
 
       <h2 class="sec">
         Wohnungen
-        <span class="muted small">
-          {{ feed.length }} Angebot{{ feed.length === 1 ? '' : 'e' }}
-          <template v-if="hidden"> · {{ hidden }} aussortiert</template>
-        </span>
-        <label class="small muted tgl"><input v-model="showRejected" type="checkbox"> Aussortierte zeigen</label>
+        <span class="muted small">{{ feed.length }}<template v-if="hidden"> · {{ hidden }} aussortiert</template></span>
+        <label class="small muted tgl"><input v-model="showRejected" type="checkbox"> Aussortierte</label>
       </h2>
 
-      <div class="tabs">
+      <div v-if="tabs.length > 1" class="tabs">
         <button
           v-for="t in tabs" :key="t.id ?? 'all'" class="tab"
           :class="{ on: selected === t.id, off: !t.enabled }"
@@ -98,9 +91,9 @@ function onChanged() {
       </div>
 
       <div v-if="!feed.length" class="muted pad">
-        <template v-if="!searches.length">Leg oben eine Suche an.</template>
-        <template v-else-if="hidden && !showRejected">Alles hier ist aussortiert (Gesuch, Zwischenmiete, Betrugsverdacht, 👎). „Aussortierte zeigen“ blendet es ein.</template>
-        <template v-else>Noch nichts gefunden. Neue Suchen brauchen ein paar Minuten für den ersten Lauf.</template>
+        <template v-if="!searches.length">Noch keine Suche.</template>
+        <template v-else-if="hidden && !showRejected">Alles aussortiert.</template>
+        <template v-else>Noch nichts gefunden.</template>
       </div>
       <div v-else class="list">
         <FlatRow
@@ -113,18 +106,19 @@ function onChanged() {
 </template>
 
 <style scoped>
-.pad { padding: 60px 0; text-align: center; }
-.sec { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--muted); margin: 22px 0 10px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-.sec .small { text-transform: none; letter-spacing: 0; font-weight: 400; }
-.tgl { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; display: flex; align-items: center; gap: 5px; cursor: pointer; }
-.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-.q { margin-top: 8px; }
+.pad { padding: 48px 0; text-align: center; }
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 2px 12px; }
+.strip b { color: var(--text); font-weight: 600; }
+.strip .ref { margin-left: auto; padding: 2px 8px; }
+.sec { flex-wrap: wrap; }
+.tgl { margin-left: auto; font-weight: 400; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.q { margin: -6px 2px 10px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-.tab { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
 .tab:hover { color: var(--text); }
 .tab.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
 .tab.off { opacity: .55; }
 .tab .n { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
 .list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-@media (max-width: 560px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .src { display: none; } }
 </style>

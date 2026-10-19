@@ -33,7 +33,7 @@ function push() {
   message.value = ''
 }
 
-// --- the tmux pane, always on beside the card ------------------------------
+// --- the tmux pane beside the card -----------------------------------------
 const tab = ref<'preview' | 'claude'>('preview')
 const logText = ref('')
 const logEl = ref<HTMLElement>()
@@ -61,35 +61,40 @@ async function loadLog() {
 }
 const full = ref(false)
 
+// the pane only exists while something runs, or when the owner opens it by hand
+const opened = ref(false)
+const anyLive = computed(() => !!props.p.running || props.p.exited != null || !!props.p.cc?.running)
+const showTerm = computed(() => anyLive.value || opened.value)
+watch(showTerm, v => v && nextTick(loadLog))
+
 let timer: any
-onMounted(() => { loadLog(); timer = setInterval(() => !document.hidden && loadLog(), 3000) })
+onMounted(() => { loadLog(); timer = setInterval(() => !document.hidden && showTerm.value && loadLog(), 3000) })
 onUnmounted(() => clearInterval(timer))
 
 const copy = (s: string) => navigator.clipboard?.writeText(s)
 </script>
 
 <template>
-  <div class="proj" :class="{ live: p.running }">
-    <!-- left: what the project is, and everything you can do to it -->
+  <div class="proj" :class="{ live: anyLive, wide: showTerm }">
     <div class="main">
       <div class="ph">
-        <b class="pname">{{ p.name }}</b>
-        <a v-if="g.url" :href="g.url" target="_blank" class="pill accent" title="open on GitHub">{{ g.repo }} ↗</a>
-        <span class="pill" :class="p.running ? 'ok' : p.exited != null ? 'bad' : ''">{{ state }}</span>
+        <span class="dot" :class="p.running ? 'ok' : p.exited != null ? 'bad' : ''" :title="state" />
+        <b class="pname" :title="p.path.replace('/home/max/', '~/')">{{ p.name }}</b>
+        <a v-if="g.url" :href="g.url" target="_blank" class="repo small" title="open on GitHub">{{ g.repo }} ↗</a>
+        <span v-if="p.exited != null" class="pill bad">{{ state }}</span>
       </div>
-      <div class="small muted mono path">{{ p.path.replace('/home/max/', '~/') }}</div>
 
       <div class="git small">
         <span class="pill">⎇ {{ p.branch || 'no branch' }}</span>
-        <span v-if="g.dirty" class="pill warn">{{ g.dirty }} uncommitted</span>
-        <span v-else class="pill ok">clean</span>
+        <span v-if="g.dirty" class="pill warn">{{ g.dirty }} changed</span>
         <span v-if="g.tracking && g.ahead" class="pill accent">↑{{ g.ahead }}</span>
         <span v-if="g.tracking && g.behind" class="pill warn">↓{{ g.behind }}</span>
         <span v-if="!g.remote" class="pill">no remote</span>
         <span v-else-if="!g.tracking" class="pill">no upstream</span>
+        <span v-if="p.cc?.running" class="pill accent">✦ {{ p.cc.profile }}</span>
       </div>
-      <div v-if="g.last" class="small faint last" :title="new Date(g.last.at).toLocaleString()">
-        {{ g.last.hash }} {{ g.last.subject }} · {{ ago(Date.parse(g.last.at) / 1000) }}
+      <div v-if="g.last" class="small faint last" :title="`${g.last.hash} · ${new Date(g.last.at).toLocaleString()}`">
+        {{ g.last.subject }} · {{ ago(Date.parse(g.last.at) / 1000) }}
       </div>
 
       <div v-if="p.urls?.length" class="urls">
@@ -97,17 +102,12 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
           <span class="mono">:{{ u.port }}</span> {{ u.url ? 'Open ↗' : 'sharing…' }}
         </a>
       </div>
-      <div v-else-if="p.running" class="small faint">waiting for a listening port…</div>
-
-      <div v-if="p.cc?.running" class="cc small">
-        <span class="dot ok" /> Claude Code running <span class="pill accent">{{ p.cc.profile }}</span>
-      </div>
+      <div v-else-if="p.running" class="small faint">waiting for a port…</div>
 
       <div v-if="error" class="small bad">{{ error }}</div>
 
-      <!-- one row, everything you can press -->
       <div class="acts">
-        <button v-if="!p.running" class="btn primary" :disabled="!p.command || !!busy" :title="p.command || 'no dev command found'" @click="call('preview', 'start')">
+        <button v-if="!p.running" class="btn" :disabled="!p.command || !!busy" :title="p.command || 'no dev command found'" @click="call('preview', 'start')">
           {{ busy === 'preview:start' ? '…' : '▶ Preview' }}
         </button>
         <button v-else class="btn danger" :disabled="!!busy" @click="call('preview', 'stop')">■ Preview</button>
@@ -122,33 +122,29 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
         <button v-else class="btn danger" :disabled="!!busy" @click="call('cc', 'stop')">■ Claude</button>
 
         <template v-if="g.remote">
-          <button class="btn" title="git fetch --prune" @click="emit('action', 'git_fetch', { vmid: box.vmid, path: p.path })">↻ Fetch</button>
-          <button class="btn" :class="{ primary: canPush }" @click="showPush = !showPush">↑ Push</button>
+          <button class="btn ghost" title="git fetch --prune" @click="emit('action', 'git_fetch', { vmid: box.vmid, path: p.path })">↻</button>
+          <button class="btn" :class="canPush ? 'primary' : 'ghost'" title="push" @click="showPush = !showPush">↑</button>
         </template>
         <!-- no remote yet: create the repo on GitHub and push it there -->
         <span v-else class="combo">
           <button class="btn" title="create the GitHub repo and push this project to it" @click="emit('action', 'github_publish', { vmid: box.vmid, path: p.path, visibility })">
-            ⇪ To GitHub
+            ⇪ GitHub
           </button>
           <select v-model="visibility" title="repo visibility">
             <option value="private">🔒</option>
             <option value="public">pub</option>
           </select>
         </span>
+        <button v-if="!anyLive" class="btn ghost" :class="{ on: opened }" title="show the tmux pane" @click="opened = !opened">▤</button>
       </div>
 
       <div v-if="showPush" class="pushbox">
-        <input v-model="message" placeholder="commit message (leave empty to push existing commits)" @keydown.enter.prevent="push">
+        <input v-model="message" :placeholder="g.dirty ? `commit message for ${g.dirty} file(s)` : 'nothing to commit — push only'" @keydown.enter.prevent="push">
         <button class="btn primary" @click="push">{{ message.trim() ? 'Commit & push' : 'Push' }}</button>
-        <div class="small muted">
-          {{ g.dirty ? `${g.dirty} file(s) changed — a message commits all of them.` : 'Working tree is clean.' }}
-          {{ g.ahead ? `${g.ahead} commit(s) to push.` : '' }}
-        </div>
       </div>
     </div>
 
-    <!-- right: the tmux pane, live -->
-    <div class="term">
+    <div v-if="showTerm" class="term">
       <div class="th">
         <button class="tab" :class="{ on: tab === 'preview' }" @click="pick('preview')">
           <span class="dot" :class="p.running ? 'ok' : p.exited != null ? 'bad' : ''" /> Preview
@@ -159,7 +155,7 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
         <code class="faint small mono attach" :title="`copy: ${attach}`" @click="copy(attach)">⧉ {{ session }}</code>
         <button v-if="live" class="tab fs" title="open full screen and type into it" @click="full = true">⛶</button>
       </div>
-      <pre ref="logEl" :class="{ empty: !logText }">{{ logText || (live ? '…' : `nothing running — press ${tab === 'claude' ? '✦ Claude' : '▶ Preview'}`) }}</pre>
+      <pre ref="logEl" :class="{ empty: !logText }">{{ logText || (live ? '…' : `nothing running in ${tab === 'claude' ? 'Claude' : 'Preview'}`) }}</pre>
       <TermFull
         v-if="full" :vmid="box.vmid" :path="p.path" :target="tab === 'claude' ? 'cc' : 'preview'" :title="`${p.name} · ${session}`"
         @close="full = false; loadLog()"
@@ -170,50 +166,51 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
 
 <style scoped>
 .proj {
-  background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px;
-  display: grid; grid-template-columns: minmax(300px, 5fr) minmax(320px, 6fr); gap: 14px; align-items: stretch;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: stretch; min-width: 0;
 }
-.proj.live { border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
-.main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.ph { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.pname { font-size: 15px; }
-.ph .pill:last-child { margin-left: auto; }
-.path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj.wide { grid-column: 1 / -1; grid-template-columns: minmax(280px, 4fr) minmax(320px, 7fr); }
+.proj.live { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.main { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.ph { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ph .dot { width: 7px; height: 7px; box-shadow: none; }
+.pname { font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.repo { margin-left: auto; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.repo:hover { color: var(--accent); }
 .git { display: flex; flex-wrap: wrap; gap: 5px; }
 .last { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .urls { display: flex; flex-wrap: wrap; gap: 6px; }
 .url { padding: 3px 10px; border-radius: 6px; background: var(--ok-soft); color: var(--ok); font-size: 13px; }
-.url.pending { background: var(--panel); color: var(--muted); }
-.cc { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.acts { display: flex; gap: 6px; margin-top: auto; padding-top: 6px; flex-wrap: wrap; align-items: center; }
-.acts .btn { flex: 1 1 auto; justify-content: center; padding: 5px 10px; min-width: max-content; }
-.combo { display: flex; flex: 1 1 auto; min-width: max-content; }
-.combo .btn { flex: 1; border-radius: 7px 0 0 7px; border-right: 0; }
-.combo select {
-  background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 0 7px 7px 0;
-  font: inherit; font-size: 11px; padding: 0 4px; width: 78px;
-}
-.pushbox { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-.pushbox input { flex: 1; min-width: 160px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; color: var(--text); font: inherit; font-size: 13px; padding: 5px 8px; }
-.pushbox .small { flex-basis: 100%; }
+.url.pending { background: var(--panel-2); color: var(--muted); }
+.acts { display: flex; gap: 5px; margin-top: auto; padding-top: 4px; flex-wrap: wrap; align-items: center; }
+.acts .btn { padding: 5px 10px; font-size: 12.5px; }
+.acts .btn.ghost { min-width: 30px; padding: 5px 7px; }
+.acts > .btn:first-child { color: var(--ok); }
+.acts > .btn.danger:first-child { color: var(--bad); }
+.acts .btn.ghost.on { color: var(--accent); background: var(--accent-soft); }
+.combo { display: flex; }
+.combo .btn { border-radius: 8px 0 0 8px; border-right: 0; }
+.combo select { color: var(--muted); border-radius: 0 8px 8px 0; font-size: 11px; padding: 0 2px; width: 60px; }
+.pushbox { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pushbox input { flex: 1; min-width: 160px; font-size: 13px; padding: 6px 9px; }
 
-.term { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: #0a0c0f; min-width: 0; }
-.th { display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.term { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #07080b; min-width: 0; }
+.th { display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
 .tab { display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 6px; cursor: pointer; }
-.tab:hover { color: var(--text); background: var(--panel-2); }
+.tab:hover { color: var(--text); background: var(--panel); }
 .tab.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.tab .dot { width: 6px; height: 6px; box-shadow: none; }
 .fs { font-size: 14px; padding: 2px 8px; }
-.attach { margin-left: auto; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-pre { margin: 0; padding: 10px 12px; height: 280px; overflow: auto; font: 12px/1.5 var(--mono); color: #d5d9e0; white-space: pre-wrap; word-break: break-all; }
-pre.empty { color: #5f6775; display: grid; place-items: center; text-align: center; }
+.attach { margin-left: auto; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+pre { margin: 0; padding: 10px 12px; height: 260px; overflow: auto; font: 12px/1.5 var(--mono); color: #d5d9e0; white-space: pre-wrap; word-break: break-all; }
+pre.empty { color: var(--faint); display: grid; place-items: center; text-align: center; height: 120px; }
 @media (max-width: 900px) {
-  .proj { grid-template-columns: minmax(0, 1fr); }
-  pre { height: 260px; }
+  .proj.wide { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 640px) {
-  .proj { padding: 10px; gap: 10px; }
-  pre { height: 55vh; font-size: 11px; padding: 8px; }
-  pre.empty { height: 90px; }
-  .ph .pill:last-child { margin-left: 0; }
+  .proj { padding: 12px; gap: 10px; }
+  pre { height: 50vh; font-size: 11px; padding: 8px; }
+  pre.empty { height: 80px; }
+  .acts .btn { min-height: 34px; }
 }
 </style>

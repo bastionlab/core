@@ -16,8 +16,8 @@ const v = computed(() => Math.max(0, Math.min(100, props.value || 0)))
 <style scoped>
 .meter + .meter { margin-top: 12px; }
 .row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
-.label { color: var(--muted); }
-.track { height: 6px; background: var(--track); border-radius: 3px; overflow: hidden; }
+.label { color: var(--muted); font-size: 13px; }
+.track { height: 5px; background: var(--track); border-radius: 3px; overflow: hidden; }
 .fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .6s ease; }
 .fill.warn { background: var(--warn); } .fill.bad { background: var(--bad); }
 </style>

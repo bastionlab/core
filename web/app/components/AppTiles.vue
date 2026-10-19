@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** The things the household actually opens. Big, colour-coded tiles — the home page's centrepiece. */
+/** The things the household actually opens — the home page's centrepiece. */
 defineProps<{ services: any[] }>()
 </script>
 
@@ -8,45 +8,46 @@ defineProps<{ services: any[] }>()
     <a
       v-for="s in services" :key="s.name" :href="s.url" target="_blank"
       class="app" :class="{ down: !s.up }" :style="{ '--h': s.hue ?? 220 }"
+      :title="s.up ? `${s.ms} ms${s.ct ? ` · CT ${s.ct}` : ''}` : `down${s.error ? `: ${s.error}` : ''}`"
     >
       <span class="icon">{{ s.icon }}</span>
-      <span class="name">{{ s.name }}</span>
-      <span class="note muted small">{{ s.note }}</span>
-      <span class="foot small">
-        <span class="dot" :class="s.up ? 'ok' : 'bad'" />
-        <span :class="s.up ? 'muted' : 'bad'">{{ s.up ? `${s.ms} ms` : 'down' }}</span>
-        <span v-if="s.ct" class="faint ct">CT {{ s.ct }}</span>
+      <span class="body">
+        <span class="name">{{ s.name }}</span>
+        <span class="note">{{ s.up ? s.note : 'down' }}</span>
       </span>
+      <span class="dot" :class="s.up ? 'ok' : 'bad'" />
     </a>
   </div>
 </template>
 
 <style scoped>
-.apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+.apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
 .app {
-  position: relative; display: flex; flex-direction: column; gap: 3px; min-width: 0;
-  padding: 16px; border-radius: 14px; color: var(--text); overflow: hidden;
-  background: linear-gradient(160deg, color-mix(in srgb, hsl(var(--h) 70% 55%) 9%, var(--panel)), var(--panel) 60%);
-  border: 1px solid var(--line);
-  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
-}
-.app::after {
-  content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
-  background: linear-gradient(90deg, hsl(var(--h) 70% 55%), transparent);
-  opacity: .8;
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 14px;
+  border-radius: var(--radius); color: var(--text); background: var(--panel); border: 1px solid var(--line);
+  transition: border-color .15s, background .15s, transform .15s;
 }
 .app:hover {
-  text-decoration: none; transform: translateY(-3px);
-  border-color: color-mix(in srgb, hsl(var(--h) 70% 55%) 45%, var(--line));
-  box-shadow: 0 10px 24px -14px hsl(var(--h) 70% 40% / .7);
+  text-decoration: none; transform: translateY(-1px);
+  border-color: hsl(var(--h) 60% 60% / .45);
+  background: linear-gradient(135deg, hsl(var(--h) 70% 60% / .08), var(--panel) 70%);
 }
-.app.down { opacity: .72; }
+.app.down { opacity: .7; }
 .icon {
-  font-size: 24px; width: 46px; height: 46px; display: grid; place-items: center; margin-bottom: 8px;
-  border-radius: 12px; background: color-mix(in srgb, hsl(var(--h) 70% 55%) 16%, transparent);
+  font-size: 21px; width: 42px; height: 42px; display: grid; place-items: center; flex: none;
+  border-radius: 11px; background: hsl(var(--h) 70% 60% / .14);
 }
-.name { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.foot { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
-.foot .ct { margin-left: auto; }
+.body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note { font-size: 12px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app.down .note { color: var(--bad); }
+.app .dot { width: 7px; height: 7px; box-shadow: none; }
+.app { position: relative; }
+@media (max-width: 640px) {
+  .apps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .app { flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px; }
+  .icon { width: 38px; height: 38px; font-size: 19px; }
+  .body { width: 100%; }
+  .app .dot { position: absolute; top: 14px; right: 14px; }
+}
 </style>

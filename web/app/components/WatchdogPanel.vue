@@ -18,39 +18,32 @@ const rows = computed(() => [
 </script>
 
 <template>
-  <Panel title="Stuck-download repair" :sub="w ? `last pass ${ago}` : 'no report yet'">
+  <Panel title="Auto-repair" :sub="w ? ago : 'no report yet'">
     <div v-if="!w" class="faint small">qb-watchdog in CT 106 has not reported yet.</div>
     <template v-else>
       <div v-if="!w.ok" class="small bad note">The repair pass could not run.</div>
-      <div v-else-if="stale" class="small warn note">
-        No pass for over an hour — check <code>qb-watchdog.timer</code> in CT 106.
-      </div>
+      <div v-else-if="stale" class="small warn note">No pass for over an hour — check <code>qb-watchdog.timer</code> in CT 106.</div>
 
-      <p class="summary">{{ w.summary }}</p>
+      <p class="summary" :title="`judged by ${w.ai?.model ?? 'the local model'}`">{{ w.summary }}</p>
 
       <div v-for="(r, n) in rows" :key="n" class="row">
         <span class="pill" :class="r.tone">{{ r.kind }}</span>
         <span class="what">
-          <b class="name">{{ r.name }}</b>
+          <span class="name">{{ r.name }}</span>
           <span v-if="r.why" class="small muted"> — {{ r.why }}</span>
         </span>
       </div>
-
-      <div class="small faint foot">
-        Rules decide and act on their own; {{ w.ai?.model ?? 'the local model' }} judges what they
-        do not recognise and writes this note.
-        <span v-if="w.ai?.error" class="warn">Model unreachable: {{ w.ai.error }}</span>
-      </div>
+      <div v-if="w.ai?.error" class="small warn note">Model unreachable: {{ w.ai.error }}</div>
     </template>
   </Panel>
 </template>
 
 <style scoped>
-.note { margin-bottom: 8px; }
-.summary { margin: 0 0 10px; line-height: 1.45; }
-.row { display: flex; gap: 8px; align-items: baseline; padding: 6px 0; }
+.note { margin: 8px 0; }
+.summary { margin: 0; line-height: 1.5; color: var(--muted); }
+.row { display: flex; gap: 8px; align-items: baseline; padding: 7px 0; }
+.summary + .row { margin-top: 8px; }
 .row + .row { border-top: 1px solid var(--line); }
 .what { flex: 1; min-width: 0; }
-.name { overflow-wrap: anywhere; }
-.foot { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.name { overflow-wrap: anywhere; font-weight: 500; }
 </style>

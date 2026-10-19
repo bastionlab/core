@@ -19,7 +19,7 @@ const ctName = (id: number | null) => props.cts.find(c => c.vmid === id)?.name ?
           <span class="mono">{{ p.name }}</span>
           <span class="muted small" style="margin-left:auto">{{ bytes(p.mem) }}</span>
         </div>
-        <div v-if="!gpu.procs.length" class="faint small">Idle — shared by Immich, Jellyfin and (soon) the local LLM</div>
+        <div v-if="!gpu.procs.length" class="faint small">Idle</div>
       </div>
     </template>
     <div v-else class="muted">No GPU data</div>

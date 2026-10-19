@@ -34,9 +34,9 @@ function clone(r: any) {
 </script>
 
 <template>
-  <Panel id="github" title="GitHub" :sub="gh?.user ? `${gh.user} · ${gh.scope}` : 'your repositories'">
+  <Panel id="github" title="GitHub" fold="closed" :sub="gh?.user">
     <template #actions>
-      <a v-if="gh?.url" :href="gh.url" target="_blank" class="small muted">github.com/{{ gh.user }} ↗</a>
+      <a v-if="gh?.url" :href="gh.url" target="_blank" class="btn ghost small" title="open on GitHub">↗</a>
       <button class="btn ghost small" title="refresh the repo list" @click="refresh">↻</button>
     </template>
 
@@ -56,18 +56,18 @@ function clone(r: any) {
       <div v-for="r in repos" :key="r.full" class="repo">
         <div class="rh">
           <a :href="r.url" target="_blank" class="rname">{{ r.name }}</a>
-          <span v-if="r.private" class="pill">🔒 private</span>
+          <span v-if="r.private" class="faint small" title="private">🔒</span>
           <span v-if="r.fork" class="pill">fork</span>
-          <span v-if="r.lang" class="pill accent">{{ r.lang }}</span>
+          <span v-if="r.lang" class="lang small faint">{{ r.lang }}</span>
         </div>
-        <div class="small muted desc">{{ r.desc || 'no description' }}</div>
+        <div v-if="r.desc" class="small muted desc">{{ r.desc }}</div>
         <div class="rf small">
-          <span class="faint">pushed {{ r.pushed ? ago(Date.parse(r.pushed) / 1000) : '–' }}</span>
+          <span class="faint">{{ r.pushed ? ago(Date.parse(r.pushed) / 1000) : '–' }}</span>
           <template v-if="cloned.get(r.full.toLowerCase())">
             <span class="pill ok">on {{ cloned.get(r.full.toLowerCase()).box.name }}</span>
           </template>
           <button v-else class="btn small" :disabled="vmid == null" :title="`clone into ~/Projects/GitHub/${r.name} on the dev box`" @click="clone(r)">
-            ⬇ Clone
+            Clone
           </button>
         </div>
       </div>
@@ -82,16 +82,18 @@ function clone(r: any) {
 
 <style scoped>
 .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-.in { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; color: var(--text); font: inherit; font-size: 13px; padding: 6px 9px; }
+.in { font-size: 13px; padding: 6px 9px; }
 .in.grow { flex: 1; min-width: 180px; }
 .toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
 .pad { padding: 14px 0; }
-.repos { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; max-height: 420px; overflow-y: auto; }
-.repo { background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.repos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr)); gap: 8px; max-height: 420px; overflow-y: auto; }
+.repo { background: var(--panel-2); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.repo:hover { border-color: var(--line-2); }
+.lang { margin-left: auto; }
 .rh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .rname { font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; }
 .rname:hover { color: var(--accent); }
-.desc { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; min-height: 2.9em; }
+.desc { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .rf { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
 .rf .btn { padding: 3px 9px; }
 .hint { margin-top: 10px; }

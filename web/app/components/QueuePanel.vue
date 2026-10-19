@@ -97,7 +97,7 @@ const toggle = (k: string) => {
 </script>
 
 <template>
-  <Panel :id="id" :title="title" :sub="sub ?? `${list.length} in queue${groups.length < list.length ? ` · ${groups.length} titles` : ''}${active.length ? ` · ${active.length} downloading` : ''}`">
+  <Panel :id="id" :title="title" :sub="sub ?? (list.length ? `${groups.length} title${groups.length === 1 ? '' : 's'}${active.length ? ` · ${active.length} downloading` : ''}` : '')">
     <div v-if="!list.length" class="faint small">{{ empty ?? 'Nothing downloading' }}</div>
     <div v-for="g in groups" :key="g.key" class="item" :class="{ err: g.items.length === 1 && g.items[0].tag === 'error' }">
       <!-- one download: the full row, as before -->
@@ -128,7 +128,7 @@ const toggle = (k: string) => {
       <!-- a series: one summary row, episodes on demand -->
       <template v-else>
         <button class="head group" :aria-expanded="open.includes(g.key)" @click="toggle(g.key)">
-          <span class="chev" :class="{ on: open.includes(g.key) }">▸</span>
+          <Icon name="arrow" :size="14" class="chev" :class="{ on: open.includes(g.key) }" />
           <b class="title">{{ g.title }}</b>
           <span class="tags">
             <span v-for="[t, n] in g.tags" :key="t" class="pill" :class="tone(t)">{{ n }} {{ t }}</span>
@@ -162,20 +162,21 @@ const toggle = (k: string) => {
 
 <style scoped>
 .item { padding: 10px 0; }
+.item:first-of-type { padding-top: 0; }
 .item + .item { border-top: 1px solid var(--line); }
 .head { display: flex; align-items: center; gap: 8px; }
 .title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub { margin-top: 1px; }
-.track { height: 5px; background: var(--track); border-radius: 3px; overflow: hidden; margin: 7px 0 5px; }
+.track { height: 4px; background: var(--track); border-radius: 3px; overflow: hidden; margin: 7px 0 5px; }
 .track i { display: block; height: 100%; background: var(--accent); transition: width .6s ease; }
 .track.thin { height: 3px; margin: 4px 0 2px; }
 .item.err .track i, .ep.err .track i { background: var(--bad); }
 .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; }
 
 button.group { width: 100%; background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
-.chev { display: inline-block; width: 12px; color: var(--muted); transition: transform .15s ease; flex: none; }
+.chev { width: 14px; color: var(--muted); transition: transform .15s ease; flex: none; }
 .chev.on { transform: rotate(90deg); }
-.tags { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; flex: none; max-width: 60%; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; flex: none; max-width: 55%; }
 .indent { margin-left: 20px; }
 .eps { margin: 8px 0 0 20px; border-left: 2px solid var(--line); padding-left: 10px; }
 .ep { padding: 5px 0; }

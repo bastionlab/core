@@ -7,6 +7,13 @@ const leaves = computed(() => {
     .sort((a, b) => b.used - a.used)
 })
 const total = computed(() => leaves.value.reduce((s, d) => s + d.used, 0))
+/** "scrub repaired 0B in 01:55:00 with 0 errors on Sun Oct 11 02:19:01 2026" → "scrub clean · 11.10." */
+function scrub(scan?: string) {
+  const m = scan?.match(/with (\d+) errors on (.+)$/)
+  if (!m) return scan ?? 'never scrubbed'
+  const d = new Date(m[2]!)
+  return `scrub ${m[1] === '0' ? 'clean' : `${m[1]} errors`} · ${isNaN(+d) ? m[2] : d.toLocaleDateString('de-DE')}`
+}
 const colors = ['var(--accent)', '#b36bdb', '#2fa8a0', '#d9822b', '#c94f7c', '#6b8e23', '#8a7f72']
 </script>
 
@@ -31,7 +38,7 @@ const colors = ['var(--accent)', '#b36bdb', '#2fa8a0', '#d9822b', '#c94f7c', '#6
         <span class="dot" :class="d.passed ? 'ok' : d.passed === false ? 'bad' : ''" /> {{ d.dev }} {{ bytes(d.size, 0) }}<template v-if="d.temp"> · {{ d.temp }}°C</template>
       </span>
     </div>
-    <div v-for="p in pools" :key="p.name" class="faint small scan">{{ p.name }}: {{ p.scan ?? 'never scrubbed' }}</div>
+    <div class="faint small scan"><span v-for="p in pools" :key="p.name" :title="p.scan">{{ p.name }}: {{ scrub(p.scan) }}</span></div>
   </Panel>
 </template>
 
@@ -42,6 +49,5 @@ const colors = ['var(--accent)', '#b36bdb', '#2fa8a0', '#d9822b', '#c94f7c', '#6
 .legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; }
 .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
 .disks { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
-.scan { margin-top: 6px; }
-.scan + .scan { margin-top: 2px; }
+.scan { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 2px 14px; }
 </style>

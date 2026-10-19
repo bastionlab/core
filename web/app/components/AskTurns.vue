@@ -16,7 +16,7 @@ const emit = defineEmits<{ run: [Proposal] }>()
       </div>
       <details v-if="t.r" class="reason small muted"><summary>reasoning{{ t.busy && !t.a ? '…' : '' }}</summary><div class="pre">{{ t.r }}</div></details>
       <div v-if="t.a" class="a" v-html="md(t.a)" />
-      <div v-else-if="t.busy && !t.r" class="muted small">thinking… (first answer loads the model, can take ~20 s)</div>
+      <div v-else-if="t.busy && !t.r" class="muted small" title="the first answer loads the model, can take ~20 s">thinking…</div>
       <div v-for="(p, j) in t.proposals" :key="'p' + j" class="proposal" :class="[p.state, { danger: p.desc?.startsWith('FORCE:') }]">
         <div class="head">
           <span class="what"><b>{{ p.desc }}</b></span>
@@ -40,13 +40,13 @@ const emit = defineEmits<{ run: [Proposal] }>()
 </template>
 
 <style scoped>
-.turn { padding: 10px 4px; display: flex; flex-direction: column; gap: 6px; }
-.turn + .turn { border-top: 1px dashed var(--line); }
-.q { font-weight: 600; }
+.turn { padding: 12px 0; display: flex; flex-direction: column; gap: 8px; }
+.q { align-self: flex-end; max-width: 85%; background: var(--panel-2); border: 1px solid var(--line); padding: 7px 12px; border-radius: 12px 12px 4px 12px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .a { line-height: 1.55; overflow-wrap: anywhere; }
 .a :deep(p) { margin: 0 0 8px; }
 .a :deep(ul), .a :deep(ol) { margin: 0 0 8px; padding-left: 20px; }
-.a :deep(pre) { background: var(--panel-2); padding: 8px 10px; border-radius: 7px; overflow-x: auto; }
+.a :deep(a) { text-decoration: underline; text-underline-offset: 2px; }
+.a :deep(pre) { background: var(--bg); border: 1px solid var(--line); padding: 8px 10px; border-radius: 7px; overflow-x: auto; }
 .a :deep(code) { font-family: var(--mono); font-size: 12.5px; }
 .a :deep(:not(pre) > code) { background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
 .a :deep(table) { margin-bottom: 8px; font-size: 13px; }
@@ -60,11 +60,11 @@ const emit = defineEmits<{ run: [Proposal] }>()
 /* a proposal that would destroy work the owner cannot get back is not an ordinary one */
 .proposal.danger { border-color: var(--bad); border-left-color: var(--bad); }
 .proposal.danger .what { color: var(--bad); }
-.btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: #0a0c10; }
 .proposal .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .proposal .btns { margin-left: auto; display: flex; gap: 6px; }
 .proposal .btn.small { padding: 3px 10px; font-size: 12px; }
-.log { white-space: pre-wrap; max-height: 160px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 0; font-family: var(--mono); }
+.log { white-space: pre-wrap; max-height: 160px; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 0; font-family: var(--mono); }
 .reason summary { cursor: pointer; }
 .pre { white-space: pre-wrap; max-height: 200px; overflow-y: auto; padding: 6px 0; }
 </style>

@@ -151,13 +151,23 @@ async function submit() {
 }
 
 const remove = (s: any) => confirm(`Delete "${s.name}" and its matches?`) && act('delete', { id: s.id })
+/** everything that used to be spelled out under the row */
+function tip(s: any) {
+  const sp = s.spec ?? {}
+  return [
+    sp.keyword,
+    sp.exclude?.length && `not: ${sp.exclude.join(', ')}`,
+    sp.shipping && sp.shipping !== 'any' && shipLabel(sp),
+    sp.intent && `✦ ${sp.intent}`,
+  ].filter(Boolean).join('\n')
+}
 const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'only' ? 'ship' : sp?.shipping))?.label
 </script>
 
 <template>
-  <Panel title="Searches" :sub="`${props.searches.length} saved`">
+  <Panel title="Searches">
     <template #actions>
-      <button class="btn" @click="openNew">{{ editing === 'new' ? 'Cancel' : '+ New search' }}</button>
+      <button class="btn" @click="openNew">{{ editing === 'new' ? 'Cancel' : '+ New' }}</button>
     </template>
 
     <form v-if="editing !== null" class="new" @submit.prevent="submit">
@@ -210,14 +220,14 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
         </label>
       </div>
       <div class="row one">
-        <label>Worauf kommt es wirklich an? <span class="hint">die KI prüft jedes Inserat dagegen — leer lassen = nur Stichwörter</span>
+        <label title="die KI prüft jedes Inserat dagegen — leer lassen = nur Stichwörter">Worauf kommt es wirklich an? (KI)
           <textarea v-model="form.intent" rows="2" placeholder="NAS-Festplatte mit mindestens 6 TB. Keine leeren Gehäuse, keine SSD." />
         </label>
       </div>
       <div class="row end">
         <span class="small muted">
-          <template v-if="editing === 'new'">First poll only seeds — you get pushes from the next one on.</template>
-          <template v-else>Saving re-checks listings you already have. It never sends notifications.</template>
+          <template v-if="editing === 'new'">First poll only seeds.</template>
+          <template v-else>Re-checks saved listings, no pushes.</template>
         </span>
         <button class="btn ghost" type="button" @click="editing = null">Cancel</button>
         <button class="btn primary" :disabled="!!busy">
@@ -229,36 +239,37 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
     <div v-if="err" class="small bad pad">{{ err }}</div>
     <div v-if="note" class="small muted pad">{{ note }}</div>
 
-    <div v-for="s in props.searches" :key="s.id" class="row-item" :class="{ editing: editing === s.id }">
+    <div v-if="!props.searches.length && editing === null" class="small muted pad">No searches yet.</div>
+    <div v-for="s in props.searches" :key="s.id" class="row-item" :class="{ editing: editing === s.id, off: !s.enabled }">
       <span class="dot" :class="s.last_error ? 'bad' : s.enabled ? 'ok' : ''" />
-      <div class="min">
-        <b>{{ s.name }}</b>
-        <div class="small muted ell">
-          {{ s.spec?.keyword }}
-          <template v-if="s.spec?.exclude?.length"> · not: {{ s.spec.exclude.join(', ') }}</template>
-          <template v-if="s.spec?.shipping && s.spec.shipping !== 'any'"> · {{ shipLabel(s.spec) }}</template>
+      <div class="min" :title="tip(s)">
+        <div class="ell">
+          <b>{{ s.name }}</b>
+          <span class="small muted kw">{{ s.spec?.keyword }}</span>
+          <span v-if="s.spec?.intent" class="ai small">✦</span>
         </div>
-        <div v-if="s.spec?.intent" class="small accent ell">✦ {{ s.spec.intent }}</div>
-        <div v-if="s.last_error" class="small bad">{{ s.last_error }}</div>
+        <div v-if="s.last_error" class="small bad ell">{{ s.last_error }}</div>
       </div>
-      <span class="small muted when">{{ s.last_polled_at ? ago(s.last_polled_at) : 'never' }}</span>
-      <a class="btn ghost" :href="s.url" target="_blank" rel="noopener" title="Open this search on Kleinanzeigen">↗</a>
-      <button class="btn ghost" title="Edit" @click="openEdit(s)">✎</button>
-      <button
-        v-if="s.spec?.intent" class="btn ghost" :disabled="!!busy"
-        title="Alle gespeicherten Inserate neu von der KI prüfen lassen"
-        @click="act('rejudge', { id: s.id, all: true })"
-      >{{ busy === 'rejudge' + s.id ? '✦…' : '✦' }}</button>
-      <button class="btn ghost" :disabled="!!busy" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? 'Pause' : 'Resume' }}</button>
-      <button class="btn ghost danger" :disabled="!!busy" @click="remove(s)">✕</button>
+      <span class="small faint when">{{ s.last_polled_at ? ago(s.last_polled_at) : 'never' }}</span>
+      <div class="acts">
+        <a class="btn ghost ic" :href="s.url" target="_blank" rel="noopener" title="Open on Kleinanzeigen">↗</a>
+        <button class="btn ghost ic" title="Edit" @click="openEdit(s)">✎</button>
+        <button
+          v-if="s.spec?.intent" class="btn ghost ic" :disabled="!!busy"
+          title="Alle gespeicherten Inserate neu von der KI prüfen lassen"
+          @click="act('rejudge', { id: s.id, all: true })"
+        >{{ busy === 'rejudge' + s.id ? '…' : '✦' }}</button>
+        <button class="btn ghost ic" :disabled="!!busy" :title="s.enabled ? 'Pause' : 'Resume'" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? '❙❙' : '▶' }}</button>
+        <button class="btn ghost ic danger" :disabled="!!busy" title="Delete" @click="remove(s)">✕</button>
+      </div>
     </div>
   </Panel>
 </template>
 
 <style scoped>
-.ask { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--accent); border-radius: 8px; background: var(--panel); }
+.ask { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 10px; border: 1px solid var(--accent); border-radius: 8px; background: var(--panel); }
 .ask .spark { color: var(--accent); font-size: 14px; }
-.wish { flex: 1; border: 0; background: transparent; padding: 3px 0; font-size: 13px; }
+.ask .wish { flex: 1; border: 0; background: transparent; padding: 3px 0; font-size: 13px; }
 .wish:focus { outline: none; }
 .why { padding-top: 2px; }
 .trace { display: flex; flex-direction: column; gap: 2px; padding: 6px 2px 2px; }
@@ -277,14 +288,19 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .row.narrow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .row.one { grid-template-columns: 1fr; }
-textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; color: var(--text); font: inherit; font-size: 13px; resize: vertical; }
+textarea { resize: vertical; }
 .hint { text-transform: none; opacity: .7; }
 .accent { color: var(--accent); }
 .row.end { display: flex; align-items: center; gap: 10px; }
 .row.end .btn:first-of-type { margin-left: auto; }
 label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); min-width: 0; }
-input, select { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; color: var(--text); font: inherit; font-size: 13px; min-width: 0; }
-.row-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+.new input, .new select, .new textarea { background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 8px; color: var(--text); font: inherit; font-size: 13px; min-width: 0; }
+.row-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+.row-item.off { opacity: .6; }
+.kw { margin-left: 8px; }
+.ai { color: var(--accent); margin-left: 6px; }
+.acts { display: flex; gap: 0; flex: none; }
+.ic { width: 30px; height: 30px; padding: 0; font-size: 13px; }
 .row-item + .row-item { border-top: 1px solid var(--line); }
 .row-item.editing { background: var(--accent-soft); border-radius: 7px; padding-inline: 8px; }
 .min { flex: 1; min-width: 0; }
@@ -292,6 +308,8 @@ input, select { background: var(--panel); border: 1px solid var(--line); border-
 .pad { padding: 6px 0; }
 @media (max-width: 700px) {
   .row, .row.narrow { grid-template-columns: 1fr 1fr; }
+  .row.end { flex-wrap: wrap; }
   .when { display: none; }
+  .new input, .new select, .new textarea, .ask .wish { font-size: 16px; }
 }
 </style>

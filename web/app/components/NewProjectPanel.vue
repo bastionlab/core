@@ -35,7 +35,7 @@ function create() {
 </script>
 
 <template>
-  <Panel id="new" title="New project" sub="empty, cloned, or created on GitHub">
+  <Panel id="new" title="New project" fold="closed">
     <div class="row">
       <input v-model="name" class="in grow" placeholder="project name" @keydown.enter.prevent="create">
       <select v-if="running.length > 1" v-model="vmid" class="in">
@@ -54,7 +54,7 @@ function create() {
     </div>
 
     <div class="row">
-      <input v-if="!onGithub" v-model="repo" class="in grow" placeholder="clone URL (optional) — git@github.com:owner/name">
+      <input v-if="!onGithub" v-model="repo" class="in grow" placeholder="clone URL (optional)">
       <div v-else class="small muted grow mono">→ {{ gh?.user }}/{{ name || '<name>' }}</div>
       <button class="btn primary" :disabled="!valid" @click="create">Create</button>
     </div>
@@ -62,8 +62,6 @@ function create() {
     <div v-if="name && taken.has(name)" class="small warn hint">A project called {{ name }} already exists on a dev box.</div>
     <div v-else-if="clash" class="small warn hint">{{ gh?.user }}/{{ name }} already exists on GitHub — pick another name, or clone it instead.</div>
     <div v-else-if="!repoOk" class="small warn hint">That does not look like a clone URL.</div>
-    <div v-else-if="onGithub" class="small faint hint">Scaffolds ~/Projects/GitHub/{{ name || '<name>' }} on the dev box, creates the repo and pushes the first commit.</div>
-    <div v-else class="small faint hint">Lands in ~/Projects/GitHub/&lt;name&gt; on the dev box and appears above when it is done.</div>
     <div v-if="!canGithub" class="small muted hint">{{ gh?.hint }}</div>
     <div v-if="!running.length" class="small warn hint">No dev box is running — create one with the newdev action.</div>
   </Panel>
@@ -72,8 +70,8 @@ function create() {
 <style scoped>
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .row + .row { margin-top: 8px; }
-.in { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; color: var(--text); font: inherit; font-size: 13px; padding: 6px 9px; }
-.in.grow, .grow { flex: 1; min-width: 160px; }
+.in { font-size: 13px; padding: 6px 9px; }
+.in.grow, .grow { flex: 1; min-width: 140px; }
 .toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
 .toggle.off { opacity: .55; cursor: default; }
 .hint { margin-top: 10px; }

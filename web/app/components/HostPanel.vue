@@ -33,12 +33,11 @@ const at = computed(() => pending.value && new Date(pending.value.at * 1000).toL
 
     <div v-if="pending" class="warnbox">
       <b>{{ pending.mode === 'reboot' ? 'Rebooting' : 'Powering off' }} at {{ at }}.</b>
-      <span class="small">Every container stops and this page goes offline.</span>
       <button class="btn" @click="emit('action', 'host_shutdown_cancel', {})">Cancel shutdown</button>
     </div>
     <div v-else-if="step" class="warnbox">
       <b>Power off the server?</b>
-      <span class="small">All containers stop — media, AI, dev boxes and this dashboard. It happens one minute after you confirm; you can cancel within that minute.</span>
+      <span class="small">Everything stops, this page too. Runs in 1 min — cancelable until then.</span>
       <div class="row">
         <button class="btn ghost" @click="cancel">Keep running</button>
         <button class="btn solid-bad" :disabled="step !== 2" @click="powerOff">Yes, power off</button>
@@ -59,6 +58,7 @@ const at = computed(() => pending.value && new Date(pending.value.at * 1000).toL
 
 <style scoped>
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
+@media (max-width: 380px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .foot { margin-top: 12px; }
 .warnbox { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; padding: 12px; border: 1px solid var(--bad); border-radius: var(--radius); background: color-mix(in srgb, var(--bad) 10%, transparent); }
 .warnbox .btn { align-self: flex-start; }

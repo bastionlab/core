@@ -6,8 +6,9 @@ export default defineNuxtConfig({
     head: {
       title: 'pve',
       meta: [
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { name: 'color-scheme', content: 'dark light' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
+        { name: 'color-scheme', content: 'dark' },
+        { name: 'theme-color', content: '#0a0c10' },
       ],
       link: [{ rel: 'icon', href: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>" }],
     },

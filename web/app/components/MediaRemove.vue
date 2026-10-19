@@ -109,7 +109,7 @@ onBeforeUnmount(() => clearTimeout(armTimer))
 </script>
 
 <template>
-  <Panel id="remove" title="Remove from the library" sub="files, torrents and Jellyfin in one go">
+  <Panel id="remove" title="Remove" fold="closed" sub="files + torrents + Jellyfin">
     <template #actions>
       <button class="btn ghost small" :disabled="loading" title="reload the list from Sonarr and Radarr" @click="reload()">↻</button>
     </template>
@@ -117,13 +117,13 @@ onBeforeUnmount(() => clearTimeout(armTimer))
     <JobList :jobs="jobs" @dismiss="dismiss" />
 
     <div class="row">
-      <select v-model="kind" class="in">
+      <select v-model="kind" class="in kind">
         <option value="all">All ({{ counts.all }})</option>
         <option value="series">Series ({{ counts.series }})</option>
         <option value="anime">Anime ({{ counts.anime }})</option>
         <option value="movie">Films ({{ counts.movie }})</option>
       </select>
-      <input v-model="query" class="in grow" type="search" placeholder="Search by title or year…">
+      <input v-model="query" class="in grow" type="search" placeholder="Search…">
     </div>
 
     <div v-if="loadError" class="small bad hint">Could not read the library: {{ loadError.statusMessage || loadError.message }}</div>
@@ -135,7 +135,7 @@ onBeforeUnmount(() => clearTimeout(armTimer))
       >
         <span class="t">{{ i.title }} <span v-if="i.year" class="muted">{{ i.year }}</span></span>
         <span class="pill">{{ LABEL[i.group] }}</span>
-        <span class="small muted num">{{ i.files ? bytes(i.size) : 'no files' }}</span>
+        <span class="small muted num">{{ i.files ? bytes(i.size) : '–' }}</span>
       </button>
       <div v-if="!matches.length" class="small muted empty">Nothing matches.</div>
     </div>
@@ -154,7 +154,7 @@ onBeforeUnmount(() => clearTimeout(armTimer))
           <button v-if="seasonsOnDisk.length > 1" class="btn ghost small" @click="allButLatest">all but {{ sname(latest) }}</button>
         </div>
         <div v-if="mode === 'seasons' && chosen.includes(latest)" class="small warn">
-          {{ sname(latest) }} is the newest season — removing it unmonitors it too, so its new episodes stop coming.
+          {{ sname(latest) }} is the newest season — its new episodes stop coming.
         </div>
       </div>
       <div v-if="mode === 'seasons' && !chosen.length" class="small muted">Pick the seasons to delete.</div>
@@ -180,10 +180,8 @@ onBeforeUnmount(() => clearTimeout(armTimer))
           </li>
           <li v-else class="muted">no torrents of it left in qBittorrent</li>
           <li v-if="plan.shared?.length" class="muted">{{ plan.shared.length }} torrent(s) also cover a season you keep — they stay seeding</li>
-          <li v-if="plan.seasons" class="muted">
-            Sonarr unmonitors {{ seasonList(plan.seasons) }} so they are not downloaded again; the series stays and keeps getting new episodes. Jellyfin drops the files on its own.
-          </li>
-          <li v-else class="muted">{{ plan.app === 'sonarr' ? 'Sonarr' : 'Radarr' }} stops tracking it and adds a list exclusion, so it is not downloaded again. Jellyfin drops it on its own.</li>
+          <li v-if="plan.seasons" class="muted">{{ seasonList(plan.seasons) }} unmonitored; the series keeps getting new episodes</li>
+          <li v-else class="muted">{{ plan.app === 'sonarr' ? 'Sonarr' : 'Radarr' }} drops it + list exclusion, so it is not fetched again</li>
         </ul>
 
         <div class="row end">
@@ -192,7 +190,7 @@ onBeforeUnmount(() => clearTimeout(armTimer))
             <button class="btn danger" @click="confirmOnce">Delete…</button>
           </template>
           <template v-else>
-            <span class="small bad grow">This cannot be undone — there is no trash for media.</span>
+            <span class="small bad grow">Cannot be undone.</span>
             <button class="btn ghost" @click="cancel">Cancel</button>
             <button class="btn solid-bad" :disabled="step !== 2" @click="remove">
               {{ step === 2 ? `Yes, delete ${what(plan)}` : 'Wait…' }}
@@ -207,19 +205,20 @@ onBeforeUnmount(() => clearTimeout(armTimer))
 <style scoped>
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .row.end { justify-content: flex-end; margin-top: 12px; }
-.in { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; color: var(--text); font: inherit; font-size: 13px; padding: 6px 9px; }
-.grow { flex: 1; min-width: 160px; }
+.in { font-size: 13px; padding: 7px 10px; }
+.kind { flex: none; }
+.grow { flex: 1; min-width: 120px; }
 .hint { margin-top: 10px; }
-.list { margin-top: 10px; max-height: 264px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
-.item { display: grid; grid-template-columns: minmax(0, 1fr) auto 64px; gap: 10px; align-items: center; width: 100%; padding: 7px 10px; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.list { margin-top: 10px; max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+.item { display: grid; grid-template-columns: minmax(0, 1fr) auto 60px; gap: 10px; align-items: center; width: 100%; padding: 8px 12px; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .item:last-child { border-bottom: 0; }
 .item:hover { background: var(--panel-2); }
 .item.on { background: var(--accent-soft); }
 .item .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty { padding: 12px; text-align: center; }
-.plan { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.plan { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
 .plan.hot { border-color: var(--bad); background: var(--bad-soft); }
-.head { display: flex; gap: 8px; align-items: center; }
+.head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .facts { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .torrents { margin: 4px 0 0; padding-left: 16px; max-height: 160px; overflow-y: auto; word-break: break-word; }
 .scope { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
@@ -230,7 +229,6 @@ onBeforeUnmount(() => clearTimeout(armTimer))
 .chip { display: inline-flex; gap: 6px; align-items: center; padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; user-select: none; }
 .chip.on { border-color: var(--bad); background: var(--bad-soft); }
 .chip input { margin: 0; }
-.warn { color: var(--warn); }
 .mono { font-family: var(--mono); word-break: break-all; }
 .btn.solid-bad { background: var(--bad); border-color: var(--bad); color: #fff; }
 .btn.solid-bad:disabled { opacity: .45; }
