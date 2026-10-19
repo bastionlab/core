@@ -4,7 +4,7 @@ import type { H3Event } from 'h3'
 export async function overview(event: H3Event) {
   const [data, health] = await Promise.all([
     agent(event, '/overview'),
-    Promise.all(services.map(async s => ({ ...s, ...(await check(s.healthUrl ?? s.url + s.health)) }))),
+    Promise.all(services.map(async s => ({ ...s, ...(await probe(s)) }))),
   ])
   return { ...data, services: health }
 }

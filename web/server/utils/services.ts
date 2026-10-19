@@ -38,3 +38,23 @@ export function check(url: string, timeout = 3000): Promise<{ up: boolean, statu
     req.on('error', e => resolve({ up: false, error: e.message }))
   })
 }
+
+type Health = Awaited<ReturnType<typeof check>>
+const GRACE = 3000
+const seen = new Map<string, { good?: Health, failSince?: number, at: number }>()
+
+/** check(), but a service only counts as down once it has failed for GRACE ms — a restart or a slow
+ *  moment shows the last good result instead of flashing red. Kept per URL in this server process. */
+export async function probe(s: Service): Promise<Health> {
+  const url = s.healthUrl ?? s.url + s.health
+  const r = await check(url)
+  const now = Date.now()
+  const prev = seen.get(url)
+  // nobody looked for a minute: an old failure says nothing about this one
+  const st = prev && now - prev.at < 60_000 ? prev : { good: prev?.good, at: now }
+  st.at = now
+  if (r.up) { st.good = r; st.failSince = undefined; seen.set(url, st); return r }
+  st.failSince ??= now
+  seen.set(url, st)
+  return now - st.failSince < GRACE && st.good ? st.good : r
+}

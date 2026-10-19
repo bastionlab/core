@@ -36,7 +36,7 @@ export async function scopeContext(event: H3Event, scope: Scope, models: any[] |
 export async function mediaData(event: H3Event) {
   const [data, health] = await Promise.all([
     agent(event, '/media'),
-    Promise.all(services.filter(s => s.group === 'media' || s.name === 'Seerr').map(async s => ({ ...s, ...(await check(s.healthUrl ?? s.url + s.health)) }))),
+    Promise.all(services.filter(s => s.group === 'media' || s.name === 'Seerr').map(async s => ({ ...s, ...(await probe(s)) }))),
   ])
   return { ...(data as any), services: health }
 }
