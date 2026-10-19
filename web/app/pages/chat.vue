@@ -52,11 +52,20 @@ watch(() => turns.value.map(t => t.a.length + t.r.length).join(), () => {
   if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 200) nextTick(() => (el.scrollTop = el.scrollHeight))
 })
 function send(q: string) {
+  if (q.trim() === '/clear') return clear()
   if (isClaude.value && current.value) {
     Object.assign(current.value, { engine: 'claude', model: ccModel.value, effort: ccEffort.value })
     claude.ask(current.value, q)
   } else ask(q)
   nextTick(touch)
+}
+/** like Claude Code's /clear: same chat on screen, but the model starts over (Claude gets a fresh session) */
+function clear() {
+  const c = current.value
+  if (!c || busy.value || !c.turns.length || c.turns.at(-1)!.clear) return
+  c.turns.push({ q: '', a: '', r: '', clear: true, fin: true, at: Date.now() })
+  if (c.session) c.session = crypto.randomUUID()
+  save()
 }
 const EXAMPLES = {
   local: ['What can you do?', 'Summarise how my server is doing', 'Explain ZFS snapshots vs backups', 'What happened in tech news today?'],
@@ -97,6 +106,10 @@ const open = ref(false) // conversation list on phones
           :title="auto ? 'Claude may change files, run commands and deploy. Click for read-only' : 'Claude can only look. Click to let it change things'"
           @click="auto = !auto"
         >{{ auto ? '⚡ Auto' : '👁 Read-only' }}</button>
+        <button
+          v-if="turns.length && !turns.at(-1)!.clear" class="btn ghost clearbtn" :disabled="busy"
+          title="start fresh in this chat: the model forgets everything above (same as typing /clear)" @click="clear"
+        >⟲</button>
         <button class="btn ghost only-phone plus" title="new chat" @click="create()">+</button>
       </div>
 
@@ -157,6 +170,7 @@ aside { display: flex; flex-direction: column; gap: 10px; background: var(--pane
 .autobtn.armed { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
 .bar select { padding: 5px 8px; font-size: 12px; }
 @media (max-width: 640px) { .bar select { flex: 1 1 40%; font-size: 16px; } }
+.clearbtn { font-size: 14px; padding: 4px 9px; flex-shrink: 0; }
 .bar.armed { box-shadow: inset 0 2px 0 var(--warn); }
 .cl { color: #d97757; margin-right: 5px; }
 .empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 30px 10px; text-align: center; }

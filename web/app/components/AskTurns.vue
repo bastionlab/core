@@ -11,7 +11,9 @@ const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tool
 
 <template>
   <div class="turns">
-    <div v-for="(t, i) in turns" :key="i" class="turn">
+    <template v-for="(t, i) in turns" :key="i">
+    <div v-if="t.clear" class="cleared small faint">context cleared · the model forgets everything above</div>
+    <div v-else class="turn">
       <div class="q">{{ t.q }}</div>
       <div v-if="t.tools?.length" class="tools small muted">
         <button v-if="t.tools.length > SHOW && !expanded.has(i)" class="pill more" @click="expanded.add(i)">+{{ t.tools.length - SHOW }} earlier</button>
@@ -52,10 +54,13 @@ const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tool
         {{ t.model }}<template v-if="t.tps"> · {{ t.tps.toFixed(1) }} tok/s</template><template v-if="t.effort"> · {{ t.effort }}</template><template v-if="t.secs"> · {{ t.secs }} s</template><span v-if="t.ct" :class="t.auto ? 'autotag' : ''"> · {{ t.auto ? '⚡ auto' : 'read-only' }}</span>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
+.cleared { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+.cleared::before, .cleared::after { content: ''; flex: 1; border-top: 1px dashed var(--line-2); }
 .turn { padding: 12px 0; display: flex; flex-direction: column; gap: 8px; }
 .q { align-self: flex-end; max-width: 85%; background: var(--panel-2); border: 1px solid var(--line); padding: 7px 12px; border-radius: 12px 12px 4px 12px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .a { line-height: 1.55; overflow-wrap: anywhere; }

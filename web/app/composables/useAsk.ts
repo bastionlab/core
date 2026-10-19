@@ -8,7 +8,12 @@ export interface Turn {
   ct?: string, auto?: boolean, effort?: string, secs?: number, denied?: string[], fin?: boolean, stopped?: boolean
   /** a ```questions block the owner already answered: question index → picked labels */
   answered?: Record<number, string[]> | null
+  /** a /clear divider: nothing before it is sent to the model again */
+  clear?: boolean
 }
+
+/** the turns since the last /clear, i.e. what the model should still remember */
+export const sinceClear = (turns: Turn[]) => turns.slice(turns.findLastIndex(t => t.clear) + 1)
 
 // model output is untrusted: render markdown but show any raw HTML as text
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
@@ -57,7 +62,7 @@ export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void)
   async function ask(text: string) {
     text = text.trim()
     if (!text || busy.value) return
-    const history = turns.value.filter(t => !t.error).flatMap(t => [{ role: 'user', content: t.q }, { role: 'assistant', content: t.a }])
+    const history = sinceClear(turns.value).filter(t => !t.error).flatMap(t => [{ role: 'user', content: t.q }, { role: 'assistant', content: t.a }])
     turns.value.push({ q: text, a: '', r: '', tools: [], proposals: [], busy: true, at: Date.now() })
     const t = turns.value[turns.value.length - 1]!
     ctl = new AbortController()

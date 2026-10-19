@@ -1,5 +1,5 @@
 import type { Chat } from '~/composables/useChats'
-import type { Tool, Turn } from '~/composables/useAsk'
+import { sinceClear, type Tool, type Turn } from '~/composables/useAsk'
 
 const base = (p = '') => p.split('/').filter(Boolean).pop() ?? p
 const short = (s = '', n = 70) => (s = s.replace(/\s+/g, ' ').trim()).length > n ? s.slice(0, n - 1) + '…' : s
@@ -129,7 +129,7 @@ export function useClaude(save: () => void) {
     let prompt = text
     if (!c.session) {
       // switching an existing local-model chat over to Claude: hand it what was said so far
-      const prior = c.turns.filter(t => !t.error).map(t => `Owner: ${t.q}\nAssistant (${t.model || 'local model'}): ${t.a}`).join('\n\n')
+      const prior = sinceClear(c.turns).filter(t => !t.error).map(t => `Owner: ${t.q}\nAssistant (${t.model || 'local model'}): ${t.a}`).join('\n\n')
       if (prior) prompt = `Earlier in this chat, with a local model:\n\n${prior.slice(-12000)}\n\n---\n\n${text}`
       c.session = crypto.randomUUID()
     }
