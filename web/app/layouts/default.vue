@@ -8,6 +8,7 @@ const nav = [
   { to: '/media', icon: '🍿', label: 'Media' },
   { to: '/dev', icon: '⌨️', label: 'Dev' },
   { to: '/deals', icon: '🏷️', label: 'Deals' },
+  { to: '/wohnungen', icon: '🔑', label: 'Wohnungen' },
   { to: '/metrics', icon: '📊', label: 'Metrics' },
   { to: '/chat', icon: '✦', label: 'Chat' },
 ]

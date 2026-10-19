@@ -13,7 +13,9 @@ const vpnOk = computed(() => m.value?.vpn && m.value.vpn.up && m.value.vpn.killS
 
 const { data: boxes, refresh: refreshProjects } = useProjects()
 const { data: deals, refresh: refreshDeals } = useDeals()
-onMounted(() => { if (!boxes.value) refreshProjects(); if (!deals.value) refreshDeals() })
+const { data: flats, refresh: refreshFlats } = useFlats()
+onMounted(() => { if (!boxes.value) refreshProjects(); if (!deals.value) refreshDeals(); if (!flats.value) refreshFlats() })
+const flatsFresh = computed(() => (flats.value?.feed ?? []).filter((i: any) => Date.now() / 1000 - (i.posted_at ?? i.first_seen_at ?? 0) < 86400).length)
 const dealsFresh = computed(() => (deals.value?.feed ?? []).filter((i: any) => Date.now() / 1000 - (i.posted_at ?? 0) < 86400).length)
 const projects = computed(() => (boxes.value ?? []).flatMap(b => b.projects ?? []))
 const previews = computed(() => projects.value.filter((p: any) => p.running).length)
@@ -65,6 +67,16 @@ const topics = computed(() => [
       ? [
           { text: `${deals.value.status?.enabled ?? 0} searches` },
           { text: `${dealsFresh.value} new today`, tone: dealsFresh.value ? 'accent' : '' },
+        ]
+      : [{ text: 'loading…' }],
+  },
+  {
+    to: '/wohnungen', icon: '🔑', name: 'Wohnungen', hue: 30,
+    line: 'Rental flats from Kleinanzeigen and inberlinwohnen, read by the local AI, checked on Warmmiete.',
+    chips: flats.value
+      ? [
+          { text: `${flats.value.status?.enabled ?? 0} searches` },
+          { text: `${flatsFresh.value} new today`, tone: flatsFresh.value ? 'accent' : '' },
         ]
       : [{ text: 'loading…' }],
   },

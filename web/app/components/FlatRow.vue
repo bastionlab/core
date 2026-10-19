@@ -1,0 +1,107 @@
+<script setup lang="ts">
+const props = defineProps<{ item: any, busy?: boolean }>()
+const emit = defineEmits<{ (e: 'verdict', v: 'up' | 'down' | null): void }>()
+
+const SOURCES: Record<string, string> = { kleinanzeigen: 'Kleinanzeigen', inberlinwohnen: 'inberlinwohnen' }
+const eur = (v?: number | null) => (v == null ? '' : `${Math.round(v).toLocaleString('de-DE')} €`)
+
+const warm = computed(() => props.item.warm == null ? (props.item.list_price ? eur(props.item.list_price) : '—') : eur(props.item.warm))
+// what the warm figure is made of, so an estimate never passes for a quote
+const breakdown = computed(() => {
+  const i = props.item
+  const bits = [i.cold && `${eur(i.cold)} kalt`, i.extra != null && `${eur(i.extra)} NK`, i.heating && `${eur(i.heating)} HK`].filter(Boolean)
+  if (i.warm_kind === 'stated') return bits.length ? `warm laut Inserat · ${bits.join(' + ')}` : 'warm laut Inserat'
+  if (i.warm_kind === 'sum') return bits.join(' + ')
+  if (i.warm_kind === 'estimated') return `geschätzt${bits.length ? ' · ' + bits.join(' + ') : ''}`
+  return i.list_price ? 'Preis laut Inserat, warm unklar' : 'Miete unklar'
+})
+const when = computed(() => ago(props.item.posted_at ?? props.item.first_seen_at))
+const fresh = computed(() => (Date.now() / 1000 - (props.item.posted_at ?? 0)) < 6 * 3600)
+const channels = computed(() => (props.item.contact?.channels ?? []).filter((c: any) => c.type === 'email' || c.type === 'phone'))
+const phoneText = (v: string) => v.replace(/^\+49/, '0')
+const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? null : v)
+</script>
+
+<template>
+  <article class="flat" :class="{ out: item.passed === 0 || item.verdict === 'down' || item.status === 'reserved' }">
+    <a :href="item.url" target="_blank" rel="noopener" class="shot">
+      <img v-if="item.image_url" :src="item.image_url" :alt="item.title" loading="lazy">
+      <span v-else>🏠</span>
+    </a>
+
+    <div class="main">
+      <a :href="item.url" target="_blank" rel="noopener" class="title">{{ item.title }}</a>
+      <div class="facts">
+        <b v-if="item.rooms">{{ item.rooms.toLocaleString('de-DE') }} Zi.</b>
+        <b v-if="item.area">{{ item.area.toLocaleString('de-DE') }} m²</b>
+        <span v-if="item.district" class="muted">{{ item.district }}</span>
+        <span v-if="item.distance_km != null" class="muted">{{ item.distance_km.toLocaleString('de-DE') }} km</span>
+        <span v-if="item.available_from" class="muted">ab {{ item.available_from }}</span>
+      </div>
+      <div class="pills">
+        <span class="pill">{{ SOURCES[item.source] ?? item.source }}</span>
+        <span v-if="item.wbs === 1" class="pill warn">WBS nötig</span>
+        <span v-else-if="item.wbs === 0 && item.source === 'inberlinwohnen'" class="pill">ohne WBS</span>
+        <span v-if="item.tausch === 1" class="pill warn">Tausch</span>
+        <!-- when the match is aussortiert, its reason already names the kind -->
+        <template v-if="item.passed !== 0">
+          <span v-if="item.kind === 'zwischenmiete'" class="pill warn">Zwischenmiete</span>
+          <span v-if="item.kind === 'wg_zimmer'" class="pill warn">WG-Zimmer</span>
+        </template>
+        <span v-if="item.scam === 'mittel'" class="pill warn" title="Die KI hat Auffälligkeiten gesehen">⚠ prüfen</span>
+        <span v-if="item.status === 'reserved'" class="pill warn">Reserviert</span>
+        <span v-if="item.passed === 0 && item.reason" class="pill bad">{{ item.reason }}</span>
+        <span class="pill ghost">{{ item.search_name }}</span>
+      </div>
+      <div v-if="item.ai_note" class="small muted note">✦ {{ item.ai_note }}</div>
+      <div class="contact small">
+        <span class="muted">{{ item.contact?.how }}<template v-if="item.contact?.name && !item.contact.how?.includes(item.contact.name)"> · {{ item.contact.name }}</template></span>
+        <a v-for="c in channels" :key="c.value" :href="c.type === 'email' ? `mailto:${c.value}` : `tel:${c.value}`" class="chan">
+          {{ c.type === 'email' ? '✉' : '☎' }} {{ c.type === 'email' ? c.value : phoneText(c.value) }}
+        </a>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="warm" :class="{ est: item.warm_kind === 'estimated' || item.warm == null }">{{ warm }}</div>
+      <div class="small muted bd">{{ breakdown }}</div>
+      <div class="small" :class="fresh ? 'accent' : 'muted'">{{ when }}</div>
+      <div class="votes">
+        <button class="btn ghost" :class="{ on: item.verdict === 'up' }" :disabled="busy" title="Interessant" @click="vote('up')">👍</button>
+        <button class="btn ghost" :class="{ on: item.verdict === 'down' }" :disabled="busy" title="Nicht für mich" @click="vote('down')">👎</button>
+      </div>
+    </div>
+  </article>
+</template>
+
+<style scoped>
+.flat { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 12px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+.flat.out { opacity: .55; }
+.shot { width: 96px; height: 72px; border-radius: 7px; overflow: hidden; background: var(--panel-2); display: grid; place-items: center; font-size: 26px; }
+.shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.shot span { opacity: .4; }
+.main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.title { font-weight: 600; font-size: 14px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.facts { display: flex; flex-wrap: wrap; gap: 2px 12px; font-size: 12.5px; }
+.pills { display: flex; flex-wrap: wrap; gap: 4px; }
+.pill.ghost { background: transparent; border: 1px solid var(--line); }
+.note { line-height: 1.3; }
+.contact { display: flex; flex-wrap: wrap; gap: 2px 12px; align-items: center; }
+.chan { white-space: nowrap; }
+.side { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; text-align: right; min-width: 120px; }
+.warm { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.warm.est { color: var(--warn); }
+.bd { max-width: 190px; line-height: 1.3; }
+.accent { color: var(--accent); font-weight: 600; }
+.votes { margin-top: auto; display: flex; gap: 2px; }
+.votes .btn { padding: 3px 6px; font-size: 13px; }
+.votes .btn.on { background: var(--accent-soft); }
+@media (max-width: 640px) {
+  .flat { grid-template-columns: 64px minmax(0, 1fr); }
+  .shot { width: 64px; height: 56px; }
+  .side { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: space-between; text-align: left; min-width: 0; flex-wrap: wrap; }
+  .bd { max-width: none; flex: 1; }
+  .votes { margin-top: 0; }
+  .title { white-space: normal; }
+}
+</style>
