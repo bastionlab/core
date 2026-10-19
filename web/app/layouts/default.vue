@@ -5,10 +5,12 @@ usePoll(refresh, 5000)
 const route = useRoute()
 const nav = [
   { to: '/', icon: 'home', label: 'Home' },
+  { to: '/habits', icon: 'check', label: 'Habits' },
   { to: '/media', icon: 'media', label: 'Media' },
   { to: '/dev', icon: 'dev', label: 'Dev' },
   { to: '/deals', icon: 'deals', label: 'Deals' },
   { to: '/wohnungen', icon: 'key', label: 'Wohnungen', short: 'Wohnen' },
+  { to: '/jobs', icon: 'briefcase', label: 'Jobs' },
   { to: '/metrics', icon: 'metrics', label: 'Metrics' },
   { to: '/chat', icon: 'chat', label: 'Chat' },
 ]

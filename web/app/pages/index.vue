@@ -14,7 +14,8 @@ const vpnOk = computed(() => m.value?.vpn && m.value.vpn.up && m.value.vpn.killS
 const { data: boxes, refresh: refreshProjects } = useProjects()
 const { data: deals, refresh: refreshDeals } = useDeals()
 const { data: flats, refresh: refreshFlats } = useFlats()
-onMounted(() => { if (!boxes.value) refreshProjects(); if (!deals.value) refreshDeals(); if (!flats.value) refreshFlats() })
+const { data: jobs, refresh: refreshJobs } = useJobs()
+onMounted(() => { if (!boxes.value) refreshProjects(); if (!deals.value) refreshDeals(); if (!flats.value) refreshFlats(); if (!jobs.value) refreshJobs() })
 const flatsFresh = computed(() => (flats.value?.feed ?? []).filter((i: any) => Date.now() / 1000 - (i.posted_at ?? i.first_seen_at ?? 0) < 86400).length)
 const dealsFresh = computed(() => (deals.value?.feed ?? []).filter((i: any) => Date.now() / 1000 - (i.posted_at ?? 0) < 86400).length)
 const projects = computed(() => (boxes.value ?? []).flatMap(b => b.projects ?? []))
@@ -78,6 +79,15 @@ const topics = computed(() => [
       ? [
           { text: `${flats.value.status?.enabled ?? 0} Suchen` },
           ...(flatsFresh.value ? [{ text: `${flatsFresh.value} neu`, tone: 'accent' }] : []),
+        ]
+      : [],
+  },
+  {
+    to: '/jobs', icon: 'briefcase', name: 'Jobs',
+    chips: jobs.value
+      ? [
+          { text: `${jobs.value.status?.enabled ?? 0} Suchen` },
+          ...(jobs.value.counts?.passed ? [{ text: `${jobs.value.counts.passed} passend`, tone: 'accent' }] : []),
         ]
       : [],
   },
