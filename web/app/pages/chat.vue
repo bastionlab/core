@@ -1,18 +1,67 @@
 <script setup lang="ts">
 import type { Turn } from '~/composables/useAsk'
 useHead({ title: 'Chat · pve' })
-const { chats, current, currentId, create, remove, load, touch } = useChats()
-onMounted(load)
+const { chats, current, currentId, create, remove, load, save, touch } = useChats()
+const claude = useClaude(save)
+onMounted(() => {
+  load()
+  // a Claude turn keeps running on pve while this page is closed: pick up every one that hadn't finished
+  for (const c of chats.value) for (const t of c.turns) if (t.ct && !t.fin) claude.attach(t)
+})
 
 const turns = computed<Turn[]>({ get: () => current.value?.turns ?? [], set: v => (current.value!.turns = v) })
-const { ask, run, stop, busy, models } = useAsk('chat', turns as any, touch)
+const { ask, run, stop: stopLocal, busy: busyLocal, models } = useAsk('chat', turns as any, touch)
+
+// which engine a new chat starts with is remembered; each chat keeps its own afterwards
+const lastEngine = () => { try { return localStorage.getItem('chat.engine') === 'claude' ? 'claude' : 'local' } catch { return 'local' } }
+const engine = computed<'local' | 'claude'>({
+  get: () => current.value?.engine ?? lastEngine(),
+  set: (v) => {
+    if (current.value) current.value.engine = v
+    try { localStorage.setItem('chat.engine', v) } catch {}
+    save()
+  },
+})
+const isClaude = computed(() => engine.value === 'claude')
+// model + effort: each chat keeps its own, a new chat starts with the last ones picked
+const pref = (k: string, d: string) => { try { return localStorage.getItem(k) || d } catch { return d } }
+function chatSetting(field: 'model' | 'effort', key: string, d: string) {
+  return computed({
+    get: () => current.value?.[field] ?? pref(key, d),
+    set: (v: string) => {
+      if (current.value) current.value[field] = v
+      try { localStorage.setItem(key, v) } catch {}
+      save()
+    },
+  })
+}
+const ccModel = chatSetting('model', 'chat.claude.model', 'opus')
+const ccEffort = chatSetting('effort', 'chat.claude.effort', 'medium')
+const auto = computed({ get: () => !!current.value?.auto, set: (v) => { if (current.value) current.value.auto = v; save() } })
+const busy = computed(() => turns.value.some(t => t.busy))
+const stop = () => (isClaude.value && current.value ? claude.stop(current.value) : stopLocal())
+function drop(id: string) {
+  const c = chats.value.find(x => x.id === id)
+  if (c?.turns.some(t => t.busy && t.ct)) claude.stop(c)
+  remove(id)
+}
 
 const body = ref<HTMLElement>()
 watch(() => turns.value.map(t => t.a.length + t.r.length).join(), () => {
   const el = body.value
   if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 200) nextTick(() => (el.scrollTop = el.scrollHeight))
 })
-function send(q: string) { ask(q); nextTick(touch) }
+function send(q: string) {
+  if (isClaude.value && current.value) {
+    Object.assign(current.value, { engine: 'claude', model: ccModel.value, effort: ccEffort.value })
+    claude.ask(current.value, q)
+  } else ask(q)
+  nextTick(touch)
+}
+const EXAMPLES = {
+  local: ['What can you do?', 'Summarise how my server is doing', 'Explain ZFS snapshots vs backups', 'What happened in tech news today?'],
+  claude: ['Which of my notes are ideas I could build?', 'Is anything broken on the server right now?', 'Why did the last backup take so long?', 'What changed in the dashboard today?'],
+}
 const open = ref(false) // conversation list on phones
 </script>
 
@@ -26,11 +75,12 @@ const open = ref(false) // conversation list on phones
           v-for="c in chats" :key="c.id" class="conv" :class="{ on: c.id === currentId }"
           @click="currentId = c.id; open = false"
         >
-          <span class="t">{{ c.title }}</span>
+          <span class="t"><span v-if="c.engine === 'claude'" class="cl" title="Claude">✳</span>{{ c.title }}</span>
           <span class="small faint">{{ ago(c.at / 1000) }}</span>
           <span class="x" title="delete" @click.stop="remove(c.id)">✕</span>
         </button>
       </div>
+      <ClaudeUsage />
       <a href="https://ai.example-tailnet.ts.net" target="_blank" class="small muted webui" title="for files, images, uncensored models">Open WebUI ↗</a>
     </aside>
 
@@ -38,6 +88,15 @@ const open = ref(false) // conversation list on phones
       <div class="mhead">
         <button class="btn ghost only-phone" title="conversations" @click="open = !open">☰</button>
         <b class="ttl">{{ current?.title ?? 'Chat' }}</b>
+        <div class="seg" role="group" aria-label="engine">
+          <button :class="{ on: !isClaude }" :disabled="busy" title="local model on the 3060 (Ollama)" @click="engine = 'local'">Local</button>
+          <button :class="{ on: isClaude }" :disabled="busy" title="Claude Code on pve, your subscription" @click="engine = 'claude'">Claude</button>
+        </div>
+        <button
+          v-if="isClaude" class="btn ghost autobtn" :class="{ armed: auto }" :disabled="busy"
+          :title="auto ? 'Claude may change files, run commands and deploy. Click for read-only' : 'Claude can only look. Click to let it change things'"
+          @click="auto = !auto"
+        >{{ auto ? '⚡ Auto' : '👁 Read-only' }}</button>
         <button class="btn ghost only-phone plus" title="new chat" @click="create()">+</button>
       </div>
 
@@ -45,14 +104,27 @@ const open = ref(false) // conversation list on phones
         <div v-if="!turns.length" class="empty muted">
           <Icon name="chat" :size="28" class="big" />
           <div class="examples">
-            <button v-for="ex in ['What can you do?', 'Summarise how my server is doing', 'Explain ZFS snapshots vs backups', 'What happened in tech news today?']" :key="ex" class="pill" @click="send(ex)">{{ ex }}</button>
+            <button v-for="ex in EXAMPLES[engine]" :key="ex" class="pill" @click="send(ex)">{{ ex }}</button>
           </div>
         </div>
-        <AskTurns v-else :turns="turns" @run="p => run(p)" />
+        <AskTurns v-else :turns="turns" @run="p => run(p)" @answer="send" />
       </div>
 
-      <div class="bar">
-        <AskBar :busy="busy" :models="models" placeholder="Message the local model…" @submit="send" @stop="stop" />
+      <div class="bar" :class="{ armed: isClaude && auto }">
+        <AskBar
+          :busy="busy" :models="isClaude ? [{ name: 'claude' }] : models"
+          :placeholder="!isClaude ? 'Message the local model…' : auto ? 'Tell Claude what to change…' : 'Ask Claude (read-only)…'"
+          @submit="send" @stop="stop"
+        >
+          <template v-if="isClaude" #opts>
+            <select v-model="ccModel" title="Claude model" :disabled="busy">
+              <option v-for="m in CLAUDE_MODELS" :key="m.id" :value="m.id">{{ m.label }}</option>
+            </select>
+            <select v-model="ccEffort" title="effort: how long Claude thinks before and while answering" :disabled="busy">
+              <option v-for="e in CLAUDE_EFFORTS" :key="e" :value="e">{{ e }} effort</option>
+            </select>
+          </template>
+        </AskBar>
       </div>
     </section>
   </div>
@@ -77,6 +149,16 @@ aside { display: flex; flex-direction: column; gap: 10px; background: var(--pane
 .ttl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .body { flex: 1; overflow-y: auto; padding: 4px 16px; min-height: 0; }
 .bar { border-top: 1px solid var(--line); padding: 6px 8px 6px 12px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+.seg button { background: transparent; border: 0; color: var(--muted); font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer; }
+.seg button.on { background: var(--accent-soft); color: var(--accent); }
+.seg button:disabled { cursor: default; }
+.autobtn { font-size: 12px; padding: 4px 10px; flex-shrink: 0; }
+.autobtn.armed { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.bar select { padding: 5px 8px; font-size: 12px; }
+@media (max-width: 640px) { .bar select { flex: 1 1 40%; font-size: 16px; } }
+.bar.armed { box-shadow: inset 0 2px 0 var(--warn); }
+.cl { color: #d97757; margin-right: 5px; }
 .empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 30px 10px; text-align: center; }
 .big { color: var(--faint); }
 .examples { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 560px; }

@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import type { Proposal, Turn } from '~/composables/useAsk'
 defineProps<{ turns: Turn[] }>()
-const emit = defineEmits<{ run: [Proposal] }>()
+const emit = defineEmits<{ run: [Proposal], answer: [string] }>()
+const view = (t: Turn) => splitQuestions(t.a, t.busy)
+// Claude can make dozens of tool calls in one answer: show the latest few, the rest behind a click
+const SHOW = 6
+const expanded = ref(new Set<number>())
+const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tools!.slice(-SHOW))
 </script>
 
 <template>
@@ -9,13 +14,19 @@ const emit = defineEmits<{ run: [Proposal] }>()
     <div v-for="(t, i) in turns" :key="i" class="turn">
       <div class="q">{{ t.q }}</div>
       <div v-if="t.tools?.length" class="tools small muted">
-        <span v-for="(tl, j) in t.tools" :key="j" class="pill" :class="{ bad: tl.error }">
-          <span class="dot" :class="tl.error ? 'bad' : tl.done ? 'ok' : 'warn'" />
-          {{ tl.name === 'web_search' ? `searched “${tl.args?.query}”` : tl.name === 'fetch_page' ? `read ${(tl.args?.url || '').replace(/^https?:\/\//, '').slice(0, 40)}` : tl.name === 'weather' ? `weather ${tl.args?.location || ''}` : tl.name }}{{ tl.error ? ` — ${tl.error}` : '' }}
+        <button v-if="t.tools.length > SHOW && !expanded.has(i)" class="pill more" @click="expanded.add(i)">+{{ t.tools.length - SHOW }} earlier</button>
+        <span v-for="(tl, j) in shown(t, i)" :key="j" class="pill" :class="{ bad: tl.error }" :title="tl.label">
+          <span class="dot" :class="tl.error ? 'bad' : tl.done || !t.busy ? 'ok' : 'warn'" />
+          {{ tl.label ? tl.label : tl.name === 'web_search' ? `searched “${tl.args?.query}”` : tl.name === 'fetch_page' ? `read ${(tl.args?.url || '').replace(/^https?:\/\//, '').slice(0, 40)}` : tl.name === 'weather' ? `weather ${tl.args?.location || ''}` : tl.name }}{{ tl.error ? ` — ${tl.error}` : '' }}
         </span>
       </div>
       <details v-if="t.r" class="reason small muted"><summary>reasoning{{ t.busy && !t.a ? '…' : '' }}</summary><div class="pre">{{ t.r }}</div></details>
-      <div v-if="t.a" class="a" v-html="md(t.a)" />
+      <div v-if="t.a" class="a" v-html="md(view(t).text)" />
+      <AskQuestions
+        v-if="!t.busy && view(t).qs" :qs="view(t).qs!" :answered="t.answered"
+        :disabled="i !== turns.length - 1 || turns.some(x => x.busy)"
+        @answer="(text, picked) => { t.answered = picked; emit('answer', text) }"
+      />
       <div v-else-if="t.busy && !t.r" class="muted small" title="the first answer loads the model, can take ~20 s">thinking…</div>
       <div v-for="(p, j) in t.proposals" :key="'p' + j" class="proposal" :class="[p.state, { danger: p.desc?.startsWith('FORCE:') }]">
         <div class="head">
@@ -33,8 +44,13 @@ const emit = defineEmits<{ run: [Proposal] }>()
         <div v-if="p.why && p.state === 'idle'" class="muted small">{{ p.why }}</div>
         <pre v-if="p.job?.log?.length" class="log small">{{ p.job.log.slice(-12).join('\n') }}</pre>
       </div>
+      <div v-if="t.denied?.length && !t.busy" class="denied small">
+        Read-only blocked {{ t.denied.length === 1 ? 'a change' : `${t.denied.length} changes` }}: <span class="mono">{{ t.denied.slice(0, 3).join(' · ') }}</span>. Switch on <b>Auto</b> to allow it.
+      </div>
       <div v-if="t.error" class="small bad">{{ t.error }}</div>
-      <div v-if="!t.busy && t.model" class="faint small">{{ t.model }}<template v-if="t.tps"> · {{ t.tps.toFixed(1) }} tok/s</template></div>
+      <div v-if="!t.busy && t.model" class="faint small">
+        {{ t.model }}<template v-if="t.tps"> · {{ t.tps.toFixed(1) }} tok/s</template><template v-if="t.effort"> · {{ t.effort }}</template><template v-if="t.secs"> · {{ t.secs }} s</template><span v-if="t.ct" :class="t.auto ? 'autotag' : ''"> · {{ t.auto ? '⚡ auto' : 'read-only' }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -52,7 +68,10 @@ const emit = defineEmits<{ run: [Proposal] }>()
 .a :deep(table) { margin-bottom: 8px; font-size: 13px; }
 .a :deep(h1), .a :deep(h2), .a :deep(h3) { font-size: 14px; margin: 10px 0 4px; }
 .tools { display: flex; flex-wrap: wrap; gap: 6px; }
-.tools .pill { gap: 6px; }
+.tools .pill { gap: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tools .more { cursor: pointer; font: inherit; }
+.denied { border: 1px solid var(--warn-soft); background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 6px 10px; overflow-wrap: anywhere; }
+.autotag { color: var(--warn); }
 .proposal { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); }
 .proposal.done { border-left-color: var(--ok); }
 .proposal.failed { border-left-color: var(--bad); }

@@ -1,8 +1,14 @@
 import { marked } from 'marked'
 
-export interface Tool { name: string, args: any, done?: boolean, error?: string }
+export interface Tool { name: string, args: any, done?: boolean, error?: string, id?: string, label?: string }
 export interface Proposal { action: string, args: any, desc: string, why?: string, state?: 'idle' | 'running' | 'done' | 'failed' | 'dismissed', job?: any }
-export interface Turn { q: string, a: string, r: string, tools?: Tool[], proposals?: Proposal[], model?: string, tps?: number | null, error?: string, busy?: boolean, at?: number }
+export interface Turn {
+  q: string, a: string, r: string, tools?: Tool[], proposals?: Proposal[], model?: string, tps?: number | null, error?: string, busy?: boolean, at?: number
+  /** Claude turns: agent turn id, whether it ran with write access, how long it took, what read-only mode blocked */
+  ct?: string, auto?: boolean, effort?: string, secs?: number, denied?: string[], fin?: boolean, stopped?: boolean
+  /** a ```questions block the owner already answered: question index → picked labels */
+  answered?: Record<number, string[]> | null
+}
 
 // model output is untrusted: render markdown but show any raw HTML as text
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))

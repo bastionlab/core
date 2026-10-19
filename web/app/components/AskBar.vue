@@ -27,12 +27,14 @@ function send() {
       <button v-else class="btn primary ico" title="ask" :disabled="!q.trim() || !models.length"><Icon name="send" :size="16" /></button>
     </div>
     <div v-if="opts" class="opts small">
+      <slot name="opts">
       <select v-model="model" title="model">
         <option v-for="m in models" :key="m.name" :value="m.name">{{ m.name }}{{ m.loaded ? ' •' : '' }}</option>
       </select>
       <label class="toggle" title="let the model search the web, read pages and look up the weather"><input v-model="web" type="checkbox"> web</label>
       <label class="toggle" title="let the model reason before answering (slower, better)"><input v-model="think" type="checkbox"> think</label>
       <span v-if="!models.length" class="bad">Ollama unreachable</span>
+      </slot>
     </div>
   </form>
 </template>

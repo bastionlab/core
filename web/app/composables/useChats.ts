@@ -1,8 +1,12 @@
-export interface Chat { id: string, title: string, at: number, turns: Turn[] }
+export interface Chat {
+  id: string, title: string, at: number, turns: Turn[]
+  /** Claude chats: the Claude Code session it resumes, and whether the next message may change things */
+  engine?: 'local' | 'claude', session?: string, auto?: boolean, model?: string, effort?: string
+}
 const KEY = 'chat.convos'
 const MAX = 40
 
-/** conversations live in this browser only (localStorage) — nothing is sent anywhere but the local model */
+/** conversations live in this browser only (localStorage); a Claude chat's history also sits in its session on pve */
 export function useChats() {
   const chats = useState<Chat[]>('chats', () => [])
   const currentId = useState<string>('chats:current', () => '')
@@ -23,7 +27,10 @@ export function useChats() {
     try {
       localStorage.setItem(KEY, JSON.stringify(chats.value.slice(0, MAX).map(c => ({
         ...c,
-        turns: c.turns.map(({ q, a, r, model, tps, error, at }) => ({ q, a, r: r?.slice(0, 4000) ?? '', model, tps, error, at })),
+        turns: c.turns.map(({ q, a, r, model, tps, error, at, tools, ct, auto, secs, denied, fin, effort, answered }) => ({
+          q, a, r: r?.slice(0, 4000) ?? '', model, tps, error, at, ct, auto, secs, denied, fin, effort, answered,
+          tools: tools?.slice(-40).map(({ name, label, done, error }) => ({ name, label, done, error, args: null })),
+        })),
       }))))
     } catch {}
   }
