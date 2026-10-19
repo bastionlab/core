@@ -78,7 +78,7 @@ export default defineEventHandler(async (event) => {
       role: 'system',
       content: SYSTEM + SCOPE_HINT[scope] + '\n'
         + (scope === 'metrics' || scope === 'chat' || scope === 'home' ? AI_CATALOG : '')
-        + (web ? WEB_HINT : '') + ACTION_HINT + '\nLive data:\n' + context,
+        + (web ? WEB_HINT : '') + (scope === 'notes' ? '' : ACTION_HINT) + '\nLive data:\n' + context,
     },
     ...history,
     { role: 'user', content: q },
@@ -101,7 +101,7 @@ export default defineEventHandler(async (event) => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model, stream: true, think: !!body.think, messages,
-              ...(round < MAX_ROUNDS - 1 ? { tools: [...(web ? TOOLS : []), actionTool(scope)] } : {}),
+              ...(round < MAX_ROUNDS - 1 ? { tools: [...(web ? TOOLS : []), ...(scope === 'notes' ? [] : [actionTool(scope)])] } : {}),
             }),
             signal: AbortSignal.timeout(10 * 60_000),
           })

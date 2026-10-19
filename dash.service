@@ -10,6 +10,8 @@ ExecStart=/usr/bin/node .output/server/index.mjs
 Restart=always
 RestartSec=3
 DynamicUser=yes
+# notes.db + pasted images (/var/lib/dash) — inside the CT, so the nightly vzdump keeps them
+StateDirectory=dash
 
 [Install]
 WantedBy=multi-user.target

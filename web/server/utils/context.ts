@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 
-export type Scope = 'home' | 'media' | 'dev' | 'metrics' | 'chat'
-export const SCOPES: Scope[] = ['home', 'media', 'dev', 'metrics', 'chat']
+export type Scope = 'home' | 'media' | 'dev' | 'metrics' | 'chat' | 'notes'
+export const SCOPES: Scope[] = ['home', 'media', 'dev', 'metrics', 'chat', 'notes']
 
 /** what the model is told about, for the page the question was asked from */
 export async function scopeContext(event: H3Event, scope: Scope, models: any[] | null) {
@@ -27,6 +27,7 @@ export async function scopeContext(event: H3Event, scope: Scope, models: any[] |
       + repos
       + `\n\nNew dev boxes are created with the newdev action (ids 200-299, ips 192.168.1.60-99).\n${PLACES_DEV}`
   }
+  if (scope === 'notes') return notesSnapshot()
   const o = await overview(event)
   if (scope === 'home') return `${homeSnapshot(o)}\n${PLACES_HOST}`
   return `${snapshot(o, models)}\n${PLACES_HOST}`
