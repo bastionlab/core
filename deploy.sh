@@ -5,6 +5,8 @@ set -euo pipefail
 CT=104
 DIR=$(dirname "$(readlink -f "$0")")
 
+[ -s "$DIR/agent/pin_hash" ] || { echo "no dashboard PIN yet — run $DIR/set-pin first" >&2; exit 1; }
+
 echo "→ agent"
 systemctl restart dash-agent
 
@@ -17,7 +19,7 @@ echo "→ sources → CT $CT"
 tar -C "$DIR/web" --exclude=node_modules --exclude=.nuxt --exclude=.output -cf - . | pct exec $CT -- sh -c 'mkdir -p /opt/dash && tar -C /opt/dash -xf -'
 
 echo "→ env + service"
-pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_TOKEN=%s\nNUXT_DEALS_TOKEN=%s\nHOST=127.0.0.1\nPORT=3000\nNODE_ENV=production\n' '$(cat "$DIR/agent/token")' '$(cat /root/deals/token 2>/dev/null)' > /etc/dash.env"
+pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_TOKEN=%s\nNUXT_DEALS_TOKEN=%s\nNUXT_PIN_HASH=%s\nHOST=127.0.0.1\nPORT=3000\nNODE_ENV=production\n' '$(cat "$DIR/agent/token")' '$(cat /root/deals/token 2>/dev/null)' '$(cat "$DIR/agent/pin_hash")' > /etc/dash.env"
 pct push $CT "$DIR/dash.service" /etc/systemd/system/dash.service
 
 echo "→ build"
@@ -26,4 +28,4 @@ pct exec $CT -- sh -c 'cd /opt/dash && npm install --no-audit --no-fund --loglev
 pct exec $CT -- sh -c 'systemctl daemon-reload && systemctl enable -q dash && systemctl restart dash'
 pct exec $CT -- sh -c 'tailscale serve status --json | jq -e ".TCP[\"443\"]" >/dev/null 2>&1 || tailscale serve --bg --https=443 http://127.0.0.1:3000 >/dev/null'
 sleep 2
-pct exec $CT -- curl -sf -o /dev/null http://127.0.0.1:3000/api/overview && echo "✅ https://$(pct exec $CT -- tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')/"
+pct exec $CT -- curl -sf -o /dev/null http://127.0.0.1:3000/api/auth/status && echo "✅ https://$(pct exec $CT -- tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')/"

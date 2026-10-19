@@ -1,3 +1,4 @@
 agent/token
 __pycache__/
 *.pyc
+agent/pin_hash

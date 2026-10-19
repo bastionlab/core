@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# set-pin — set the dashboard PIN. Only its scrypt hash is stored (agent/pin_hash, gitignored);
+# ./deploy.sh hands it to the app. Changing it logs every browser out.
+set -euo pipefail
+DIR=$(dirname "$(readlink -f "$0")")
+[ -t 0 ] || { echo "needs a real terminal (ssh root@pve), the PIN is read hidden" >&2; exit 1; }
+read -rsp "New PIN (4-12 digits): " a; echo
+read -rsp "Again: " b; echo
+[[ "$a" == "$b" ]] || { echo "PINs differ" >&2; exit 1; }
+[[ "$a" =~ ^[0-9]{4,12}$ ]] || { echo "4-12 digits only" >&2; exit 1; }
+umask 077
+PIN="$a" python3 -c '
+import hashlib, os
+salt = os.urandom(16)
+h = hashlib.scrypt(os.environ["PIN"].encode(), salt=salt, n=16384, r=8, p=1, dklen=32)
+print(f"scrypt:{salt.hex()}:{h.hex()}")' > "$DIR/agent/pin_hash"
+echo "saved — run ./deploy.sh to apply"
