@@ -25,6 +25,8 @@ const searches = computed(() => d.value?.searches ?? [])
 const st = computed(() => d.value?.status)
 const counts = computed(() => d.value?.counts ?? { per_search: {}, total: 0 })
 const feed = computed(() => d.value?.feed ?? [])
+const liked = computed(() => d.value?.liked ?? [])
+const likedLive = computed(() => liked.value.filter((i: any) => i.status !== 'gone').length)
 const hidden = computed(() => counts.value.sorted_out ?? 0)
 const tabs = computed(() => [
   { id: null as number | null, name: 'Alle', hits: counts.value.total, enabled: true },
@@ -44,6 +46,7 @@ async function verdict(item: any, v: 'up' | 'down' | null) {
       method: 'POST',
       body: { action: 'feedback', searchId: item.search_id, source: item.source, sourceId: item.source_id, verdict: v },
     })
+    load()                                 // a 👍 moves the flat between Gemerkt and the list
   } catch { item.verdict = before } finally { busyItem.value = '' }
 }
 
@@ -76,6 +79,19 @@ function onChanged() {
 
       <FlatSearches :searches="searches" @changed="onChanged" />
       <FlatProfile class="prof" />
+
+      <template v-if="liked.length">
+        <h2 class="sec">
+          👍 Gemerkt
+          <span class="muted small">{{ likedLive }} online<template v-if="liked.length > likedLive"> · {{ liked.length - likedLive }} weg</template></span>
+        </h2>
+        <div class="list">
+          <FlatRow
+            v-for="i in liked" :key="'up:' + i.source + ':' + i.source_id" :item="i" checked
+            :busy="busyItem === i.source + i.source_id" @verdict="verdict(i, $event)"
+          />
+        </div>
+      </template>
 
       <h2 class="sec">
         Wohnungen

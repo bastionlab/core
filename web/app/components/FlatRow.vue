@@ -1,8 +1,9 @@
 <script setup lang="ts">
-const props = defineProps<{ item: any, busy?: boolean }>()
+/** checked: show when the flat was last seen online (the Gemerkt list) */
+const props = defineProps<{ item: any, busy?: boolean, checked?: boolean }>()
 const emit = defineEmits<{ (e: 'verdict', v: 'up' | 'down' | null): void }>()
 
-const SOURCES: Record<string, string> = { kleinanzeigen: 'Kleinanzeigen', inberlinwohnen: 'inberlinwohnen' }
+const SOURCES: Record<string, string> = { kleinanzeigen: 'Kleinanzeigen', inberlinwohnen: 'inberlinwohnen', immoscout24: 'ImmoScout24' }
 const eur = (v?: number | null) => (v == null ? '' : `${Math.round(v).toLocaleString('de-DE')} €`)
 
 const warm = computed(() => props.item.warm == null ? (props.item.list_price ? eur(props.item.list_price) : '—') : eur(props.item.warm))
@@ -49,7 +50,7 @@ async function copy() {
 </script>
 
 <template>
-  <article class="flat" :class="{ out: item.passed === 0 || item.verdict === 'down' || item.status === 'reserved' }">
+  <article class="flat" :class="{ out: item.passed === 0 || item.verdict === 'down' || item.status === 'reserved', gone: item.status === 'gone' }">
     <a :href="item.url" target="_blank" rel="noopener" class="shot">
       <img v-if="item.image_url" :src="item.image_url" :alt="item.title" loading="lazy">
       <span v-else>🏠</span>
@@ -76,6 +77,7 @@ async function copy() {
         </template>
         <span v-if="item.scam === 'mittel'" class="pill warn" title="Die KI hat Auffälligkeiten gesehen">⚠ prüfen</span>
         <span v-if="item.status === 'reserved'" class="pill warn">Reserviert</span>
+        <span v-if="item.status === 'gone'" class="pill bad">nicht mehr online{{ item.gone_at ? ` · ${ago(item.gone_at)}` : '' }}</span>
         <span v-if="item.passed === 0 && item.reason" class="pill bad">{{ item.reason }}</span>
         <span class="pill ghost">{{ item.search_name }}</span>
       </div>
@@ -92,6 +94,9 @@ async function copy() {
       <div class="warm" :class="{ est: item.warm_kind === 'estimated' || item.warm == null }">{{ warm }}</div>
       <div class="small muted bd">{{ breakdown }}</div>
       <div class="small" :class="fresh ? 'accent' : 'muted'">{{ when }}</div>
+      <div v-if="checked && item.status !== 'gone'" class="small faint" title="zuletzt geprüft, ob die Anzeige noch online ist">
+        {{ item.checked_at ? `✓ geprüft ${ago(item.checked_at)}` : 'noch nicht geprüft' }}
+      </div>
       <div class="votes">
         <button class="btn ghost" :class="{ on: msg.open }" title="Nachricht an den Anbieter" @click="toggleMsg">💬</button>
         <button class="btn ghost" :class="{ on: item.verdict === 'up' }" :disabled="busy" title="Interessant" @click="vote('up')">👍</button>
@@ -119,6 +124,8 @@ async function copy() {
 <style scoped>
 .flat { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 12px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .flat.out { opacity: .55; }
+.flat.gone { opacity: .45; }
+.flat.gone .title { text-decoration: line-through; }
 .shot { width: 96px; height: 72px; border-radius: 7px; overflow: hidden; background: var(--panel-2); display: grid; place-items: center; font-size: 26px; }
 .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .shot span { opacity: .4; }
