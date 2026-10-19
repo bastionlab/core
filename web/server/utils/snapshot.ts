@@ -252,6 +252,8 @@ export function devSnapshot(boxes: any[]) {
         + (g.repo ? `, GitHub ${g.repo}` : ', no origin remote')
         + (g.last ? `, last commit ${g.last.hash} "${g.last.subject}" (${g.last.at})` : ''))
       if (p.cc?.running) L.push(`    Claude Code is running here (profile ${p.cc.profile}) — attach with ${p.cc.attach}`)
+      if (p.ship?.running) L.push(`    /conduct ship session ${p.ship.session}: ${p.ship.conductor ? 'conductor running' : 'NO conductor'}, ${p.ship.lanes.length} lane(s)${p.ship.lanes.length ? ' (' + p.ship.lanes.join(', ') + ')' : ''}${p.ship.board?.launched != null ? `, launched ${p.ship.board.launched}/${p.ship.board.max}` : ''} — attach with ${p.ship.attach}`)
+      else if (p.ship) L.push(`    /conduct is set up but its tmux session ${p.ship.session} is not running`)
     }
     if (!b.projects?.length) L.push('  (no projects)')
   }

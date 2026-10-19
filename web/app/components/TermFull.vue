@@ -3,7 +3,8 @@
  *  Keystrokes go straight to the pty; closing only detaches (the session keeps running). */
 import '@xterm/xterm/css/xterm.css'
 
-const props = defineProps<{ vmid: number, path: string, target: 'preview' | 'cc', title: string }>()
+// target shell = a fresh login shell (ShellsPanel); `session` names it, there is no project path
+const props = defineProps<{ vmid: number, path?: string, target: 'preview' | 'cc' | 'ship' | 'shell', session?: string, title: string }>()
 const emit = defineEmits<{ close: [] }>()
 
 const host = ref<HTMLElement>()
@@ -71,18 +72,26 @@ onMounted(async () => {
   const phone = window.innerWidth < 640
   term = new Terminal({
     cursorBlink: true, fontSize: phone ? 12 : 13, scrollback: 2000,
-    fontFamily: getComputedStyle(document.documentElement).getPropertyValue('--mono') || 'monospace',
+    fontFamily: await termFont(),
     theme: { background: '#0a0c0f', foreground: '#d5d9e0' },
   })
   fit = new FitAddon()
   term.loadAddon(fit)
   term.open(host.value!)
+  // WebGL paints all backgrounds before the text, so a Nerd Font icon may spill into the next cell like in a
+  // real terminal; the default DOM renderer lets the neighbour's background cut it in half
+  try {
+    const { WebglAddon } = await import('@xterm/addon-webgl')
+    const gl = new WebglAddon()
+    gl.onContextLoss(() => gl.dispose())
+    term.loadAddon(gl)
+  } catch {}
   fit.fit()
   size = { cols: term.cols, rows: term.rows }
   term.onData(type)
   term.focus()
   try {
-    const r: any = await post('open', { vmid: props.vmid, path: props.path, target: props.target, ...size })
+    const r: any = await post('open', { vmid: props.vmid, path: props.path, target: props.target, session: props.session, ...size })
     id = r.id
     connect()
     term.focus()
@@ -113,6 +122,9 @@ onBeforeUnmount(() => {
 const KEYS: [string, string][] = [
   ['Esc', '\x1b'], ['Tab', '\t'], ['⇧Tab', '\x1b[Z'], ['↑', '\x1b[A'], ['↓', '\x1b[B'], ['←', '\x1b[D'], ['→', '\x1b[C'], ['^C', '\x03'],
 ]
+// the ship session has a conductor and a lanes window: tmux prefix + n / p switches, + z zooms a lane
+const SHIP_KEYS: [string, string][] = [['win ›', '\x02n'], ['‹ win', '\x02p'], ['pane', '\x02o'], ['zoom', '\x02z']]
+const keys = computed(() => (props.target === 'ship' ? [...KEYS, ...SHIP_KEYS] : KEYS))
 const press = (seq: string) => { type(seq); term?.focus() }
 </script>
 
@@ -126,7 +138,7 @@ const press = (seq: string) => { type(seq); term?.focus() }
       </div>
       <div ref="host" class="xt" @click="term?.focus()" />
       <div class="keys">
-        <button v-for="[label, seq] in KEYS" :key="label" class="key mono" @mousedown.prevent @click="press(seq)">{{ label }}</button>
+        <button v-for="[label, seq] in keys" :key="label" class="key mono" @mousedown.prevent @click="press(seq)">{{ label }}</button>
       </div>
     </div>
   </Teleport>

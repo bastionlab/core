@@ -18,7 +18,7 @@ async function call(kind: 'preview' | 'cc', action: string, body: any = {}) {
   error.value = ''
   try {
     await $fetch(`/api/${kind}/${action}`, { method: 'POST', body: { vmid: props.box.vmid, path: props.p.path, ...body } })
-    if (action === 'start') { tab.value = kind === 'cc' ? 'claude' : 'preview'; logText.value = '' }
+    if (action === 'start') { tab.value = kind === 'cc' ? 'claude' : 'preview'; snap.value = null }
   } catch (e: any) {
     error.value = e?.data?.statusMessage || e?.statusMessage || e?.message
   } finally {
@@ -34,36 +34,55 @@ function push() {
 }
 
 // --- the tmux pane beside the card -----------------------------------------
-const tab = ref<'preview' | 'claude'>('preview')
-const logText = ref('')
-const logEl = ref<HTMLElement>()
-const session = computed(() => (tab.value === 'claude' ? props.p.cc?.session : props.p.session))
-const attach = computed(() => (tab.value === 'claude'
-  ? props.p.cc?.attach
-  : `ssh -t max@${props.box.name} tmux a -t ${props.p.session}`))
-const live = computed(() => (tab.value === 'claude' ? !!props.p.cc?.running : !!props.p.running || props.p.exited != null))
+type Tab = 'preview' | 'claude' | 'ship'
+const tab = ref<Tab>('preview')
+// the pane as tmux draws it: colours, real line breaks, its width (TermMirror renders it)
+const snap = ref<{ log: string, cols: number, rows: number } | null>(null)
+// /conduct: the repo's ship tmux session (conductor + lanes windows); null when the repo has no ship setup
+const ship = computed(() => props.p.ship)
+const shipLive = computed(() => !!ship.value?.running)
+const shipTitle = computed(() => {
+  const s = ship.value
+  if (!s?.running) return `${s?.session}: not running`
+  const b = s.board ?? {}
+  return [s.conductor ? 'conductor running' : 'no conductor', `${s.lanes.length} lane(s)${s.lanes.length ? ': ' + s.lanes.join(', ') : ''}`,
+    b.launched != null ? `launched ${b.launched}/${b.max}` : ''].filter(Boolean).join(' · ')
+})
+const session = computed(() => ({ claude: props.p.cc?.session, ship: ship.value?.session, preview: props.p.session })[tab.value])
+const attach = computed(() => ({
+  claude: props.p.cc?.attach,
+  ship: ship.value?.attach,
+  preview: `ssh -t max@${props.box.name} tmux a -t ${props.p.session}`,
+})[tab.value])
+const live = computed(() => ({
+  claude: !!props.p.cc?.running,
+  ship: shipLive.value,
+  preview: !!props.p.running || props.p.exited != null,
+})[tab.value])
 
 // follow whichever session is actually alive, until the owner picks a tab themselves
 const pinned = ref(false)
-watchEffect(() => { if (!pinned.value && props.p.cc?.running && !props.p.running) tab.value = 'claude' })
-const pick = (t: 'preview' | 'claude') => { pinned.value = true; tab.value = t; logText.value = ''; loadLog() }
+watchEffect(() => {
+  if (pinned.value || props.p.running) return
+  if (props.p.cc?.running) tab.value = 'claude'
+  else if (shipLive.value) tab.value = 'ship'
+})
+const pick = (t: Tab) => { pinned.value = true; tab.value = t; snap.value = null; loadLog() }
 
 async function loadLog() {
-  if (!live.value) { logText.value = ''; return }
-  const url = tab.value === 'claude' ? '/api/cc/log' : '/api/preview/log'
+  if (!live.value) { snap.value = null; return }
+  const t = tab.value
+  const url = ({ claude: '/api/cc/log', ship: '/api/ship/log', preview: '/api/preview/log' })[t]
   try {
-    const r: any = await $fetch(url, { query: { vmid: props.box.vmid, path: props.p.path } })
-    const el = logEl.value
-    const atBottom = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 40
-    logText.value = stripAnsi(r.log || '').trimEnd()
-    if (atBottom) nextTick(() => el && (el.scrollTop = el.scrollHeight))
+    const r: any = await $fetch(url, { query: { vmid: props.box.vmid, path: props.p.path, ansi: 1 } })
+    if (t === tab.value) snap.value = r?.cols ? r : null
   } catch {}
 }
 const full = ref(false)
 
 // the pane only exists while something runs, or when the owner opens it by hand
 const opened = ref(false)
-const anyLive = computed(() => !!props.p.running || props.p.exited != null || !!props.p.cc?.running)
+const anyLive = computed(() => !!props.p.running || props.p.exited != null || !!props.p.cc?.running || shipLive.value)
 const showTerm = computed(() => anyLive.value || opened.value)
 watch(showTerm, v => v && nextTick(loadLog))
 
@@ -92,6 +111,9 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
         <span v-if="!g.remote" class="pill">no remote</span>
         <span v-else-if="!g.tracking" class="pill">no upstream</span>
         <span v-if="p.cc?.running" class="pill accent">✦ {{ p.cc.profile }}</span>
+        <span v-if="shipLive" class="pill" :class="ship.conductor ? 'accent' : 'warn'" :title="shipTitle">
+          ⚓ {{ ship.conductor ? 'conducting' : 'no conductor' }}{{ ship.lanes.length ? ` · ${ship.lanes.length} lane${ship.lanes.length > 1 ? 's' : ''}` : '' }}
+        </span>
       </div>
       <div v-if="g.last" class="small faint last" :title="`${g.last.hash} · ${new Date(g.last.at).toLocaleString()}`">
         {{ g.last.subject }} · {{ ago(Date.parse(g.last.at) / 1000) }}
@@ -152,12 +174,22 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
         <button class="tab" :class="{ on: tab === 'claude' }" @click="pick('claude')">
           <span class="dot" :class="p.cc?.running ? 'ok' : ''" /> Claude
         </button>
+        <button v-if="ship" class="tab" :class="{ on: tab === 'ship' }" :title="shipTitle" @click="pick('ship')">
+          <span class="dot" :class="shipLive ? (ship.conductor ? 'ok' : 'warn') : ''" /> Ship
+          <span v-if="ship.lanes?.length" class="lanes">{{ ship.lanes.length }}</span>
+        </button>
         <code class="faint small mono attach" :title="`copy: ${attach}`" @click="copy(attach)">⧉ {{ session }}</code>
         <button v-if="live" class="tab fs" title="open full screen and type into it" @click="full = true">⛶</button>
       </div>
-      <pre ref="logEl" :class="{ empty: !logText }">{{ logText || (live ? '…' : `nothing running in ${tab === 'claude' ? 'Claude' : 'Preview'}`) }}</pre>
+      <div v-if="tab === 'ship' && shipLive && ship.lanes.length" class="lanerow small">
+        <span v-for="l in ship.lanes" :key="l" class="pill">{{ l }}</span>
+      </div>
+      <div v-if="live && snap" class="pane" title="double-click to open full screen" @dblclick="full = true">
+        <TermMirror :snap="snap" />
+      </div>
+      <pre v-else class="empty">{{ live ? '…' : tab === 'ship' ? `no ${ship?.session} session — start /conduct in the repo` : `nothing running in ${tab === 'claude' ? 'Claude' : 'Preview'}` }}</pre>
       <TermFull
-        v-if="full" :vmid="box.vmid" :path="p.path" :target="tab === 'claude' ? 'cc' : 'preview'" :title="`${p.name} · ${session}`"
+        v-if="full" :vmid="box.vmid" :path="p.path" :target="tab === 'claude' ? 'cc' : tab"" :title="`${p.name} · ${session}`"
         @close="full = false; loadLog()"
       />
     </div>
@@ -200,8 +232,11 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
 .tab:hover { color: var(--text); background: var(--panel); }
 .tab.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .tab .dot { width: 6px; height: 6px; box-shadow: none; }
+.tab .lanes { font-size: 10.5px; padding: 0 5px; border-radius: 8px; background: var(--panel); color: var(--muted); }
+.lanerow { display: flex; flex-wrap: wrap; gap: 4px; padding: 5px 8px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
 .fs { font-size: 14px; padding: 2px 8px; }
 .attach { margin-left: auto; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.pane { height: 300px; }
 pre { margin: 0; padding: 10px 12px; height: 260px; overflow: auto; font: 12px/1.5 var(--mono); color: #d5d9e0; white-space: pre-wrap; word-break: break-all; }
 pre.empty { color: var(--faint); display: grid; place-items: center; text-align: center; height: 120px; }
 @media (max-width: 900px) {
@@ -210,6 +245,7 @@ pre.empty { color: var(--faint); display: grid; place-items: center; text-align:
 @media (max-width: 640px) {
   .proj { padding: 12px; gap: 10px; }
   pre { height: 50vh; font-size: 11px; padding: 8px; }
+  .pane { height: 45vh; }
   pre.empty { height: 80px; }
   .acts .btn { min-height: 34px; }
 }

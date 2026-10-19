@@ -749,23 +749,94 @@ def checked_project(vmid, path):
     return path
 
 
-def preview(action, vmid, path):
+def preview(action, vmid, path, ansi=False):
     checked_project(vmid, path)
     if action == "log":
-        return {"log": pv(vmid, "log", path, "300")}
+        return json.loads(pv(vmid, "log", path, "300", "--ansi")) if ansi else {"log": pv(vmid, "log", path, "300")}
     return json.loads(pv(vmid, action, path, "--json", timeout=60))
 
 
-def claude_code(action, vmid, path, profile="noven"):
+def claude_code(action, vmid, path, profile="noven", ansi=False):
     """start / stop / read a Claude Code session in the project's dev box"""
     checked_project(vmid, path)
     if action == "log":
+        if ansi:
+            return json.loads(pv(vmid, "cclog", path, "400", "--ansi", timeout=30))
         return {"log": pv(vmid, "cclog", path, "400", timeout=30)}
     if action == "stop":
         return json.loads(pv(vmid, "ccstop", path, "--json", timeout=30))
     if profile not in ("noven", "work"):
         raise ValueError("profile must be noven or work")
     return json.loads(pv(vmid, "cc", path, profile, "--json", timeout=60))
+
+
+def ship_log(vmid, path, ansi=False):
+    """the /conduct conductor's pane (claude-base parallel lanes); read only"""
+    checked_project(vmid, path)
+    if ansi:
+        return json.loads(pv(vmid, "shiplog", path, "400", "--ansi", timeout=30))
+    return {"log": pv(vmid, "shiplog", path, "400", timeout=30)}
+
+
+# --- shells: fresh login shells in a dev box, as max, each in its own tmux session on a private
+# socket ("web") so it survives closing the browser, a flaky phone connection and agent restarts.
+# That outer tmux is invisible: no status bar, no prefix key, no alternate screen (so the browser keeps
+# the scrollback), and $TMUX is unset inside, so `tmux attach -t ship` works from the shell as usual.
+SHELL_TMUX = ["tmux", "-L", "web"]
+SHELL_RE = re.compile(r"sh-\d{1,4}")
+SHELL_SETUP = ["set", "-g", "status", "off", ";", "set", "-g", "prefix", "None", ";", "set", "-g", "prefix2", "None", ";",
+               "set", "-g", "escape-time", "0", ";", "set", "-g", "history-limit", "20000", ";",
+               "set", "-g", "default-terminal", "tmux-256color", ";", "set", "-g", "window-size", "latest", ";",
+               "set", "-ga", "terminal-overrides", ",xterm*:smcup@:rmcup@", ";", "set", "-g", "mouse", "off"]
+
+
+def dev_box(vmid):
+    c = next((c for c in dev_cts() if c["vmid"] == vmid and c["status"] == "running"), None)
+    if not c:
+        raise ValueError(f"CT {vmid} is not a running dev box")
+    return c
+
+
+def _shell_tmux(vmid, *args, timeout=20):
+    # a login environment (HOME, PATH, LANG of max) so the shells it starts look like an ssh login
+    # always quote: max's login shell is zsh, where a bare "=sh-1" is expanded as a command path
+    cmd = " ".join("'" + a.replace("'", "'\\''") + "'" for a in (*SHELL_TMUX, *args))
+    return subprocess.run(["pct", "exec", str(vmid), "--", "runuser", "-l", "max", "-c", cmd],
+                          capture_output=True, text=True, timeout=timeout)
+
+
+def shells():
+    def one(c):
+        r = _shell_tmux(c["vmid"], "list-sessions", "-F",
+                        "#{session_name}\t#{session_created}\t#{session_attached}\t#{pane_current_command}\t#{pane_current_path}")
+        out = []
+        for line in r.stdout.splitlines() if r.returncode == 0 else []:
+            name, created, attached, cmd, cwd = (line.split("\t") + [""] * 5)[:5]
+            if SHELL_RE.fullmatch(name):
+                out.append({"session": name, "created": int(created or 0), "attached": int(attached or 0),
+                            "command": cmd, "cwd": cwd.replace("/home/max", "~", 1)})
+        out.sort(key=lambda x: int(x["session"][3:]))
+        return {"vmid": c["vmid"], "name": c["name"], "shells": out}
+    return list(POOL.map(one, [c for c in dev_cts() if c["status"] == "running"]))
+
+
+def shell_new(vmid):
+    dev_box(vmid)
+    taken = {int(s["session"][3:]) for s in next((b["shells"] for b in shells() if b["vmid"] == vmid), [])}
+    name = f"sh-{next(i for i in range(1, 10000) if i not in taken)}"
+    r = _shell_tmux(vmid, "-f", "/dev/null", "new-session", "-d", "-s", name, "-x", "120", "-y", "40", "-c", "/home/max",
+                    "exec env -u TMUX -u TMUX_PANE zsh -l", ";", *SHELL_SETUP)
+    if r.returncode:
+        raise ValueError((r.stderr or r.stdout).strip() or "could not start a shell")
+    return {"vmid": vmid, "session": name}
+
+
+def shell_kill(vmid, session):
+    dev_box(vmid)
+    if not SHELL_RE.fullmatch(session):
+        raise ValueError("not a shell session")
+    _shell_tmux(vmid, "kill-session", "-t", "=" + session)
+    return {"killed": session}
 
 
 # --- full-screen terminal: a real `tmux attach` on a pty, streamed to the browser ---------
@@ -775,7 +846,7 @@ TERMS = {}
 TERMS_LOCK = threading.Lock()
 TERM_BUF = 1 << 20          # keep at most 1 MiB of output for reconnects
 TERM_IDLE = 90              # seconds without a stream reader before the client is detached
-DEFAULT_SIZE = {"preview": (200, 50), "cc": (220, 50)}  # what pv creates; restored on close
+DEFAULT_SIZE = {"preview": (140, 45), "cc": (140, 45), "ship": None, "shell": None}  # what pv creates; restored on close
 
 
 def _winsize(fd, cols, rows):
@@ -797,8 +868,9 @@ class Term:
         self.alive, self.readers, self.seen = True, 0, time.time()
         pid, fd = pty.fork()
         if pid == 0:
+            tmux = SHELL_TMUX if target == "shell" else ["tmux"]
             os.execvp("pct", ["pct", "exec", str(vmid), "--", "env", "TERM=xterm-256color", "LANG=C.UTF-8",
-                              "runuser", "-u", "max", "--", "tmux", "attach", "-t", session])
+                              "runuser", "-u", "max", "--", *tmux, "attach", "-t", "=" + session])
         self.pid, self.fd = pid, fd
         _winsize(fd, cols, rows)
         threading.Thread(target=self._pump, daemon=True).start()
@@ -835,21 +907,36 @@ class Term:
         except OSError:
             pass
         # hand the window back its usual size, and let the next attach resize it again
-        w, h = DEFAULT_SIZE[self.target]
+        size = DEFAULT_SIZE[self.target]
+        if not size:  # the ship session follows whoever attached last anyway
+            return
+        w, h = size
         subprocess.run(["pct", "exec", str(self.vmid), "--", "runuser", "-u", "max", "--", "tmux",
                         "resize-window", "-t", self.session, "-x", str(w), "-y", str(h), ";",
                         "set-window-option", "-t", self.session, "window-size", "latest"],
                        capture_output=True, timeout=15)
 
 
-def term_open(vmid, path, target, cols, rows):
-    checked_project(vmid, path)
-    if target not in ("preview", "cc"):
-        raise ValueError("target must be preview or cc")
+def term_open(vmid, path, target, cols, rows, session=None):
     cols, rows = _dims(cols, rows)
+    if target == "shell":
+        dev_box(vmid)
+        if not SHELL_RE.fullmatch(str(session)) or _shell_tmux(vmid, "has-session", "-t", f"={session}").returncode:
+            raise ValueError(f"no shell {session} in CT {vmid}")
+        tid = secrets.token_urlsafe(18)
+        with TERMS_LOCK:
+            TERMS[tid] = Term(vmid, session, target, cols, rows)
+        return {"id": tid, "session": session}
+    checked_project(vmid, path)
+    if target not in ("preview", "cc", "ship"):
+        raise ValueError("target must be preview, cc, ship or shell")
     p = next(p for p in json.loads(pv(vmid, "ls", "--json")) if p["path"] == path)
-    session = p["cc"]["session"] if target == "cc" else p["session"]
-    alive = p["cc"]["running"] if target == "cc" else (p["running"] or p.get("exited") is not None)
+    if target == "ship":
+        session, alive = (p.get("ship") or {}).get("session"), (p.get("ship") or {}).get("running")
+    elif target == "cc":
+        session, alive = p["cc"]["session"], p["cc"]["running"]
+    else:
+        session, alive = p["session"], p["running"] or p.get("exited") is not None
     if not alive:
         raise ValueError(f"{session} is not running")
     tid = secrets.token_urlsafe(18)
@@ -1349,10 +1436,15 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, media_items())
             if u.path == "/media/plan":
                 return self._send(200, media_plan(q.get("kind"), q.get("id"), q.get("seasons")))
+            ansi = q.get("ansi") == "1"
             if u.path == "/cc/log":
-                return self._send(200, claude_code("log", int(q["vmid"]), q["path"]))
+                return self._send(200, claude_code("log", int(q["vmid"]), q["path"], ansi=ansi))
+            if u.path == "/ship/log":
+                return self._send(200, ship_log(int(q["vmid"]), q["path"], ansi))
             if u.path == "/preview/log":
-                return self._send(200, preview("log", int(q["vmid"]), q["path"]))
+                return self._send(200, preview("log", int(q["vmid"]), q["path"], ansi))
+            if u.path == "/shells":
+                return self._send(200, shells())
             if u.path == "/action/status":
                 return self._send(200, job_status(q["id"]))
             if u.path == "/term/stream":
@@ -1375,8 +1467,12 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, claude_code(m[1], int(body["vmid"]), str(body["path"]),
                                                    str(body.get("profile", "noven"))))
             if u.path == "/term/open":
-                return self._send(200, term_open(int(body["vmid"]), str(body["path"]), str(body["target"]),
-                                                 body.get("cols", 80), body.get("rows", 24)))
+                return self._send(200, term_open(int(body["vmid"]), str(body.get("path", "")), str(body["target"]),
+                                                 body.get("cols", 80), body.get("rows", 24), body.get("session")))
+            if u.path == "/shells/new":
+                return self._send(200, shell_new(int(body["vmid"])))
+            if u.path == "/shells/kill":
+                return self._send(200, shell_kill(int(body["vmid"]), str(body["session"])))
             if u.path == "/term/input":
                 data = body.get("data", "")
                 if not isinstance(data, str) or len(data) > 65536:
@@ -1431,7 +1527,7 @@ class H(BaseHTTPRequestHandler):
             t.seen = time.time()
 
     def log_message(self, fmt, *args):
-        if not self.path.startswith(("/overview", "/projects", "/media", "/preview/log", "/cc/log",
+        if not self.path.startswith(("/overview", "/projects", "/media", "/preview/log", "/cc/log", "/ship/log", "/shells",
                                      "/action/status", "/term/", "/github/repos", "/media/items", "/media/plan")):
             super().log_message(fmt, *args)
 

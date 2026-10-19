@@ -82,3 +82,14 @@ th:last-child, td:last-child { padding-right: 0; }
 .num { text-align: right; white-space: nowrap; }
 .scroll-x { overflow-x: auto; }
 .btn.primary .pill { background: rgba(10, 12, 16, .22); color: inherit; border-color: transparent; }
+
+/* Nerd Font icons for the terminals (p10k / omz use nerdfont-v3). Icons only: the unicode-range limits it
+   to the private-use areas, so normal text keeps --mono and nothing downloads until a terminal needs it. */
+/* the non-Mono variant on purpose: Mono shrinks each icon into one narrow cell; this one lets it spill
+   into the space p10k leaves after it, like a real terminal does */
+@font-face {
+  font-family: 'Symbols Nerd Font';
+  src: url('/fonts/SymbolsNerdFont-Regular.ttf') format('truetype');
+  font-display: block;
+  unicode-range: U+23FB-23FE, U+2665, U+26A1, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
+}
