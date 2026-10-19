@@ -10,7 +10,7 @@ const totalPending = computed(() => (props.all ? hostPending.value : 0)
 </script>
 
 <template>
-  <Panel :id="all ? 'containers' : 'dev-containers'" :title="title" :sub="sub" :fold="all ? 'open' : 'closed'">
+  <Panel :id="all ? 'containers' : 'dev-containers'" :title="title" :sub="sub" :fold="all ? 'phone' : 'closed'">
     <template #actions>
       <button
         v-if="all" class="btn" :class="{ primary: totalPending }"

@@ -13,6 +13,35 @@ const nav = [
   { to: '/chat', icon: 'chat', label: 'Chat' },
 ]
 const problems = computed(() => alerts(o.value).filter(a => a.level === 'bad').length)
+const badge = (to: string) => (to === '/metrics' ? problems.value : 0)
+
+// phone: four pinned tabs + "More" (a sheet with every page). Which four is the viewer's choice, kept in localStorage.
+const MAX_PINS = 4
+const PIN_KEY = 'nav:pinned'
+const pinned = ref<string[]>(['/', '/media', '/dev', '/deals'])
+try {
+  const v = JSON.parse(localStorage.getItem(PIN_KEY) || 'null')
+  if (Array.isArray(v)) { const ok = v.filter(x => nav.some(n => n.to === x)).slice(0, MAX_PINS); if (ok.length) pinned.value = ok }
+} catch {}
+const tabs = computed(() => pinned.value.map(to => nav.find(n => n.to === to)!).filter(Boolean))
+const here = computed(() => nav.find(n => n.to === route.path))
+const offTab = computed(() => (here.value && !pinned.value.includes(here.value.to) ? here.value : null))
+const moreBadge = computed(() => nav.filter(n => !pinned.value.includes(n.to)).reduce((s, n) => s + badge(n.to), 0))
+
+const sheet = ref(false)
+const editing = ref(false)
+function openSheet() { editing.value = false; sheet.value = !sheet.value }
+function togglePin(to: string) {
+  const p = pinned.value
+  if (p.includes(to)) { if (p.length > 1) pinned.value = p.filter(x => x !== to) }
+  else if (p.length < MAX_PINS) pinned.value = nav.map(n => n.to).filter(x => x === to || p.includes(x))
+  try { localStorage.setItem(PIN_KEY, JSON.stringify(pinned.value)) } catch {}
+}
+function pick(to: string) { if (editing.value) togglePin(to); else { sheet.value = false; navigateTo(to) } }
+watch(() => route.path, () => (sheet.value = false))
+const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') sheet.value = false }
+onMounted(() => window.addEventListener('keydown', onKey))
+onUnmounted(() => window.removeEventListener('keydown', onKey))
 
 const tick = ref(Date.now())
 let t: any
@@ -32,14 +61,48 @@ const stateText = computed(() => (error.value ? 'agent unreachable' : stale.valu
       </NuxtLink>
       <nav>
         <NuxtLink v-for="n in nav" :key="n.to" :to="n.to" :class="{ on: route.path === n.to }">
-          <Icon :name="n.icon" class="i" /><span class="l">{{ n.label }}</span><span class="l short">{{ n.short ?? n.label }}</span>
-          <span v-if="n.to === '/metrics' && problems" class="badge">{{ problems }}</span>
+          <Icon :name="n.icon" class="i" /><span class="l">{{ n.label }}</span>
+          <span v-if="badge(n.to)" class="badge">{{ badge(n.to) }}</span>
         </NuxtLink>
       </nav>
       <div class="foot small faint" :title="updated ? new Date(updated).toLocaleString() : ''">
         {{ o?.cts?.filter((c: any) => c.status === 'running').length ?? '–' }}/{{ o?.cts?.length ?? '–' }} up · {{ stateText }}
       </div>
     </aside>
+
+    <div class="tabs" role="navigation" :class="{ lifted: sheet }">
+      <NuxtLink v-for="n in tabs" :key="n.to" :to="n.to" :class="{ on: route.path === n.to && !sheet }">
+        <Icon :name="n.icon" class="i" /><span class="l">{{ n.short ?? n.label }}</span>
+        <span v-if="badge(n.to)" class="badge">{{ badge(n.to) }}</span>
+      </NuxtLink>
+      <button type="button" :class="{ on: offTab || sheet }" :aria-expanded="sheet" @click="openSheet">
+        <Icon :name="offTab && !sheet ? offTab.icon : 'grid'" class="i" /><span class="l">{{ offTab && !sheet ? (offTab.short ?? offTab.label) : 'More' }}</span>
+        <span v-if="moreBadge" class="badge">{{ moreBadge }}</span>
+      </button>
+    </div>
+
+    <Transition name="sheet">
+      <div v-if="sheet" class="scrim" @click.self="sheet = false">
+        <div class="sheet" role="dialog" aria-label="All pages">
+          <div class="sheet-head">
+            <span class="dot" :class="state" />
+            <span class="small faint">{{ o?.cts?.filter((c: any) => c.status === 'running').length ?? '–' }}/{{ o?.cts?.length ?? '–' }} up · {{ stateText }}</span>
+            <button type="button" class="edit" :class="{ on: editing }" @click="editing = !editing">{{ editing ? 'Done' : 'Edit tabs' }}</button>
+          </div>
+          <div v-if="editing" class="hint small faint">Tap to pin up to {{ MAX_PINS }} pages to the bar · {{ pinned.length }}/{{ MAX_PINS }}</div>
+          <div class="pages">
+            <button v-for="n in nav" :key="n.to" type="button" class="page"
+              :class="{ on: route.path === n.to, pinned: pinned.includes(n.to), editing, full: editing && !pinned.includes(n.to) && pinned.length >= MAX_PINS }"
+              @click="pick(n.to)">
+              <span class="tile"><Icon :name="n.icon" :size="22" /></span>
+              <span class="pl">{{ n.label }}</span>
+              <span v-if="badge(n.to)" class="badge">{{ badge(n.to) }}</span>
+              <span v-if="editing && pinned.includes(n.to)" class="pinmark"><Icon name="pin" :size="12" /></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <main class="wrap">
       <div v-if="state !== 'ok'" class="banner small" :class="state">{{ error ? 'Agent unreachable — data may be old' : 'Data is stale' }}</div>
@@ -64,7 +127,6 @@ nav a.on { color: var(--text); background: var(--panel-2); font-weight: 500; }
 nav a.on .i { color: var(--accent); }
 .i { color: var(--faint); }
 nav a:hover .i { color: var(--muted); }
-.short { display: none; }
 .badge { margin-left: auto; background: var(--bad); color: #fff; border-radius: 999px; font-size: 10px; font-weight: 600; padding: 0 6px; line-height: 16px; }
 .foot { margin-top: auto; padding: 0 10px; }
 .banner { padding: 7px 12px; border-radius: 8px; margin-bottom: 14px; }
@@ -81,23 +143,58 @@ nav a:hover .i { color: var(--muted); }
   .badge { position: absolute; top: 3px; right: 3px; padding: 0 4px; font-size: 9px; line-height: 13px; }
 }
 
+.tabs, .scrim { display: none; }
+
 @media (max-width: 640px) {
   .shell { display: block; --tabbar: calc(58px + env(safe-area-inset-bottom)); }
-  .side {
-    position: fixed; z-index: 50; top: auto; bottom: 0; left: 0; right: 0; height: auto;
-    padding: 0 4px env(safe-area-inset-bottom); flex-direction: row; gap: 0;
-    border-right: 0; border-top: 1px solid var(--line);
+  .side { display: none; }
+  .tabs {
+    position: fixed; z-index: 60; bottom: 0; left: 0; right: 0; display: flex;
+    padding: 0 4px env(safe-area-inset-bottom); border-top: 1px solid var(--line);
     background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
   }
-  .brand, .foot { display: none; }
-  nav { flex-direction: row; flex: 1; justify-content: space-around; gap: 0; }
-  nav a { flex: 1; flex-direction: column; gap: 2px; padding: 8px 0 7px; font-size: 10px; border-radius: 0; background: none !important; }
-  nav a.on { color: var(--accent); }
-  .i { width: 21px; height: 21px; }
-  nav a.on .i { color: var(--accent); }
-  .l:not(.short) { display: none; }
-  .short { display: block; }
-  .l { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .badge { position: absolute; top: 4px; left: calc(50% + 6px); padding: 0 4px; font-size: 9px; line-height: 14px; }
+  .tabs.lifted { background: var(--panel); }
+  .tabs a, .tabs button {
+    position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 9px 0 8px; font: inherit; font-size: 11px; color: var(--muted); background: none; border: 0; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tabs a:hover { text-decoration: none; }
+  .tabs .i { width: 22px; height: 22px; color: inherit; }
+  .tabs .on { color: var(--accent); }
+  .tabs .l { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabs .badge { position: absolute; top: 4px; left: calc(50% + 6px); padding: 0 4px; font-size: 9px; line-height: 14px; }
+
+  .scrim {
+    display: block; position: fixed; z-index: 55; inset: 0; background: rgb(0 0 0 / .5);
+  }
+  .sheet {
+    position: absolute; left: 0; right: 0; bottom: var(--tabbar); max-height: calc(100dvh - var(--tabbar) - 40px); overflow-y: auto;
+    background: var(--panel); border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; padding: 14px 16px 16px;
+  }
+  .sheet-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .edit { margin-left: auto; font: inherit; font-size: 13px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .edit.on { color: var(--accent); border-color: var(--accent); }
+  .hint { margin: -4px 0 10px; }
+  .pages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 4px; }
+  .page {
+    position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0;
+    font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; border-radius: 12px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .page:active { background: var(--panel-2); }
+  .tile { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); }
+  .page.on { color: var(--text); }
+  .page.on .tile { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+  .page.editing.pinned .tile { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel-2)); }
+  .page.full { opacity: .4; }
+  .pl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .page .badge { position: absolute; top: 3px; left: calc(50% + 14px); padding: 0 5px; font-size: 10px; line-height: 16px; }
+  .pinmark { position: absolute; top: 2px; left: calc(50% + 16px); display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: var(--bg); }
+
+  .sheet-enter-active, .sheet-leave-active { transition: opacity .18s; }
+  .sheet-enter-active .sheet, .sheet-leave-active .sheet { transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
+  .sheet-enter-from, .sheet-leave-to { opacity: 0; }
+  .sheet-enter-from .sheet, .sheet-leave-to .sheet { transform: translateY(24px); }
 }
 </style>

@@ -18,7 +18,7 @@ const colors = ['var(--accent)', '#b36bdb', '#2fa8a0', '#d9822b', '#c94f7c', '#6
 </script>
 
 <template>
-  <Panel id="storage" title="Storage">
+  <Panel id="storage" title="Storage" fold="phone">
     <Meter v-for="p in pools" :key="p.name" :label="p.name" :value="pct(p.alloc, p.size)" :detail="`${bytes(p.alloc)} / ${bytes(p.size)}`" :warn="80" />
 
     <div class="split">

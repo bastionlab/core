@@ -5,7 +5,7 @@ const age = (t?: number | null, max = 26 * 3600) => (!t ? 'warn' : props.now - t
 </script>
 
 <template>
-  <Panel id="backups" title="Backups" :sub="`daily ${b.vzdumpJobs[0]?.schedule ?? '–'}`">
+  <Panel id="backups" title="Backups" fold="phone" :sub="`daily ${b.vzdumpJobs[0]?.schedule ?? '–'}`">
     <template #actions>
       <button
         class="btn" :disabled="b.busy?.length"
