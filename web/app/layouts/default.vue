@@ -12,6 +12,7 @@ const nav = [
   { to: '/deals', icon: 'deals', label: 'Deals' },
   { to: '/wohnungen', icon: 'key', label: 'Wohnungen', short: 'Wohnen' },
   { to: '/jobs', icon: 'briefcase', label: 'Jobs' },
+  { to: '/money', icon: 'euro', label: 'Money' },
   { to: '/metrics', icon: 'metrics', label: 'Metrics' },
   { to: '/chat', icon: 'chat', label: 'Chat' },
 ]
