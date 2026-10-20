@@ -4,7 +4,7 @@
 Serves JSON to the dashboard CT only (source IP + bearer token). It never runs caller-supplied
 commands: previews go through `pv` inside a CT tagged `dev`, for a project path that `pv ls` listed.
 """
-import base64, fcntl, json, os, pty, re, secrets, select, shlex, signal, struct, subprocess, termios, threading, time, urllib.error, urllib.request
+import base64, fcntl, json, os, pty, re, secrets, select, shlex, signal, struct, subprocess, termios, threading, tty, time, urllib.error, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -866,18 +866,54 @@ class Term:
         self.buf, self.base = bytearray(), 0   # base = stream offset of buf[0]
         self.cond = threading.Condition()
         self.alive, self.readers, self.seen = True, 0, time.time()
+        tmux = SHELL_TMUX if target == "shell" else ["tmux"]
+        attach = [*tmux, "attach", "-t", "=" + session]
+        self.view = None
+        if target == "ship":
+            # The ship session is usually also open on the desktop (kitty, 4 lanes side by side). A plain attach
+            # from a phone shrank every lane to phone width and shared one current window, so switching windows
+            # in the browser flipped the desktop too. Instead: a throwaway session grouped with it (same windows,
+            # its own current window), destroyed as soon as this view detaches. Sizes follow window-size latest:
+            # the window fits whichever screen typed last. (ignore-size was tried: a forgotten kitty client then
+            # pinned 315x73 and the browser only saw a cut-out of it — empty right edge, clipped input line.)
+            self.view = f"{session}-web-{secrets.token_hex(3)}"
+            cur = subprocess.run(["pct", "exec", str(vmid), "--", "runuser", "-u", "max", "--", "tmux", "display",
+                                  "-p", "-t", f"={session}:", "#{window_index}"], capture_output=True, text=True, timeout=15)
+            attach = ["tmux", "new-session", "-t", "=" + session, "-s", self.view, ";",
+                      "set", "destroy-unattached", "on"]
+            if cur.stdout.strip().isdigit():
+                attach += [";", "select-window", "-t", ":" + cur.stdout.strip()]
         pid, fd = pty.fork()
         if pid == 0:
-            tmux = SHELL_TMUX if target == "shell" else ["tmux"]
+            tty.setraw(0)
             os.execvp("pct", ["pct", "exec", str(vmid), "--", "env", "TERM=xterm-256color", "LANG=C.UTF-8",
-                              "runuser", "-u", "max", "--", *tmux, "attach", "-t", "=" + session])
+                              "runuser", "-u", "max", "--", *attach])
         self.pid, self.fd = pid, fd
         _winsize(fd, cols, rows)
+        threading.Thread(target=self._rawout, daemon=True).start()
         threading.Thread(target=self._pump, daemon=True).start()
+
+    def _rawout(self, until=None):
+        """lxc-attach (pct exec) switches our side of the pty back to OPOST|ONLCR on start, so tmux's cursor-down
+        "\n" arrived as "\r\n": a right-hand pane's next row was painted from column 0, over the left pane (the
+        ship lanes smearing each other). Undo that as soon as it appears; _pump re-checks before every read."""
+        until = until or time.time() + 5
+        while self.alive:
+            try:
+                a = termios.tcgetattr(self.fd)
+                if a[1] & (termios.OPOST | termios.ONLCR):
+                    a[1] &= ~(termios.OPOST | termios.ONLCR)
+                    termios.tcsetattr(self.fd, termios.TCSANOW, a)
+            except (termios.error, OSError):
+                return
+            if time.time() > until:
+                return
+            time.sleep(0.02)
 
     def _pump(self):
         while True:
             try:
+                self._rawout(until=1)  # one check
                 data = os.read(self.fd, 65536)
             except OSError:
                 data = b""
@@ -906,6 +942,9 @@ class Term:
             os.close(self.fd)
         except OSError:
             pass
+        if self.view:  # destroy-unattached normally already took it
+            subprocess.run(["pct", "exec", str(self.vmid), "--", "runuser", "-u", "max", "--", "tmux",
+                            "kill-session", "-t", "=" + self.view], capture_output=True, timeout=15)
         # hand the window back its usual size, and let the next attach resize it again
         size = DEFAULT_SIZE[self.target]
         if not size:  # the ship session follows whoever attached last anyway

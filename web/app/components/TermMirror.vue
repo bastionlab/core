@@ -30,15 +30,17 @@ async function draw(force = false) {
   const s = props.snap
   if (!s?.cols || !wrap.value || !host.value) return
   if (!term) {
-    const [{ Terminal }, f] = await Promise.all([import('@xterm/xterm'), termFont()])
+    const [{ Terminal }, { Unicode11Addon }, f] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-unicode11'), termFont()])
     if (!mounted || term) return
     font = f
     measure()
     term = new Terminal({
       disableStdin: true, cursorBlink: false, cursorInactiveStyle: 'none', scrollback: 1000,
       fontFamily: font, fontSize: MAX_FONT, lineHeight: 1, cols: s.cols, rows: 10,
-      theme: { background: '#07080b', foreground: '#d5d9e0', cursor: '#07080b' },
+      theme: { background: '#07080b', foreground: '#d5d9e0', cursor: '#07080b' }, allowProposedApi: true,
     })
+    term.loadAddon(new Unicode11Addon()) // emoji are two cells wide, as in tmux (see TermFull)
+    term.unicode.activeVersion = '11'
     term.open(host.value)
     force = true
   }

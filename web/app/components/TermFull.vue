@@ -68,13 +68,18 @@ function refit() {
 }
 
 onMounted(async () => {
-  const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')])
+  const [{ Terminal }, { FitAddon }, { Unicode11Addon }] = await Promise.all([
+    import('@xterm/xterm'), import('@xterm/addon-fit'), import('@xterm/addon-unicode11')])
   const phone = window.innerWidth < 640
   term = new Terminal({
-    cursorBlink: true, fontSize: phone ? 12 : 13, scrollback: 2000,
+    cursorBlink: true, fontSize: phone ? 12 : 13, scrollback: 2000, allowProposedApi: true,
     fontFamily: await termFont(),
     theme: { background: '#0a0c0f', foreground: '#d5d9e0' },
   })
+  // tmux counts emoji like Claude Code's 🟡 / 🟢 as two cells; xterm's default (Unicode 6) as one, which shifted the
+  // rest of that line by a cell
+  term.loadAddon(new Unicode11Addon())
+  term.unicode.activeVersion = '11'
   fit = new FitAddon()
   term.loadAddon(fit)
   term.open(host.value!)
@@ -122,7 +127,8 @@ onBeforeUnmount(() => {
 const KEYS: [string, string][] = [
   ['Esc', '\x1b'], ['Tab', '\t'], ['⇧Tab', '\x1b[Z'], ['↑', '\x1b[A'], ['↓', '\x1b[B'], ['←', '\x1b[D'], ['→', '\x1b[C'], ['^C', '\x03'],
 ]
-// the ship session has a conductor and a lanes window: tmux prefix + n / p switches, + z zooms a lane
+// the ship session has a conductor and a lanes window: tmux prefix + n / p switches, + z zooms a lane.
+// The agent attaches through a grouped view session, so n / p only move this view; o / z act on the shared window.
 const SHIP_KEYS: [string, string][] = [['win ›', '\x02n'], ['‹ win', '\x02p'], ['pane', '\x02o'], ['zoom', '\x02z']]
 const keys = computed(() => (props.target === 'ship' ? [...KEYS, ...SHIP_KEYS] : KEYS))
 const press = (seq: string) => { type(seq); term?.focus() }
