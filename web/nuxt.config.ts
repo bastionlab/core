@@ -14,6 +14,12 @@ export default defineNuxtConfig({
     },
   },
   css: ['~/assets/main.css'],
+  // the SPA shell must be revalidated or phones (iOS home-screen apps especially) keep showing the old build after a deploy;
+  // /_nuxt/* is content-hashed and keeps its long cache
+  routeRules: {
+    '/**': { headers: { 'cache-control': 'no-cache' } },
+    '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+  },
   runtimeConfig: {
     agentUrl: 'http://192.168.1.50:7070', // NUXT_AGENT_URL
     agentToken: '', // NUXT_AGENT_TOKEN
