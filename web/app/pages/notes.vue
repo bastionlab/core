@@ -192,8 +192,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .sec { margin-top: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
 .pad { padding: 48px 0; text-align: center; }
 @media (max-width: 640px) {
-  .find { order: 3; flex-basis: 100%; }
-  .search { max-width: none; }
+  .find { order: 3; flex-basis: 100%; min-width: 0; }
+  /* an input's natural width is wide on iOS; let it shrink so the row never pushes the page sideways */
+  .search { flex: 1 1 0; width: 0; min-width: 0; max-width: none; }
+  .find select { flex: none; max-width: 40%; }
   .bar .btn.ghost { margin-left: auto; }
   /* one swipeable row instead of a wall of chips */
   .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -12px 14px; padding: 0 12px; }
