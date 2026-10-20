@@ -61,8 +61,12 @@ let t: any
 onMounted(() => (t = setInterval(() => (tick.value = Date.now()), 1000)))
 onUnmounted(() => clearInterval(t))
 const stale = computed(() => updated.value > 0 && tick.value - updated.value > 20000)
-const state = computed(() => (error.value ? 'bad' : stale.value ? 'warn' : 'ok'))
-const stateText = computed(() => (error.value ? 'agent unreachable' : stale.value ? 'stale' : 'live'))
+// one failed poll is a blip, not an outage: only call the agent down after 30 s of failures
+const failSince = ref(0)
+watch(error, e => (failSince.value = e ? (failSince.value || Date.now()) : 0))
+const down = computed(() => failSince.value > 0 && tick.value - failSince.value > 30000)
+const state = computed(() => (down.value ? 'bad' : stale.value ? 'warn' : 'ok'))
+const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value ? 'stale' : 'live'))
 </script>
 
 <template>
@@ -122,7 +126,7 @@ const stateText = computed(() => (error.value ? 'agent unreachable' : stale.valu
     </Transition>
 
     <main class="wrap">
-      <div v-if="state !== 'ok'" class="banner small" :class="state">{{ error ? 'Agent unreachable — data may be old' : 'Data is stale' }}</div>
+      <div v-if="state !== 'ok'" class="banner small" :class="state">{{ down ? 'Agent unreachable — data may be old' : 'Data is stale' }}</div>
       <slot />
     </main>
   </div>
