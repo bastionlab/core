@@ -125,12 +125,12 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); document.body.
       </div>
 
       <footer>
-        <button type="button" class="btn ghost" :class="{ on: n.pinned }" @click="emit('patch', { pinned: !n.pinned })"><Icon name="pin" :size="14" />{{ n.pinned ? 'Pinned' : 'Pin' }}</button>
-        <button type="button" class="btn ghost" @click="emit('patch', { state: n.state === 'done' ? 'active' : 'done' })">✓ {{ n.state === 'done' ? 'Reopen' : 'Done' }}</button>
-        <button type="button" class="btn ghost" @click="emit('patch', { state: n.state === 'archived' ? 'active' : 'archived' })">🗄️ {{ n.state === 'archived' ? 'Unarchive' : 'Archive' }}</button>
-        <button type="button" class="btn ghost" @click="copy">{{ copied ? 'Copied' : '📋 Copy' }}</button>
+        <button type="button" class="btn ghost" :class="{ on: n.pinned }" @click="emit('patch', { pinned: !n.pinned })"><Icon name="pin" :size="14" /><span>{{ n.pinned ? 'Pinned' : 'Pin' }}</span></button>
+        <button type="button" class="btn ghost" @click="emit('patch', { state: n.state === 'done' ? 'active' : 'done' })"><span class="ic">✓</span><span>{{ n.state === 'done' ? 'Reopen' : 'Done' }}</span></button>
+        <button type="button" class="btn ghost" @click="emit('patch', { state: n.state === 'archived' ? 'active' : 'archived' })"><span class="ic">🗄️</span><span>{{ n.state === 'archived' ? 'Unarchive' : 'Archive' }}</span></button>
+        <button type="button" class="btn ghost" @click="copy"><span class="ic">📋</span><span>{{ copied ? 'Copied' : 'Copy' }}</span></button>
         <span class="sp" />
-        <button type="button" class="btn danger" :class="{ armed }" @click="del">{{ armed ? 'Sure?' : 'Delete' }}</button>
+        <button type="button" class="btn danger" :class="{ armed }" @click="del"><span class="ic">🗑️</span><span>{{ armed ? 'Sure?' : 'Delete' }}</span></button>
       </footer>
     </div>
   </div>
@@ -181,9 +181,22 @@ footer .btn.ghost.on { color: var(--accent); background: transparent; }
   .tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .tools .btn { justify-content: center; padding: 8px 10px; font-size: 13.5px; }
   .rel { max-width: 100%; }
-  /* one even row of actions, pinned to the bottom of the sheet */
-  footer { margin-top: auto; flex-wrap: nowrap; gap: 4px; }
+  /* ✕ floats so it stays reachable on a long note */
+  .x { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 10px; z-index: 3; width: 38px; height: 38px; padding: 0; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line-2); }
+  header { padding-right: 44px; }
+  /* phones zoom into inputs under 16px */
+  .topic, .edit { font-size: 16px !important; }
+  .edit { min-height: 45dvh; }
+  .body :deep(li > input[type='checkbox']) { width: 18px; height: 18px; vertical-align: -3px; }
+  .body :deep(li:has(> input[type='checkbox'])) { padding-left: 28px; text-indent: -28px; }
+  /* one even row of icon actions, stuck to the bottom of the screen */
+  footer {
+    position: sticky; bottom: 0; z-index: 2; margin: auto -14px calc(-16px - env(safe-area-inset-bottom));
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); background: var(--panel); flex-wrap: nowrap; gap: 2px;
+  }
   footer .sp { display: none; }
-  footer .btn { flex: 1; min-width: 0; justify-content: center; padding: 8px 4px; font-size: 12.5px; white-space: nowrap; }
+  footer .btn { flex: 1; min-width: 0; flex-direction: column; gap: 2px; padding: 6px 2px; border: 0; background: transparent; font-size: 11.5px; white-space: nowrap; }
+  footer .btn .ic, footer .btn :deep(svg) { font-size: 17px; width: 18px; height: 18px; line-height: 18px; }
+  footer .btn.danger:not(.armed) { color: var(--bad); }
 }
 </style>

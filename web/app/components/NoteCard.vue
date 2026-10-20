@@ -55,7 +55,13 @@ function onClick(e: MouseEvent) {
 h3 { flex: 1; margin: 0; font-size: 14.5px; font-weight: 600; line-height: 20px; min-width: 0; overflow-wrap: anywhere; }
 .tools { display: flex; gap: 2px; opacity: 0; transition: opacity .15s; margin: -3px -6px 0 0; }
 .card:hover .tools, .card:focus-within .tools { opacity: 1; }
-@media (pointer: coarse) { .tools { display: none; } }
+/* no hover on touch: keep pin + done visible, with room for a thumb */
+@media (pointer: coarse) {
+  .tools { opacity: 1; margin: -7px -8px 0 0; }
+  .b { width: 34px; height: 34px; }
+  .body :deep(li > input[type='checkbox']) { width: 18px; height: 18px; vertical-align: -3px; }
+  .body :deep(li:has(> input[type='checkbox'])) { padding-left: 28px; text-indent: -28px; }
+}
 .b { width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--faint); cursor: pointer; font-size: 13px; }
 .b:hover { background: var(--panel-2); color: var(--text); }
 .b.on { color: var(--accent); }

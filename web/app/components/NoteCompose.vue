@@ -112,5 +112,8 @@ textarea:focus-visible { border: 0; }
 .toggle { display: flex; align-items: center; gap: 5px; color: var(--muted); cursor: pointer; white-space: nowrap; }
 .err { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sp { flex: 1; }
-@media (max-width: 640px) { .hide-s { display: none; } }
+@media (max-width: 640px) {
+  .hide-s { display: none; }
+  textarea { font-size: 16px; } /* phones zoom into inputs under 16px */
+}
 </style>
