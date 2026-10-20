@@ -17,6 +17,15 @@ const nav = [
 ]
 const problems = computed(() => alerts(o.value).filter(a => a.level === 'bad').length)
 const badge = (to: string) => (to === '/metrics' ? problems.value : 0)
+// chat: a pulsing dot while Claude works, an amber one when an answer waits on the owner's pick, on every page
+const { chats, load: loadChats, save: saveChats, overall } = useChats()
+const claude = useClaude(saveChats)
+onMounted(() => {
+  loadChats()
+  for (const c of chats.value) for (const t of c.turns) if (t.ct && !t.fin) claude.attach(t)
+})
+const mark = (to: string) => (to === '/chat' ? overall.value : '')
+const markTitle = (m: string) => (m === 'input' ? 'a chat is waiting for your answer' : 'a chat is working')
 
 // phone: four pinned tabs + "More" (a sheet with every page). Which four is the viewer's choice, kept in localStorage.
 const MAX_PINS = 4
@@ -30,6 +39,7 @@ const tabs = computed(() => pinned.value.map(to => nav.find(n => n.to === to)!).
 const here = computed(() => nav.find(n => n.to === route.path))
 const offTab = computed(() => (here.value && !pinned.value.includes(here.value.to) ? here.value : null))
 const moreBadge = computed(() => nav.filter(n => !pinned.value.includes(n.to)).reduce((s, n) => s + badge(n.to), 0))
+const moreMark = computed(() => (pinned.value.includes('/chat') ? '' : overall.value))
 
 const sheet = ref(false)
 const editing = ref(false)
@@ -66,6 +76,7 @@ const stateText = computed(() => (error.value ? 'agent unreachable' : stale.valu
         <NuxtLink v-for="n in nav" :key="n.to" :to="n.to" :class="{ on: route.path === n.to }">
           <Icon :name="n.icon" class="i" /><span class="l">{{ n.label }}</span>
           <span v-if="badge(n.to)" class="badge">{{ badge(n.to) }}</span>
+          <span v-if="mark(n.to)" class="cmark" :class="mark(n.to)" :title="markTitle(mark(n.to))" />
         </NuxtLink>
       </nav>
       <div class="foot small faint" :title="updated ? new Date(updated).toLocaleString() : ''">
@@ -77,10 +88,12 @@ const stateText = computed(() => (error.value ? 'agent unreachable' : stale.valu
       <NuxtLink v-for="n in tabs" :key="n.to" :to="n.to" :class="{ on: route.path === n.to && !sheet }">
         <Icon :name="n.icon" class="i" /><span class="l">{{ n.short ?? n.label }}</span>
         <span v-if="badge(n.to)" class="badge">{{ badge(n.to) }}</span>
+        <span v-if="mark(n.to)" class="cmark" :class="mark(n.to)" />
       </NuxtLink>
       <button type="button" :class="{ on: offTab || sheet }" :aria-expanded="sheet" @click="openSheet">
         <Icon :name="offTab && !sheet ? offTab.icon : 'grid'" class="i" /><span class="l">{{ offTab && !sheet ? (offTab.short ?? offTab.label) : 'More' }}</span>
         <span v-if="moreBadge" class="badge">{{ moreBadge }}</span>
+        <span v-else-if="moreMark" class="cmark" :class="moreMark" />
       </button>
     </div>
 
@@ -100,6 +113,7 @@ const stateText = computed(() => (error.value ? 'agent unreachable' : stale.valu
               <span class="tile"><Icon :name="n.icon" :size="22" /></span>
               <span class="pl">{{ n.label }}</span>
               <span v-if="badge(n.to)" class="badge">{{ badge(n.to) }}</span>
+              <span v-if="mark(n.to)" class="cmark" :class="mark(n.to)" />
               <span v-if="editing && pinned.includes(n.to)" class="pinmark"><Icon name="pin" :size="12" /></span>
             </button>
           </div>
@@ -131,6 +145,11 @@ nav a.on .i { color: var(--accent); }
 .i { color: var(--faint); }
 nav a:hover .i { color: var(--muted); }
 .badge { margin-left: auto; background: var(--bad); color: #fff; border-radius: 999px; font-size: 10px; font-weight: 600; padding: 0 6px; line-height: 16px; }
+.cmark { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.badge + .cmark { margin-left: 6px; }
+.cmark.busy { background: var(--accent); animation: cpulse 1.4s ease-in-out infinite; }
+.cmark.input { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+@keyframes cpulse { 50% { opacity: .3; transform: scale(.7); } }
 .foot { margin-top: auto; padding: 0 10px; }
 .banner { padding: 7px 12px; border-radius: 8px; margin-bottom: 14px; }
 .banner.bad { background: var(--bad-soft); color: var(--bad); }
@@ -144,6 +163,7 @@ nav a:hover .i { color: var(--muted); }
   nav a { justify-content: center; padding: 10px; }
   .l, .foot { display: none; }
   .badge { position: absolute; top: 3px; right: 3px; padding: 0 4px; font-size: 9px; line-height: 13px; }
+  .cmark { position: absolute; top: 6px; right: 6px; }
 }
 
 .tabs, .scrim { display: none; }
@@ -167,6 +187,7 @@ nav a:hover .i { color: var(--muted); }
   .tabs .on { color: var(--accent); }
   .tabs .l { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tabs .badge { position: absolute; top: 4px; left: calc(50% + 6px); padding: 0 4px; font-size: 9px; line-height: 14px; }
+  .tabs .cmark { position: absolute; top: 7px; left: calc(50% + 9px); margin: 0; }
 
   .scrim {
     display: block; position: fixed; z-index: 55; inset: 0; background: rgb(0 0 0 / .5);
@@ -193,6 +214,7 @@ nav a:hover .i { color: var(--muted); }
   .page.full { opacity: .4; }
   .pl { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .page .badge { position: absolute; top: 3px; left: calc(50% + 14px); padding: 0 5px; font-size: 10px; line-height: 16px; }
+  .page .cmark { position: absolute; top: 6px; left: calc(50% + 18px); margin: 0; }
   .pinmark { position: absolute; top: 2px; left: calc(50% + 16px); display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: var(--bg); }
 
   .sheet-enter-active, .sheet-leave-active { transition: opacity .18s; }

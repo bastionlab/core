@@ -3,6 +3,7 @@ export interface Chat {
   /** Claude chats: the Claude Code session it resumes, and whether the next message may change things */
   engine?: 'local' | 'claude', session?: string, auto?: boolean, model?: string, effort?: string
 }
+export type ChatStatus = 'busy' | 'input' | ''
 const KEY = 'chat.convos'
 const MAX = 40
 
@@ -60,5 +61,18 @@ export function useChats() {
     save()
   }
 
-  return { chats, current, currentId, create, remove, load, save, touch }
+  /** busy: an answer is still coming · input: the last answer ends in questions nobody has answered yet */
+  function status(c?: Chat): ChatStatus {
+    if (!c) return ''
+    if (c.turns.some(t => t.busy)) return 'busy'
+    const last = c.turns.at(-1)
+    return last && !last.clear && !last.error && !last.answered && splitQuestions(last.a).qs ? 'input' : ''
+  }
+  /** the most urgent status over every chat, for the nav */
+  const overall = computed<ChatStatus>(() => {
+    const all = chats.value.map(status)
+    return all.includes('input') ? 'input' : all.includes('busy') ? 'busy' : ''
+  })
+
+  return { chats, current, currentId, create, remove, load, save, touch, status, overall }
 }

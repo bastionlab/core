@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Turn } from '~/composables/useAsk'
 useHead({ title: 'Chat · pve' })
-const { chats, current, currentId, create, remove, load, save, touch } = useChats()
+const { chats, current, currentId, create, remove, load, save, touch, status } = useChats()
 const claude = useClaude(save)
 onMounted(() => {
   load()
@@ -47,10 +47,26 @@ function drop(id: string) {
 }
 
 const body = ref<HTMLElement>()
-watch(() => turns.value.map(t => t.a.length + t.r.length).join(), () => {
+const away = ref(false) // scrolled up: offer a jump back to the newest message
+const onScroll = () => { const el = body.value; away.value = !!el && el.scrollHeight - el.scrollTop - el.clientHeight > 300 }
+const toBottom = (smooth = true) => body.value?.scrollTo({ top: body.value.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+watch(() => turns.value.map(t => t.a.length + t.r.length + (t.tools?.length ?? 0)).join(), () => {
   const el = body.value
   if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 200) nextTick(() => (el.scrollTop = el.scrollHeight))
+  nextTick(onScroll)
 })
+watch(currentId, () => nextTick(() => { toBottom(false); onScroll() }))
+
+/** ask the last question again: replaces a failed or stopped answer, or rolls the dice again on a local model */
+const canRetry = computed(() => !busy.value && !!turns.value.at(-1)?.q && (!isClaude.value || !!turns.value.at(-1)!.error))
+function retry() {
+  const c = current.value
+  if (!c || !canRetry.value) return
+  const q = c.turns.pop()!.q
+  save()
+  send(q)
+}
+const STATUS = { busy: 'working…', input: 'needs your answer' } as const
 function send(q: string) {
   if (q.trim() === '/clear') return clear()
   if (isClaude.value && current.value) {
@@ -85,7 +101,8 @@ const open = ref(false) // conversation list on phones
           @click="currentId = c.id; open = false"
         >
           <span class="t"><span v-if="c.engine === 'claude'" class="cl" title="Claude">✳</span>{{ c.title }}</span>
-          <span class="small faint">{{ ago(c.at / 1000) }}</span>
+          <span v-if="status(c)" class="small st" :class="status(c)"><span class="sd" />{{ STATUS[status(c) as 'busy'] }}</span>
+          <span v-else class="small faint">{{ ago(c.at / 1000) }}</span>
           <span class="x" title="delete" @click.stop="remove(c.id)">✕</span>
         </button>
       </div>
@@ -97,6 +114,7 @@ const open = ref(false) // conversation list on phones
       <div class="mhead">
         <button class="btn ghost only-phone" title="conversations" @click="open = !open">☰</button>
         <b class="ttl">{{ current?.title ?? 'Chat' }}</b>
+        <span v-if="status(current) === 'input'" class="st input small hide-phone"><span class="sd" />your turn</span>
         <div class="seg" role="group" aria-label="engine">
           <button :class="{ on: !isClaude }" :disabled="busy" title="local model on the 3060 (Ollama)" @click="engine = 'local'">Local</button>
           <button :class="{ on: isClaude }" :disabled="busy" title="Claude Code on pve, your subscription" @click="engine = 'claude'">Claude</button>
@@ -113,15 +131,20 @@ const open = ref(false) // conversation list on phones
         <button class="btn ghost only-phone plus" title="new chat" @click="create()">+</button>
       </div>
 
-      <div ref="body" class="body">
+      <div ref="body" class="body" @scroll.passive="onScroll">
         <div v-if="!turns.length" class="empty muted">
-          <Icon name="chat" :size="28" class="big" />
+          <div class="hero" :class="engine">
+            <span class="logo">{{ isClaude ? '✳' : '◆' }}</span>
+            <b>{{ isClaude ? 'Claude on pve' : 'Local model' }}</b>
+            <span class="small faint">{{ isClaude ? (auto ? 'can change files, run commands and deploy' : 'read-only: looks, never touches') : 'private, runs on the 3060 · web search + weather' }}</span>
+          </div>
           <div class="examples">
             <button v-for="ex in EXAMPLES[engine]" :key="ex" class="pill" @click="send(ex)">{{ ex }}</button>
           </div>
         </div>
-        <AskTurns v-else :turns="turns" @run="p => run(p)" @answer="send" />
+        <AskTurns v-else :turns="turns" :retry="canRetry" @run="p => run(p)" @answer="send" @retry="retry" />
       </div>
+      <button v-if="away" class="jump" title="newest message" @click="toBottom()">↓</button>
 
       <div class="bar" :class="{ armed: isClaude && auto }">
         <AskBar
@@ -157,7 +180,7 @@ aside { display: flex; flex-direction: column; gap: 10px; background: var(--pane
 .conv:hover .x, .conv.on .x { opacity: 1; }
 .conv .x:hover { color: var(--bad); }
 .webui { border-top: 1px solid var(--line); padding: 10px 2px 0; }
-.main { display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); min-height: 0; min-width: 0; }
+.main { position: relative; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); min-height: 0; min-width: 0; }
 .mhead { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); min-height: 48px; }
 .ttl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .body { flex: 1; overflow-y: auto; padding: 4px 16px; min-height: 0; }
@@ -174,7 +197,19 @@ aside { display: flex; flex-direction: column; gap: 10px; background: var(--pane
 .bar.armed { box-shadow: inset 0 2px 0 var(--warn); }
 .cl { color: #d97757; margin-right: 5px; }
 .empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 30px 10px; text-align: center; }
-.big { color: var(--faint); }
+.hero { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.hero b { color: var(--text); font-size: 16px; }
+.hero .logo { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; font-size: 24px; margin-bottom: 6px; background: var(--accent-soft); color: var(--accent); }
+.hero.claude .logo { background: color-mix(in srgb, #d97757 16%, transparent); color: #d97757; }
+.st { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.st .sd { width: 7px; height: 7px; border-radius: 50%; }
+.st.busy { color: var(--accent); }
+.st.busy .sd { background: var(--accent); animation: sdpulse 1.4s ease-in-out infinite; }
+.st.input { color: var(--warn); }
+.st.input .sd { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+@keyframes sdpulse { 50% { opacity: .3; transform: scale(.7); } }
+.jump { position: absolute; right: 18px; bottom: 74px; z-index: 5; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); font-size: 16px; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+.jump:hover { border-color: var(--faint); }
 .examples { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 560px; }
 .examples .pill { cursor: pointer; font: inherit; font-size: 12px; padding: 4px 11px; }
 .examples .pill:hover { color: var(--text); border-color: var(--faint); }
@@ -190,6 +225,7 @@ aside { display: flex; flex-direction: column; gap: 10px; background: var(--pane
   aside.open { display: flex; }
   .scrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, .5); }
   .only-phone { display: inline-flex; padding: 4px 10px; font-size: 16px; }
+  .hide-phone { display: none; }
   .mhead { padding: 6px 6px; }
   .body { padding: 4px 12px; }
   .conv { padding: 10px 30px 10px 10px; }

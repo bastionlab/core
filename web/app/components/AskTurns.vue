@@ -1,16 +1,55 @@
 <script setup lang="ts">
 import type { Proposal, Turn } from '~/composables/useAsk'
-defineProps<{ turns: Turn[] }>()
-const emit = defineEmits<{ run: [Proposal], answer: [string] }>()
+const props = defineProps<{ turns: Turn[], retry?: boolean }>()
+const emit = defineEmits<{ run: [Proposal], answer: [string], retry: [] }>()
 const view = (t: Turn) => splitQuestions(t.a, t.busy)
 // Claude can make dozens of tool calls in one answer: show the latest few, the rest behind a click
 const SHOW = 6
 const expanded = ref(new Set<number>())
 const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tools!.slice(-SHOW))
+
+// code blocks get a copy button; clicks are caught once on the list instead of per block
+const html = (t: Turn) => md(view(t).text).replace(/<pre>/g, '<div class="code"><button type="button" class="cp">copy</button><pre>').replace(/<\/pre>/g, '</pre></div>')
+const copied = ref('')
+async function copy(text: string, key: string) {
+  try { await navigator.clipboard.writeText(text) } catch {
+    const ta = Object.assign(document.createElement('textarea'), { value: text })
+    document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove()
+  }
+  copied.value = key
+  setTimeout(() => copied.value === key && (copied.value = ''), 1500)
+}
+function onClick(e: MouseEvent) {
+  const b = (e.target as HTMLElement).closest('button.cp') as HTMLElement | null
+  const pre = b?.nextElementSibling as HTMLElement | null
+  if (!b || !pre) return
+  copy(pre.innerText, '')
+  b.textContent = 'copied ✓'
+  setTimeout(() => (b.textContent = 'copy'), 1500)
+}
+
+// while an answer runs: what it is doing right now and for how long
+const now = ref(Date.now())
+let timer: any
+watchEffect(() => {
+  const running = props.turns.some(t => t.busy)
+  if (running && !timer) timer = setInterval(() => (now.value = Date.now()), 1000)
+  else if (!running && timer) { clearInterval(timer); timer = null }
+})
+onUnmounted(() => clearInterval(timer))
+const clock = (s: number) => (s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`)
+const elapsed = (t: Turn) => clock(Math.max(0, Math.round((now.value - (t.at ?? now.value)) / 1000)))
+function activity(t: Turn) {
+  const tl = t.tools?.findLast(x => !x.done)
+  if (tl) return tl.label || tl.name
+  if (t.a) return 'writing'
+  if (t.r) return 'thinking'
+  return t.ct ? 'starting' : 'loading the model'
+}
 </script>
 
 <template>
-  <div class="turns">
+  <div class="turns" @click="onClick">
     <template v-for="(t, i) in turns" :key="i">
     <div v-if="t.clear" class="cleared small faint">context cleared · the model forgets everything above</div>
     <div v-else class="turn">
@@ -23,13 +62,15 @@ const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tool
         </span>
       </div>
       <details v-if="t.r" class="reason small muted"><summary>reasoning{{ t.busy && !t.a ? '…' : '' }}</summary><div class="pre">{{ t.r }}</div></details>
-      <div v-if="t.a" class="a" v-html="md(view(t).text)" />
+      <div v-if="t.a" class="a" v-html="html(t)" />
       <AskQuestions
         v-if="!t.busy && view(t).qs" :qs="view(t).qs!" :answered="t.answered"
         :disabled="i !== turns.length - 1 || turns.some(x => x.busy)"
         @answer="(text, picked) => { t.answered = picked; emit('answer', text) }"
       />
-      <div v-else-if="t.busy && !t.r" class="muted small" title="the first answer loads the model, can take ~20 s">thinking…</div>
+      <div v-if="t.busy" class="live small muted">
+        <span class="spin" /><span class="what">{{ activity(t) }}</span><span class="faint">· {{ elapsed(t) }}</span>
+      </div>
       <div v-for="(p, j) in t.proposals" :key="'p' + j" class="proposal" :class="[p.state, { danger: p.desc?.startsWith('FORCE:') }]">
         <div class="head">
           <span class="what"><b>{{ p.desc }}</b></span>
@@ -50,7 +91,11 @@ const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tool
         Read-only blocked {{ t.denied.length === 1 ? 'a change' : `${t.denied.length} changes` }}: <span class="mono">{{ t.denied.slice(0, 3).join(' · ') }}</span>. Switch on <b>Auto</b> to allow it.
       </div>
       <div v-if="t.error" class="small bad">{{ t.error }}</div>
-      <div v-if="!t.busy && t.model" class="faint small">
+      <div v-if="!t.busy && (t.model || t.a || t.error)" class="meta faint small">
+        <span class="acts">
+          <button v-if="t.a" type="button" class="act" title="copy the answer" @click="copy(view(t).text, 'a' + i)">{{ copied === 'a' + i ? '✓ copied' : 'copy' }}</button>
+          <button v-if="retry && i === turns.length - 1" type="button" class="act" title="ask the same question again" @click="emit('retry')">↻ retry</button>
+        </span>
         {{ t.model }}<template v-if="t.tps"> · {{ t.tps.toFixed(1) }} tok/s</template><template v-if="t.effort"> · {{ t.effort }}</template><template v-if="t.secs"> · {{ t.secs }} s</template><span v-if="t.ct" :class="t.auto ? 'autotag' : ''"> · {{ t.auto ? '⚡ auto' : 'read-only' }}</span>
       </div>
     </div>
@@ -90,5 +135,18 @@ const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tool
 .proposal .btn.small { padding: 3px 10px; font-size: 12px; }
 .log { white-space: pre-wrap; max-height: 160px; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 0; font-family: var(--mono); }
 .reason summary { cursor: pointer; }
+.live { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.live .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.live .faint { flex-shrink: 0; }
+.spin { width: 12px; height: 12px; flex-shrink: 0; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: tspin .8s linear infinite; }
+@keyframes tspin { to { transform: rotate(360deg) } }
+.meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0 4px; }
+.acts { display: inline-flex; gap: 2px; margin-right: 6px; }
+.act { background: none; border: 1px solid transparent; border-radius: 6px; color: var(--muted); font: inherit; padding: 1px 6px; cursor: pointer; }
+.act:hover { color: var(--text); border-color: var(--line); background: var(--panel-2); }
+.a :deep(.code) { position: relative; margin-bottom: 8px; }
+.a :deep(.code pre) { margin: 0; }
+.a :deep(.cp) { position: absolute; top: 5px; right: 5px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font: inherit; font-size: 11px; padding: 1px 7px; cursor: pointer; opacity: .75; }
+.a :deep(.cp:hover) { opacity: 1; color: var(--text); }
 .pre { white-space: pre-wrap; max-height: 200px; overflow-y: auto; padding: 6px 0; }
 </style>
