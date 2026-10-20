@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import type { Proposal, Turn } from '~/composables/useAsk'
-const props = defineProps<{ turns: Turn[], retry?: boolean }>()
+// dock: open questions are shown by the page above its input instead of in the answer; here only what was picked
+const props = defineProps<{ turns: Turn[], retry?: boolean, dock?: boolean }>()
 const emit = defineEmits<{ run: [Proposal], answer: [string], retry: [] }>()
 const view = (t: Turn) => splitQuestions(t.a, t.busy)
+const picked = (t: Turn) => {
+  const qs = view(t).qs ?? []
+  const a = (j: number) => t.answered?.[j]?.join(', ') || '—'
+  return qs.length === 1 ? a(0) : qs.map((q, j) => `${q.header || q.q}: ${a(j)}`).join(' · ')
+}
 // Claude can make dozens of tool calls in one answer: show the latest few, the rest behind a click
 const SHOW = 6
 const expanded = ref(new Set<number>())
@@ -63,8 +69,12 @@ function activity(t: Turn) {
       </div>
       <details v-if="t.r" class="reason small muted"><summary>reasoning{{ t.busy && !t.a ? '…' : '' }}</summary><div class="pre">{{ t.r }}</div></details>
       <div v-if="t.a" class="a" v-html="html(t)" />
+      <template v-if="dock && !t.busy && view(t).qs">
+        <div v-if="t.answered" class="picked small"><span class="ok">✓</span> <span class="muted">Picked:</span> {{ picked(t) }}</div>
+        <div v-else-if="i === turns.length - 1 && !t.error" class="picked small warn">❓ waiting for your answer below</div>
+      </template>
       <AskQuestions
-        v-if="!t.busy && view(t).qs" :qs="view(t).qs!" :answered="t.answered"
+        v-else-if="!t.busy && view(t).qs" :qs="view(t).qs!" :answered="t.answered"
         :disabled="i !== turns.length - 1 || turns.some(x => x.busy)"
         @answer="(text, picked) => { t.answered = picked; emit('answer', text) }"
       />
@@ -148,5 +158,7 @@ function activity(t: Turn) {
 .a :deep(.code pre) { margin: 0; }
 .a :deep(.cp) { position: absolute; top: 5px; right: 5px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font: inherit; font-size: 11px; padding: 1px 7px; cursor: pointer; opacity: .75; }
 .a :deep(.cp:hover) { opacity: 1; color: var(--text); }
+.picked { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--panel-2); overflow-wrap: anywhere; align-self: flex-start; }
+.picked.warn { color: var(--warn); border-color: var(--warn-soft); background: var(--warn-soft); }
 .pre { white-space: pre-wrap; max-height: 200px; overflow-y: auto; padding: 6px 0; }
 </style>

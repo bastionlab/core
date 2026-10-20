@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { Turn } from '~/composables/useAsk'
+import { COMMANDS, parseCommand } from '~/utils/commands'
+import type { Question } from '~/utils/questions'
 useHead({ title: 'Chat · pve' })
 const { chats, current, currentId, create, remove, load, save, touch, status } = useChats()
 const claude = useClaude(save)
@@ -10,7 +12,7 @@ onMounted(() => {
 })
 
 const turns = computed<Turn[]>({ get: () => current.value?.turns ?? [], set: v => (current.value!.turns = v) })
-const { ask, run, stop: stopLocal, busy: busyLocal, models } = useAsk('chat', turns as any, touch)
+const { ask, run, stop: stopLocal, busy: busyLocal, models, model: localModel } = useAsk('chat', turns as any, touch)
 
 // which engine a new chat starts with is remembered; each chat keeps its own afterwards
 const lastEngine = () => { try { return localStorage.getItem('chat.engine') === 'claude' ? 'claude' : 'local' } catch { return 'local' } }
@@ -67,19 +69,71 @@ function retry() {
   send(q)
 }
 const STATUS = { busy: 'working…', input: 'needs your answer' } as const
+
+// a short line above the input confirming what a command did
+const flash = ref('')
+let flashT: any
+function say(s: string) { flash.value = s; clearTimeout(flashT); flashT = setTimeout(() => (flash.value = ''), 3000) }
+
+// note titles for /note, fetched once
+const noteTitles = ref<string[]>([])
+onMounted(() => $fetch<any>('/api/notes').then(r => (noteTitles.value = (r.notes ?? []).filter((n: any) => n.state === 'active').map((n: any) => n.title))).catch(() => {}))
+const commands = computed(() => COMMANDS.filter(c => isClaude.value || !c.claude).map(c => ({
+  ...c,
+  choices: c.name === 'model' ? (isClaude.value ? CLAUDE_MODELS.map(m => m.id) : models.value.map((m: any) => m.name))
+    : c.name === 'effort' ? CLAUDE_EFFORTS : c.name === 'note' ? noteTitles.value : undefined,
+})))
+
+/** our slash commands; false = not one of them, so it goes to the model as typed (Claude's own skills) */
+function command(text: string): boolean {
+  const p = parseCommand(text)
+  if (!p?.cmd) return false
+  const { cmd, arg } = p
+  if (cmd.claude && !isClaude.value) return say(`/${cmd.name} needs Claude`), true
+  if (busy.value && !cmd.busy) return say('wait until the answer is done (or /stop)'), true
+  switch (cmd.name) {
+    case 'clear': clear(); return true
+    case 'new': create(); return true
+    case 'stop': if (busy.value) stop(); return true
+    case 'retry': canRetry.value ? retry() : say(isClaude.value ? 'only a failed or stopped answer can be retried' : 'nothing to retry'); return true
+    case 'auto': case 'readonly':
+      auto.value = cmd.name === 'auto'
+      say(auto.value ? '⚡ Auto: Claude may change things' : '👁 Read-only: Claude can only look')
+      return true
+    case 'effort':
+      if (!CLAUDE_EFFORTS.includes(arg.toLowerCase())) return say(`effort is one of ${CLAUDE_EFFORTS.join(', ')}`), true
+      ccEffort.value = arg.toLowerCase(); say(`effort → ${ccEffort.value}`); return true
+    case 'model': {
+      const a = arg.toLowerCase()
+      if (isClaude.value) {
+        const m = CLAUDE_MODELS.find(m => m.id === a) ?? CLAUDE_MODELS.find(m => m.label.toLowerCase().startsWith(a))
+        if (!m) return say(`model is one of ${CLAUDE_MODELS.map(m => m.id).join(', ')}`), true
+        ccModel.value = m.id; say(`model → ${m.label}`); return true
+      }
+      const m = models.value.find((m: any) => m.name === a) ?? models.value.find((m: any) => m.name.toLowerCase().includes(a))
+      if (!m) return say(`no local model “${arg}”`), true
+      localModel.value = m.name; say(`model → ${m.name}`); return true
+    }
+  }
+  if (cmd.prompt) { deliver(cmd.prompt(arg)); return true }
+  return false
+}
 function send(q: string) {
-  if (q.trim() === '/clear') return clear()
+  if (q.trim().startsWith('/') && command(q)) return
+  deliver(q)
+}
+function deliver(q: string) {
   if (isClaude.value && current.value) {
     Object.assign(current.value, { engine: 'claude', model: ccModel.value, effort: ccEffort.value })
     claude.ask(current.value, q)
   } else ask(q)
   nextTick(touch)
 }
-/** like Claude Code's /clear: same chat on screen, but the model starts over (Claude gets a fresh session) */
+/** like Claude Code's /clear: the screen empties and the model starts over (Claude gets a fresh session) */
 function clear() {
   const c = current.value
-  if (!c || busy.value || !c.turns.length || c.turns.at(-1)!.clear) return
-  c.turns.push({ q: '', a: '', r: '', clear: true, fin: true, at: Date.now() })
+  if (!c || busy.value || !c.turns.length) return
+  c.turns = []
   if (c.session) c.session = crypto.randomUUID()
   save()
 }
@@ -88,6 +142,21 @@ const EXAMPLES = {
   claude: ['Which of my notes are ideas I could build?', 'Is anything broken on the server right now?', 'Why did the last backup take so long?', 'What changed in the dashboard today?'],
 }
 const open = ref(false) // conversation list on phones
+
+// open questions sit above the input, apart from the chat; typing a message instead answers them too
+const pending = computed<{ t: Turn, qs: Question[] } | null>(() => {
+  const t = turns.value.at(-1)
+  if (!t || t.busy || t.clear || t.error || t.answered) return null
+  const qs = splitQuestions(t.a).qs
+  return qs ? { t, qs } : null
+})
+const qsMin = ref(false)
+watch(() => pending.value?.t, () => (qsMin.value = false))
+function answer(text: string, picked: Record<number, string[]>) {
+  if (!pending.value) return
+  pending.value.t.answered = picked
+  send(text)
+}
 </script>
 
 <template>
@@ -125,12 +194,13 @@ const open = ref(false) // conversation list on phones
           @click="auto = !auto"
         >{{ auto ? '⚡ Auto' : '👁 Read-only' }}</button>
         <button
-          v-if="turns.length && !turns.at(-1)!.clear" class="btn ghost clearbtn" :disabled="busy"
-          title="start fresh in this chat: the model forgets everything above (same as typing /clear)" @click="clear"
+          v-if="turns.length" class="btn ghost clearbtn" :disabled="busy"
+          title="clear this chat and start fresh (same as typing /clear)" @click="clear"
         >⟲</button>
         <button class="btn ghost only-phone plus" title="new chat" @click="create()">+</button>
       </div>
 
+      <div class="bodywrap">
       <div ref="body" class="body" @scroll.passive="onScroll">
         <div v-if="!turns.length" class="empty muted">
           <div class="hero" :class="engine">
@@ -142,14 +212,24 @@ const open = ref(false) // conversation list on phones
             <button v-for="ex in EXAMPLES[engine]" :key="ex" class="pill" @click="send(ex)">{{ ex }}</button>
           </div>
         </div>
-        <AskTurns v-else :turns="turns" :retry="canRetry" @run="p => run(p)" @answer="send" @retry="retry" />
+        <AskTurns v-else dock :turns="turns" :retry="canRetry" @run="p => run(p)" @answer="send" @retry="retry" />
       </div>
       <button v-if="away" class="jump" title="newest message" @click="toBottom()">↓</button>
+      </div>
+
+      <div v-if="pending" class="dock" :class="{ min: qsMin }">
+        <div class="dhead small">
+          <span class="warn">❓ {{ pending.qs.length === 1 ? 'Claude needs your answer' : `${pending.qs.length} questions for you` }}</span>
+          <button type="button" class="btn ghost dmin" :title="qsMin ? 'show the questions' : 'tuck them away'" @click="qsMin = !qsMin">{{ qsMin ? 'show ▴' : 'hide ▾' }}</button>
+        </div>
+        <AskQuestions v-show="!qsMin" :key="turns.length" :qs="pending.qs" @answer="answer" />
+      </div>
 
       <div class="bar" :class="{ armed: isClaude && auto }">
+        <div v-if="flash" class="flash small">{{ flash }}</div>
         <AskBar
-          :busy="busy" :models="isClaude ? [{ name: 'claude' }] : models"
-          :placeholder="!isClaude ? 'Message the local model…' : auto ? 'Tell Claude what to change…' : 'Ask Claude (read-only)…'"
+          :busy="busy" :models="isClaude ? [{ name: 'claude' }] : models" :commands="commands"
+          :placeholder="pending ? 'Or type your own answer…' : !isClaude ? 'Message the local model…' : auto ? 'Tell Claude what to change…' : 'Ask Claude (read-only)…'"
           @submit="send" @stop="stop"
         >
           <template v-if="isClaude" #opts>
@@ -183,7 +263,13 @@ aside { display: flex; flex-direction: column; gap: 10px; background: var(--pane
 .main { position: relative; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); min-height: 0; min-width: 0; }
 .mhead { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); min-height: 48px; }
 .ttl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.bodywrap { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .body { flex: 1; overflow-y: auto; padding: 4px 16px; min-height: 0; }
+.dock { flex-shrink: 0; max-height: 55dvh; overflow-y: auto; border-top: 1px solid var(--line); padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
+.dock.min { padding-bottom: 6px; }
+.dhead { display: flex; align-items: center; gap: 8px; }
+.dmin { margin-left: auto; font-size: 12px; padding: 2px 8px; }
+.flash { color: var(--accent); padding: 2px 0 6px 31px; }
 .bar { border-top: 1px solid var(--line); padding: 6px 8px 6px 12px; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
 .seg button { background: transparent; border: 0; color: var(--muted); font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer; }
@@ -208,7 +294,7 @@ aside { display: flex; flex-direction: column; gap: 10px; background: var(--pane
 .st.input { color: var(--warn); }
 .st.input .sd { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
 @keyframes sdpulse { 50% { opacity: .3; transform: scale(.7); } }
-.jump { position: absolute; right: 18px; bottom: 74px; z-index: 5; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); font-size: 16px; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+.jump { position: absolute; right: 18px; bottom: 12px; z-index: 5; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text); font-size: 16px; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
 .jump:hover { border-color: var(--faint); }
 .examples { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 560px; }
 .examples .pill { cursor: pointer; font: inherit; font-size: 12px; padding: 4px 11px; }
