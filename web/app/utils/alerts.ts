@@ -18,12 +18,18 @@ export function alerts(o: any): Alert[] {
     const cap = pct(p.alloc, p.size)
     if (cap >= 80) add(cap >= 90 ? 'bad' : 'warn', `Pool ${p.name} is ${cap.toFixed(0)}% full`, 'storage')
   }
-  for (const d of o.smart ?? []) if (d.passed === false) add('bad', `SMART failing on ${d.dev} (${d.model})`, 'storage')
+  for (const p of o.pools ?? []) if (p.scrubbed && now - p.scrubbed > 35 * D) add('warn', `Pool ${p.name} last scrubbed ${ago(p.scrubbed, now)}`, 'storage')
+  for (const d of o.smart ?? []) if (d.warn?.length) add('bad', `Disk ${d.dev} (${d.model}): ${d.warn.join(', ')}`, 'storage')
+
+  for (const u of o.uptime ?? []) if (u.state !== 'running' && u.state !== 'ct-stopped') add('bad', `${u.name} in CT ${u.ct} is ${u.state}`, 'uptime')
 
   const b = o.backups
   if (b) {
+    const last = b.history?.find((t: any) => t.status)
+    if (last && last.status !== 'OK') add('bad', `Last vzdump run ${ago(last.time, now)} ended: ${last.status}`, 'backups')
     for (const v of b.vzdump) {
-      if (!v.time) add('warn', `CT ${v.vmid} ${v.name} has no vzdump backup yet`, 'backups')
+      if (v.run && !v.run.ok && v.run.time >= (v.time ?? 0)) add('bad', `CT ${v.vmid} ${v.name}: backup failed ${ago(v.run.time, now)}${v.run.error ? ` (${v.run.error})` : ''}`, 'backups')
+      else if (!v.time) add('warn', `CT ${v.vmid} ${v.name} has no vzdump backup yet`, 'backups')
       else if (now - v.time > 26 * H) add('bad', `CT ${v.vmid} ${v.name}: last backup ${ago(v.time, now)}`, 'backups')
     }
     if (b.sanoid.result !== 'success') add('bad', `sanoid last run: ${b.sanoid.result}`, 'backups')

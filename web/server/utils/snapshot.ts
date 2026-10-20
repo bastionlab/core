@@ -33,15 +33,18 @@ export function snapshot(o: any, models: any[] | null) {
   L.push('', '## Web services')
   for (const s of o.services ?? []) L.push(`${s.name} (${s.note}${s.ct ? `, CT ${s.ct}` : ''}): ${s.up ? `up, ${s.ms} ms` : `DOWN ${s.error ?? s.status ?? ''}`}`)
 
+  L.push('', '## Service processes (restartable with service_restart)')
+  for (const u of o.uptime ?? []) L.push(`${u.name} (CT ${u.ct}): ${u.state}${u.since ? `, started ${ago(u.since, now)}` : ''}${u.restarts ? `, ${u.restarts} automatic restarts` : ''}`)
+
   L.push('', '## Storage')
   for (const p of o.pools ?? []) L.push(`ZFS pool ${p.name}: ${bytes(p.alloc)} of ${bytes(p.size)} (${pctOf(p.alloc, p.size)}), ${p.health}, frag ${p.frag}%, last scrub: ${p.scan ?? '?'}, errors: ${p.errors ?? '?'}`)
   for (const d of o.datasets ?? []) L.push(`  dataset ${d.name}: ${bytes(d.used)} used`)
-  for (const d of o.smart ?? []) L.push(`Disk ${d.dev} ${d.model ?? '?'} ${bytes(d.size)}: SMART ${d.passed === false ? 'FAILING' : d.passed ? 'ok' : '?'}, ${d.temp ?? '?'}°C, ${d.hours ?? '?'} h`)
+  for (const d of o.smart ?? []) L.push(`Disk ${d.dev} ${d.model ?? '?'} ${bytes(d.size)}: SMART ${d.passed === false ? 'FAILING' : d.passed ? 'ok' : '?'}, ${d.temp ?? '?'}°C, ${d.hours ?? '?'} h${d.wear != null ? `, ${d.wear}% worn` : ''}${d.warn?.length ? `, WARNING: ${d.warn.join(', ')}` : ''}`)
 
   const b = o.backups
   if (b) {
     L.push('', '## Backups')
-    for (const v of b.vzdump) L.push(`vzdump CT ${v.vmid} ${v.name}: ${v.time ? `last ${ago(v.time, now)}, ${bytes(v.size)}, ${v.count} kept` : 'never'}`)
+    for (const v of b.vzdump) L.push(`vzdump CT ${v.vmid} ${v.name}: ${v.time ? `last ${ago(v.time, now)}, ${bytes(v.size)}, ${v.count} kept` : 'never'}${v.run && !v.run.ok ? `; LAST RUN FAILED ${ago(v.run.time, now)}: ${v.run.error ?? 'did not finish'}` : ''}`)
     L.push(b.busy?.length ? `Busy (a backup cannot start now): ${b.busy.join('; ')}` : 'Busy: nothing — no backup, restore or upgrade is running, so a backup can start now. vzdump runs in snapshot mode: services keep running, only disk I/O rises for a few minutes.')
     L.push(`sanoid (ZFS snapshots): last run ${ago(b.sanoid.last, now)} → ${b.sanoid.result}`)
     L.push(`syncoid (replication tank → backup pool): last run ${ago(b.syncoid.last, now)} → ${b.syncoid.result}`)

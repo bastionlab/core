@@ -146,8 +146,13 @@ def pools():
         st = sh("zpool", "status", name)
         scan = re.search(r"scan: (.*)", st)
         errors = re.search(r"errors: (.*)", st)
+        when = re.search(r" on (\w{3} \w{3} +\d+ [\d:]+ \d{4})$", scan[1].strip()) if scan else None
+        try:
+            scrubbed = int(time.mktime(time.strptime(when[1], "%a %b %d %H:%M:%S %Y"))) if when else None
+        except ValueError:
+            scrubbed = None
         out.append({"name": name, "size": int(size), "alloc": int(alloc), "free": int(free), "health": health,
-                    "frag": int(frag.rstrip("%") or 0), "scan": scan[1].strip() if scan else None,
+                    "frag": int(frag.rstrip("%") or 0), "scan": scan[1].strip() if scan else None, "scrubbed": scrubbed,
                     "errors": errors[1].strip() if errors else None})
     return out
 
@@ -191,9 +196,13 @@ def backups(cts):
             per[b["vmid"]]["count"] += 1
     snaps = snapshots()
     jobs = js("pvesh", "get", "/cluster/backup", "--output-format", "json", default=[]) or []
+    tasks = js("pvesh", "get", "/nodes/pve/tasks", "--typefilter", "vzdump", "--limit", "14", "--output-format", "json",
+               default=[]) or []
     return {
-        "vzdump": [{"vmid": c["vmid"], "name": c["name"], **per.get(c["vmid"], {"time": None, "size": None, "count": 0})}
-                   for c in cts],
+        "vzdump": [{"vmid": c["vmid"], "name": c["name"], **per.get(c["vmid"], {"time": None, "size": None, "count": 0}),
+                    "run": vzdump_run(c["vmid"])} for c in cts],
+        "history": [{"time": t.get("starttime"), "end": t.get("endtime"), "status": t.get("status"), "id": t.get("id") or None}
+                    for t in tasks],
         "vzdumpJobs": [{"schedule": j.get("schedule"), "enabled": j.get("enabled", 1), "storage": j.get("storage"),
                         "all": j.get("all")} for j in jobs],
         "busy": backup_busy(),
@@ -204,6 +213,49 @@ def backups(cts):
     }
 
 
+def vzdump_run(vmid):
+    """how the last vzdump of this guest ended — its log in /var/log/vzdump is rewritten on every run,
+    so a failed run shows up here even though the previous good archive is still listed"""
+    f = Path(f"/var/log/vzdump/lxc-{vmid}.log")
+    if not f.exists():
+        return None
+    text = f.read_text(errors="replace")
+    err = next((l.split("ERROR: ", 1)[1] for l in text.splitlines() if "ERROR: " in l), None)
+    return {"time": int(f.stat().st_mtime), "ok": err is None and "Finished Backup" in text, "error": err and err[:200]}
+
+
+def _wear(d):
+    """percent of rated life used (SSD/NVMe) and the counters that predict a dying disk"""
+    nv = d.get("nvme_smart_health_information_log")
+    if nv:
+        return {"wear": nv.get("percentage_used"), "spare": nv.get("available_spare"), "mediaErrors": nv.get("media_errors"),
+                "critical": nv.get("critical_warning")}
+    attrs = {a["id"]: a for a in d.get("ata_smart_attributes", {}).get("table", [])}
+    raw = lambda i: attrs[i]["raw"]["value"] if i in attrs else None
+    life = next((attrs[i]["value"] for i in (231, 233, 177, 202) if i in attrs), None)  # normalised: 100 = new
+    return {"wear": 100 - life if life is not None else None, "realloc": raw(5), "pending": raw(197),
+            "uncorrectable": raw(198), "crc": raw(199)}
+
+
+def _disk_warn(x):
+    out = []
+    if x.get("passed") is False:
+        out.append("SMART self-assessment FAILED")
+    for k, what in (("realloc", "reallocated sectors"), ("pending", "pending sectors"),
+                    ("uncorrectable", "uncorrectable sectors"), ("mediaErrors", "media errors")):
+        if x.get(k):
+            out.append(f"{x[k]} {what}")
+    if x.get("critical"):
+        out.append(f"NVMe critical warning {x['critical']}")
+    if x.get("wear") is not None and x["wear"] >= 80:
+        out.append(f"{x['wear']}% of rated life used")
+    if x.get("spare") is not None and x["spare"] < 20:
+        out.append(f"spare blocks at {x['spare']}%")
+    if (x.get("temp") or 0) >= (70 if x["dev"].startswith("nvme") else 50):
+        out.append(f"running hot ({x['temp']}°C)")
+    return out
+
+
 @cached(3600)
 def smart():
     out = []
@@ -211,7 +263,8 @@ def smart():
         d = js("smartctl", "-j", "-a", str(dev), default={}) or {}
         out.append({"dev": dev.name, "model": d.get("model_name"), "passed": d.get("smart_status", {}).get("passed"),
                     "temp": d.get("temperature", {}).get("current"), "hours": d.get("power_on_time", {}).get("hours"),
-                    "size": d.get("user_capacity", {}).get("bytes")})
+                    "size": d.get("user_capacity", {}).get("bytes"), **_wear(d)})
+        out[-1]["warn"] = _disk_warn(out[-1])
     return out
 
 
@@ -1080,6 +1133,37 @@ SERVICES = {
 AI_CT = 105
 
 
+@cached(30)
+def service_uptime():
+    """state, start time and restart count of every SERVICES entry — one pct exec per container"""
+    running = {c["vmid"] for c in cts() if c["status"] == "running"}
+    by_ct = {}
+    for name, (vmid, kind, ref) in SERVICES.items():
+        by_ct.setdefault(vmid, []).append((name, kind, ref))
+
+    def one(vmid, items):
+        if vmid not in running:
+            return [{"name": n, "ct": vmid, "state": "ct-stopped", "since": None, "restarts": None} for n, _, _ in items]
+        script = "\n".join(
+            f"echo \"{n}|$(systemctl show {r} -p ActiveState --value)|$(systemctl show {r} -p ActiveEnterTimestamp --value)|$(systemctl show {r} -p NRestarts --value)\""
+            if k == "systemd" else
+            f"echo \"{n}|$(docker inspect -f '{{{{.State.Status}}}}|{{{{.State.StartedAt}}}}|{{{{.RestartCount}}}}' {r} 2>/dev/null || echo 'missing||')\""
+            for n, k, r in items)
+        out = []
+        for line in sh(*_pct(vmid, "sh", "-c", script), timeout=15).splitlines():
+            n, state, since, restarts = (line.split("|") + ["", "", ""])[:4]
+            t = None
+            if since:
+                stamp = sh("date", "-d", since, "+%s").strip()
+                t = int(stamp) if stamp.isdigit() and int(stamp) > 0 else None
+            out.append({"name": n, "ct": vmid, "state": {"active": "running"}.get(state, state or "unknown"), "since": t,
+                        "restarts": int(restarts) if restarts.isdigit() else None})
+        return out
+
+    futures = [POOL.submit(one, v, items) for v, items in by_ct.items()]
+    return sorted((x for f in futures for x in f.result()), key=lambda x: (x["ct"], x["name"]))
+
+
 def _ct(args, key="vmid", running=None):
     try:
         vmid = int(args[key])
@@ -1405,7 +1489,7 @@ def _run_job(job, argv, timeout):
         job["rc"] = -1
     finally:
         job["done"] = int(time.time())
-        invalidate("updates", "ct_ports", "overview", "media_items", "media", "media_sizes")
+        invalidate("updates", "ct_ports", "overview", "media_items", "media", "media_sizes", "service_uptime")
 
 
 def start_action(name, args):
@@ -1623,7 +1707,8 @@ def overview():
     c = cts()
     parts = {"host": POOL.submit(host), "gpu": POOL.submit(gpu), "pools": POOL.submit(pools),
              "datasets": POOL.submit(datasets), "backups": POOL.submit(backups, c), "tailnet": POOL.submit(tailnet),
-             "ports": POOL.submit(ports, c), "smart": POOL.submit(smart), "updates": POOL.submit(all_updates, c)}
+             "ports": POOL.submit(ports, c), "smart": POOL.submit(smart), "updates": POOL.submit(all_updates, c),
+             "uptime": POOL.submit(service_uptime)}
     return {"time": int(time.time()), "cts": c, **{k: f.result() for k, f in parts.items()}}
 
 

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-const props = defineProps<{ pools: any[], datasets: any[], smart: any[] }>()
+const props = defineProps<{ pools: any[], datasets: any[], smart: any[], now: number }>()
+const diskTone = (d: any) => (d.warn?.length || d.passed === false ? 'bad' : d.passed ? 'ok' : '')
+const scrubTone = (p: any) => (!p.scrubbed || props.now - p.scrubbed > 35 * 86400 ? 'warn' : '')
 const leaves = computed(() => {
   const names = props.datasets.map(d => d.name)
   return props.datasets
@@ -34,11 +36,17 @@ const colors = ['var(--accent)', '#b36bdb', '#2fa8a0', '#d9822b', '#c94f7c', '#6
     </div>
 
     <div class="disks">
-      <span v-for="d in smart" :key="d.dev" class="pill" :class="d.passed === false ? 'bad' : ''" :title="`${d.model} · ${d.hours ?? '?'}h`">
-        <span class="dot" :class="d.passed ? 'ok' : d.passed === false ? 'bad' : ''" /> {{ d.dev }} {{ bytes(d.size, 0) }}<template v-if="d.temp"> · {{ d.temp }}°C</template>
+      <span
+        v-for="d in smart" :key="d.dev" class="pill" :class="diskTone(d) === 'bad' ? 'bad' : ''"
+        :title="[`${d.model} · ${d.hours ?? '?'}h powered on`, d.realloc != null ? `reallocated ${d.realloc} · pending ${d.pending} · uncorrectable ${d.uncorrectable} · CRC ${d.crc}` : '', d.spare != null ? `spare ${d.spare}% · media errors ${d.mediaErrors}` : '', ...(d.warn ?? [])].filter(Boolean).join('\n')"
+      >
+        <span class="dot" :class="diskTone(d)" /> {{ d.dev }} {{ bytes(d.size, 0) }}<template v-if="d.temp"> · {{ d.temp }}°C</template><template v-if="d.wear != null"> · {{ d.wear }}% worn</template>
       </span>
     </div>
-    <div class="faint small scan"><span v-for="p in pools" :key="p.name" :title="p.scan">{{ p.name }}: {{ scrub(p.scan) }}</span></div>
+    <div v-for="d in smart.filter(d => d.warn?.length)" :key="d.dev" class="bad small">⚠ {{ d.dev }}: {{ d.warn.join(', ') }}</div>
+    <div class="faint small scan">
+      <span v-for="p in pools" :key="p.name" :title="p.scan" :class="scrubTone(p)">{{ p.name }}: {{ scrub(p.scan) }}<template v-if="p.scrubbed"> ({{ ago(p.scrubbed, now) }})</template></span>
+    </div>
   </Panel>
 </template>
 

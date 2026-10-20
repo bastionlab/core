@@ -23,13 +23,15 @@ const { jobs, run, dismiss } = useActions()
       <div class="grid cols-3">
         <HostPanel :host="o.host" :updates="o.updates" :busy="o.backups?.busy" @action="(n, a) => run(n, a, refresh)" />
         <GpuPanel :gpu="o.gpu" :cts="o.cts" />
-        <StoragePanel :pools="o.pools" :datasets="o.datasets" :smart="o.smart" />
+        <StoragePanel :pools="o.pools" :datasets="o.datasets" :smart="o.smart" :now="now" />
       </div>
 
       <div class="grid cols-2">
         <BackupsPanel :b="o.backups" :now="now" @action="(n, a) => run(n, a, refresh)" />
         <TailnetPanel :t="o.tailnet" :now="now" />
       </div>
+
+      <div class="grid"><UptimePanel :uptime="o.uptime ?? []" :services="o.services" :now="now" @action="(n, a) => run(n, a, refresh)" /></div>
 
       <div class="grid">
         <ContainersPanel
