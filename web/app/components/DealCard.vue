@@ -11,6 +11,10 @@ const price = computed(() => {
 // posted_at is what the seller's clock says; first_seen_at is when we caught it
 const when = computed(() => ago(props.item.posted_at ?? props.item.first_seen_at))
 const fresh = computed(() => (Date.now() / 1000 - (props.item.posted_at ?? 0)) < 3600)
+const fitTone = computed(() => {
+  const f = props.item.score
+  return f >= 80 ? 'ok' : f >= 60 ? 'accent' : 'warn'
+})
 const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? null : v)
 
 // same text as the Telegram "Nachricht kopieren" button (deals app/notify.py INQUIRY)
@@ -44,7 +48,10 @@ async function ask() {
               :title="'Konto aktiv seit ' + new Date(item.seller_since * 1000).toLocaleDateString('de-DE')">⚠ Neues Konto – Phishing?</span>
       </div>
 
-      <div class="price">{{ price }}</div>
+      <div class="price">
+        {{ price }}
+        <span v-if="item.score != null && item.passed !== 0" class="fit" :class="fitTone" title="Match laut KI">{{ Math.round(item.score) }}</span>
+      </div>
 
       <div class="meta small muted">
         <span v-if="item.district">{{ item.district }}</span>
@@ -57,7 +64,7 @@ async function ask() {
       <div v-if="item.reason" class="small muted why" :class="{ bad: item.passed === 0 }">✦ {{ item.reason }}</div>
 
       <div class="foot">
-        <span class="pill">{{ item.search_name }}</span>
+        <span class="pill ghost">{{ item.search_name }}</span>
         <div class="votes">
           <a class="btn ghost" :class="{ on: copied }" :href="item.url" target="_blank" rel="noopener"
              :title="copied ? 'Kopiert – in Kleinanzeigen einfügen' : inquiry" @click="ask">{{ copied ? '✓' : '💬' }}</a>
@@ -82,7 +89,12 @@ async function ask() {
 .body { padding: 10px 12px 8px; display: flex; flex-direction: column; gap: 5px; flex: 1; }
 .head { display: flex; gap: 8px; align-items: flex-start; }
 .title { flex: 1; min-width: 0; font-weight: 600; font-size: 13.5px; line-height: 1.3; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.price { font-size: 16px; font-weight: 700; }
+.price { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.fit { margin-left: auto; padding: 1px 7px; border-radius: 6px; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--panel-2); color: var(--muted); }
+.fit.ok { background: var(--ok-soft); color: var(--ok); }
+.fit.accent { background: var(--accent-soft); color: var(--accent); }
+.fit.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.ghost { background: transparent; border: 1px solid var(--line); }
 .meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
 .meta .accent { color: var(--accent); font-weight: 600; }
 .foot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 6px; }

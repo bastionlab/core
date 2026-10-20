@@ -2,7 +2,7 @@
 useHead({ title: 'Wohnungen · pve' })
 
 const selected = ref<number | null>(null)
-const showRejected = ref(false)
+const show = ref<'passed' | 'liked' | 'rejected'>('passed')
 
 // filtered in CT 107, not here: one busy search must not crowd another out of the shared row limit
 const d = ref<any>(null)
@@ -13,25 +13,34 @@ async function load() {
   pending.value = true
   try {
     d.value = await $fetch('/api/flats', {
-      query: { search: selected.value ?? undefined, show: showRejected.value ? 'all' : 'passed', limit: 200 },
+      query: { search: selected.value ?? undefined, show: show.value === 'rejected' ? 'rejected' : 'passed', limit: 200 },
     })
     error.value = null
   } catch (e: any) { error.value = e } finally { pending.value = false }
 }
 usePoll(load, 30000)
-watch([selected, showRejected], load)
+watch([selected, show], load)
 
 const searches = computed(() => d.value?.searches ?? [])
 const st = computed(() => d.value?.status)
 const counts = computed(() => d.value?.counts ?? { per_search: {}, total: 0 })
-const feed = computed(() => d.value?.feed ?? [])
 const liked = computed(() => d.value?.liked ?? [])
 const likedLive = computed(() => liked.value.filter((i: any) => i.status !== 'gone').length)
-const hidden = computed(() => counts.value.sorted_out ?? 0)
+// 👍 flats come as their own list, so Gemerkt filters and counts per search here
+const feed = computed(() => show.value !== 'liked' ? d.value?.feed ?? []
+  : liked.value.filter((i: any) => selected.value === null || i.search_id === selected.value))
+const hits = (id: number | null) => show.value !== 'liked'
+  ? (id === null ? counts.value.total : counts.value.per_search?.[String(id)] ?? 0)
+  : liked.value.filter((i: any) => id === null || i.search_id === id).length
 const tabs = computed(() => [
-  { id: null as number | null, name: 'Alle', hits: counts.value.total, enabled: true },
-  ...searches.value.map((s: any) => ({ id: s.id, name: s.name, hits: counts.value.per_search?.[String(s.id)] ?? 0, enabled: !!s.enabled })),
+  { id: null as number | null, name: 'Alle', hits: hits(null), enabled: true },
+  ...searches.value.map((s: any) => ({ id: s.id, name: s.name, hits: hits(s.id), enabled: !!s.enabled })),
 ])
+const VIEWS = computed(() => [
+  { v: 'passed', label: 'Passend', n: counts.value.passed },
+  { v: 'liked', label: 'Gemerkt', n: liked.value.length },
+  { v: 'rejected', label: 'Aussortiert', n: counts.value.rejected },
+] as const)
 // a cycle is ~2.5 min plus the time it takes; three cycles without a poll means it is stuck
 const pollerOk = computed(() => st.value?.last_poll && Date.now() / 1000 - st.value.last_poll < (st.value.cycle ?? 150) * 3 + 300)
 const sources = computed(() => Object.entries(st.value?.per_source ?? {}).map(([k, v]) => `${v} ${k}`).join(' · '))
@@ -80,26 +89,19 @@ function onChanged() {
       <FlatSearches :searches="searches" @changed="onChanged" />
       <FlatProfile class="prof" />
 
-      <template v-if="liked.length">
-        <h2 class="sec">
-          👍 Gemerkt
-          <span class="muted small">{{ likedLive }} online<template v-if="liked.length > likedLive"> · {{ liked.length - likedLive }} weg</template></span>
-        </h2>
-        <div class="list">
-          <FlatRow
-            v-for="i in liked" :key="'up:' + i.source + ':' + i.source_id" :item="i" checked
-            :busy="busyItem === i.source + i.source_id" @verdict="verdict(i, $event)"
-          />
-        </div>
-      </template>
-
       <h2 class="sec">
         Wohnungen
-        <span class="muted small">{{ feed.length }}<template v-if="hidden"> · {{ hidden }} aussortiert</template></span>
-        <label class="small muted tgl"><input v-model="showRejected" type="checkbox"> Aussortierte</label>
+        <span class="views">
+          <button v-for="v in VIEWS" :key="v.v" class="vw" :class="{ on: show === v.v }" @click="show = v.v">
+            {{ v.label }} <span class="n">{{ v.n ?? 0 }}</span>
+          </button>
+        </span>
       </h2>
+      <div v-if="show === 'liked' && liked.length > likedLive" class="small muted q">
+        {{ likedLive }} online · {{ liked.length - likedLive }} nicht mehr online
+      </div>
 
-      <div v-if="tabs.length > 1" class="tabs">
+      <div v-if="tabs.length > 2" class="tabs">
         <button
           v-for="t in tabs" :key="t.id ?? 'all'" class="tab"
           :class="{ on: selected === t.id, off: !t.enabled }"
@@ -109,12 +111,13 @@ function onChanged() {
 
       <div v-if="!feed.length" class="muted pad">
         <template v-if="!searches.length">Noch keine Suche.</template>
-        <template v-else-if="hidden && !showRejected">Alles aussortiert.</template>
-        <template v-else>Noch nichts gefunden.</template>
+        <template v-else-if="show === 'liked'">Noch nichts gemerkt · 👍 auf einer Wohnung merkt sie hier.</template>
+        <template v-else-if="show === 'passed' && counts.rejected">Noch nichts Passendes · {{ counts.rejected }} aussortiert.</template>
+        <template v-else>Nichts hier.</template>
       </div>
       <div v-else class="list">
         <FlatRow
-          v-for="i in feed" :key="i.search_id + ':' + i.source + ':' + i.source_id" :item="i"
+          v-for="i in feed" :key="i.search_id + ':' + i.source + ':' + i.source_id" :item="i" :checked="show === 'liked'"
           :busy="busyItem === i.source + i.source_id" @verdict="verdict(i, $event)"
         />
       </div>
@@ -133,9 +136,13 @@ function onChanged() {
   .strip .ref { position: absolute; top: -3px; right: 0; }
 }
 .sec { flex-wrap: wrap; }
-.tgl { margin-left: auto; font-weight: 400; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.views { margin-left: auto; display: flex; flex-wrap: wrap; gap: 2px; font-weight: 400; }
+.vw { padding: 3px 9px; border-radius: 6px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.vw.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.vw .n { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
 .prof { margin-top: 14px; }
 .q { margin: -6px 2px 10px; }
+.sec + .q { margin: -4px 2px 10px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
 .tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
 .tab:hover { color: var(--text); }
@@ -143,5 +150,5 @@ function onChanged() {
 .tab.off { opacity: .55; }
 .tab .n { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
 .list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-@media (max-width: 560px) { .src { display: none; } }
+@media (max-width: 560px) { .src { display: none; } .views { margin-left: 0; } }
 </style>

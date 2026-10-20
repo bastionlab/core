@@ -3,7 +3,7 @@ useHead({ title: 'Deals · pve' })
 
 const selected = ref<number | null>(null)
 const shipping = ref<'all' | 'pickup' | 'ship'>('all')
-const showRejected = ref(false)
+const show = ref<'passed' | 'liked' | 'rejected'>('passed')
 
 // The feed is filtered in CT 107, not in the browser: with several searches a
 // shared row limit would let a busy search crowd a quiet one out of its own tab.
@@ -18,7 +18,7 @@ async function load() {
       query: {
         search: selected.value ?? undefined,
         shipping: shipping.value === 'all' ? undefined : shipping.value,
-        show: showRejected.value ? 'all' : 'passed',
+        show: show.value,
         limit: 120,
       },
     })
@@ -26,7 +26,7 @@ async function load() {
   } catch (e: any) { error.value = e } finally { pending.value = false }
 }
 usePoll(load, 20000)
-watch([selected, shipping, showRejected], load)
+watch([selected, shipping, show], load)
 
 const searches = computed(() => d.value?.searches ?? [])
 const st = computed(() => d.value?.status)
@@ -42,7 +42,7 @@ const SHIP = [
 // number always equals the number of cards clicking it produces
 const counts = computed(() => d.value?.counts ?? { per_search: {}, total: 0 })
 const tabs = computed(() => [
-  { id: null as number | null, name: 'All', hits: counts.value.total, enabled: true },
+  { id: null as number | null, name: 'Alle', hits: counts.value.total, enabled: true },
   ...searches.value.map((s: any) => ({
     id: s.id,
     name: s.name,
@@ -52,8 +52,12 @@ const tabs = computed(() => [
 ])
 
 const feed = computed(() => d.value?.feed ?? [])
-// AI-rejected, reserved by the seller, or 👎 — all hidden until „Aussortierte zeigen“
-const hidden = computed(() => counts.value.sorted_out ?? 0)
+// Aussortiert = AI-rejected, reserved by the seller, or 👎; a 👍 stays in Passend too
+const VIEWS = computed(() => [
+  { v: 'passed', label: 'Passend', n: counts.value.passed },
+  { v: 'liked', label: 'Gemerkt', n: counts.value.liked },
+  { v: 'rejected', label: 'Aussortiert', n: counts.value.rejected },
+] as const)
 
 // the poller writes every 8s; anything older than two minutes means it is not running
 const pollerOk = computed(() => st.value?.last_poll && Date.now() / 1000 - st.value.last_poll < 120)
@@ -79,38 +83,41 @@ function onChanged() {
 
 <template>
   <div>
-    <div v-if="!d && pending" class="muted pad">Loading the feed…</div>
+    <div v-if="!d && pending" class="muted pad">Lade Angebote…</div>
     <div v-else-if="error && !d" class="bad pad">
-      Could not reach the deals API in CT 107: {{ error.statusMessage || error.message }}
+      Die Deals-API in CT 107 ist nicht erreichbar: {{ error.statusMessage || error.message }}
     </div>
 
     <template v-if="d">
       <div class="strip small">
         <span class="dot" :class="pollerOk ? 'ok' : 'bad'" />
         <span :class="pollerOk ? 'muted' : 'bad'" :title="st.last_poll ? new Date(st.last_poll * 1000).toLocaleString() : ''">
-          {{ pollerOk ? 'polling' : 'poller stopped' }}<template v-if="st.last_poll"> · {{ ago(st.last_poll) }}</template>
+          {{ pollerOk ? 'sucht' : 'steht' }}<template v-if="st.last_poll"> · {{ ago(st.last_poll) }}</template>
         </span>
-        <span class="muted"><b>{{ st.seen_24h }}</b> seen 24h</span>
+        <span class="muted"><b>{{ st.seen_24h }}</b> neu 24h</span>
         <span class="muted" title="von der KI aussortiert"><b>{{ st.filtered ?? 0 }}</b> aussortiert</span>
         <span v-if="st.queued" class="muted"><b>{{ st.queued }}</b> → Telegram</span>
-        <button class="btn ghost ref" :disabled="pending" title="refresh" @click="load">↻</button>
+        <button class="btn ghost ref" :disabled="pending" title="neu laden" @click="load">↻</button>
       </div>
       <div v-for="e in st.errors" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>
 
       <DealSearches :searches="searches" @changed="onChanged" />
 
       <h2 class="sec">
-        Feed
-        <span class="muted small">{{ feed.length }}<template v-if="hidden"> · {{ hidden }} aussortiert</template></span>
-        <label class="small muted tgl"><input v-model="showRejected" type="checkbox"> Aussortierte</label>
+        Angebote
+        <span class="views">
+          <button v-for="v in VIEWS" :key="v.v" class="vw" :class="{ on: show === v.v }" @click="show = v.v">
+            {{ v.label }} <span class="n">{{ v.n ?? 0 }}</span>
+          </button>
+        </span>
       </h2>
 
       <div class="tabs">
-        <button
+        <template v-if="tabs.length > 2"><button
           v-for="t in tabs" :key="t.id ?? 'all'" class="tab"
           :class="{ on: selected === t.id, off: !t.enabled }"
           @click="selected = t.id"
-        >{{ t.name }} <span class="n">{{ t.hits }}</span></button>
+        >{{ t.name }} <span class="n">{{ t.hits }}</span></button></template>
 
         <div class="seg">
           <button v-for="o in SHIP" :key="o.v" :class="{ on: shipping === o.v }" @click="shipping = o.v">{{ o.label }}</button>
@@ -118,9 +125,8 @@ function onChanged() {
       </div>
 
       <div v-if="!feed.length" class="muted pad">
-        <template v-if="hidden && !showRejected">
-          Alles aussortiert.
-        </template>
+        <template v-if="show === 'liked'">Noch nichts gemerkt · 👍 auf einem Angebot merkt es hier.</template>
+        <template v-else-if="show === 'passed' && counts.rejected">Noch nichts Passendes · {{ counts.rejected }} aussortiert.</template>
         <template v-else-if="shipping !== 'all'">Nichts {{ shipping === 'pickup' ? 'zum Abholen' : 'mit Versand' }}.</template>
         <template v-else>Noch nichts.</template>
       </div>
@@ -144,7 +150,11 @@ function onChanged() {
   .strip { position: relative; padding-right: 34px; gap: 4px 12px; }
   .strip .ref { position: absolute; top: -3px; right: 0; }
 }
-.tgl { margin-left: auto; font-weight: 400; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.sec { flex-wrap: wrap; }
+.views { margin-left: auto; display: flex; flex-wrap: wrap; gap: 2px; font-weight: 400; }
+.vw { padding: 3px 9px; border-radius: 6px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.vw.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.vw .n { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
 .q { margin: -6px 2px 10px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; align-items: center; }
 .tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
@@ -157,5 +167,5 @@ function onChanged() {
 .seg button:hover { color: var(--text); }
 .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 12px; margin-bottom: 16px; }
-@media (max-width: 560px) { .seg { margin-left: 0; } .cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
+@media (max-width: 560px) { .views { margin-left: 0; } .seg { margin-left: 0; } .cards { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; } }
 </style>
