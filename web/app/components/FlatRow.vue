@@ -67,6 +67,9 @@ async function copy() {
       </div>
       <div class="pills">
         <span class="pill">{{ SOURCES[item.source] ?? item.source }}</span>
+        <!-- the same flat seen elsewhere, folded into this card by the hunter -->
+        <a v-for="d in item.dupes ?? []" :key="d.source + d.source_id" :href="d.url" target="_blank" rel="noopener"
+           class="pill ghost" title="Gleiche Anzeige, dort auch gefunden">auch {{ SOURCES[d.source] ?? d.source }} ↗</a>
         <span v-if="item.wbs === 1" class="pill warn">WBS nötig</span>
         <span v-else-if="item.wbs === 0 && item.source === 'inberlinwohnen'" class="pill">ohne WBS</span>
         <span v-if="item.tausch === 1" class="pill warn">Tausch</span>
