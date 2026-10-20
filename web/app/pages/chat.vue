@@ -134,6 +134,7 @@ function clear() {
   const c = current.value
   if (!c || busy.value || !c.turns.length) return
   c.turns = []
+  c.title = 'New chat' // the next question names it again
   if (c.session) c.session = crypto.randomUUID()
   save()
 }

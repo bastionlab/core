@@ -126,7 +126,10 @@ const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value
     </Transition>
 
     <main class="wrap">
-      <div v-if="state !== 'ok'" class="banner small" :class="state">{{ down ? 'Agent unreachable — data may be old' : 'Data is stale' }}</div>
+      <!-- floats over the page so it never shifts content (chat scroll etc.) -->
+      <Transition name="pop">
+        <div v-if="state !== 'ok'" class="banner small" :class="state" role="status">{{ down ? 'Agent unreachable — data may be old' : 'Data is stale' }}</div>
+      </Transition>
       <slot />
     </main>
   </div>
@@ -155,7 +158,13 @@ nav a:hover .i { color: var(--muted); }
 .cmark.input { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
 @keyframes cpulse { 50% { opacity: .3; transform: scale(.7); } }
 .foot { margin-top: auto; padding: 0 10px; }
-.banner { padding: 7px 12px; border-radius: 8px; margin-bottom: 14px; }
+.banner {
+  position: fixed; z-index: 60; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); transform: translateX(-50%);
+  padding: 6px 14px; border-radius: 999px; white-space: nowrap; pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .35); backdrop-filter: blur(6px);
+}
+.pop-enter-active, .pop-leave-active { transition: opacity .2s, transform .2s; }
+.pop-enter-from, .pop-leave-to { opacity: 0; transform: translate(-50%, -8px); }
 .banner.bad { background: var(--bad-soft); color: var(--bad); }
 .banner.warn { background: var(--warn-soft); color: var(--warn); }
 
