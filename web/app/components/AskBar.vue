@@ -1,10 +1,46 @@
 <script setup lang="ts">
 import { parseCommand, type Cmd } from '~/utils/commands'
-const props = defineProps<{ busy: boolean, models: any[], placeholder?: string, commands?: Cmd[] }>()
-const emit = defineEmits<{ submit: [string], stop: [], focus: [boolean] }>()
+const props = defineProps<{ busy: boolean, models: any[], placeholder?: string, commands?: Cmd[], draftKey?: string, images?: boolean }>()
+const emit = defineEmits<{ submit: [string, string[]], stop: [], focus: [boolean] }>()
 const { model, think, web } = useAskSettings()
 const q = ref('')
+const imgs = ref<string[]>([]) // pasted/picked screenshots, already uploaded
 const opts = ref(false)
+
+// an unsent draft survives switching tabs and reloads, one per draftKey (the chat page keys it by chat)
+let loaded = ''
+function loadDraft(k?: string) {
+  loaded = k ?? ''
+  let d: any = null
+  try { d = k ? JSON.parse(localStorage.getItem(k) || 'null') : null } catch {}
+  q.value = d?.q ?? ''
+  imgs.value = d?.imgs ?? []
+}
+onMounted(() => loadDraft(props.draftKey))
+watch(() => props.draftKey, k => loadDraft(k))
+watch([q, imgs], () => {
+  if (!loaded) return
+  try { q.value || imgs.value.length ? localStorage.setItem(loaded, JSON.stringify({ q: q.value, imgs: imgs.value })) : localStorage.removeItem(loaded) } catch {}
+}, { deep: true })
+
+const uploading = ref(0)
+const imgErr = ref('')
+const file = ref<HTMLInputElement>()
+async function addImages(files: Iterable<File>) {
+  imgErr.value = ''
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) continue
+    uploading.value++
+    try { imgs.value.push(await uploadNoteImage(f, '/api/chat/image')) } catch (e: any) { imgErr.value = `image failed: ${e?.statusMessage || e?.message}` } finally { uploading.value-- }
+  }
+}
+function onPaste(e: ClipboardEvent) {
+  if (!props.images) return
+  const files = [...(e.clipboardData?.files ?? [])].filter(f => f.type.startsWith('image/'))
+  if (files.length) { e.preventDefault(); addImages(files) }
+}
+function onDrop(e: DragEvent) { if (props.images) addImages(e.dataTransfer?.files ?? []) }
+function onPick() { addImages(file.value?.files ?? []); file.value!.value = '' }
 // grows with what is typed (up to ~8 lines); Enter sends, Shift+Enter starts a new line
 const box = ref<HTMLTextAreaElement>()
 const fit = () => { const el = box.value; if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px' }
@@ -54,14 +90,16 @@ function send() {
   const c = props.commands && parseCommand(text, props.commands)
   if (c?.cmd?.name === 'help') return void (q.value = '/')
   if (c?.cmd?.arg && !c.arg) return void (q.value = `/${c.name} `)
-  if (!text || (props.busy && !c?.cmd?.busy)) return
+  const att = props.images ? imgs.value : []
+  if ((!text && !att.length) || uploading.value || (props.busy && !c?.cmd?.busy)) return
   q.value = ''
-  emit('submit', text)
+  imgs.value = props.images ? [] : imgs.value
+  emit('submit', text, att)
 }
 </script>
 
 <template>
-  <form class="askbar" @submit.prevent="send">
+  <form class="askbar" @submit.prevent="send" @dragover.prevent @drop.prevent="onDrop">
     <div v-if="items.length" ref="list" class="cmds" role="listbox">
       <button
         v-for="(it, i) in items" :key="it.cmd.name + (it.choice ?? '')" type="button" role="option" class="cmd" :class="{ on: i === sel }"
@@ -75,17 +113,31 @@ function send() {
         </template>
       </button>
     </div>
+    <div v-if="images && (imgs.length || uploading || imgErr)" class="att">
+      <span v-for="(n, i) in imgs" :key="n" class="th">
+        <img :src="`/api/chat/img/${n}`" alt="screenshot">
+        <button type="button" title="remove" @click="imgs.splice(i, 1)">✕</button>
+      </span>
+      <span v-if="uploading" class="small faint">uploading…</span>
+      <span v-if="imgErr" class="small bad">{{ imgErr }}</span>
+    </div>
     <div class="line">
       <Icon name="spark" :size="17" class="spark" />
       <textarea
         ref="box" v-model="q" class="q" rows="1" :placeholder="placeholder || 'Ask about your server…'" enterkeyhint="send" autocomplete="off"
-        @keydown="key" @focus="emit('focus', true)" @blur="emit('focus', false)"
+        @keydown="key" @paste="onPaste" @focus="emit('focus', true)" @blur="emit('focus', false)"
       />
+      <template v-if="images">
+        <input ref="file" type="file" accept="image/*" multiple hidden @change="onPick">
+        <button type="button" class="btn ghost ico" title="attach screenshots (or paste / drop them)" @click="file?.click()">
+          <Icon name="image" :size="16" />
+        </button>
+      </template>
       <button type="button" class="btn ghost ico" :class="{ on: opts }" title="model and tools" @click="opts = !opts">
         <Icon name="settings" :size="16" />
       </button>
       <button v-if="busy" type="button" class="btn ico" title="stop" @click="emit('stop')"><Icon name="stop" :size="15" /></button>
-      <button v-else class="btn primary ico" title="ask" :disabled="!q.trim() || !models.length"><Icon name="send" :size="16" /></button>
+      <button v-else class="btn primary ico" title="ask" :disabled="(!q.trim() && !(images && imgs.length)) || !!uploading || !models.length"><Icon name="send" :size="16" /></button>
     </div>
     <div v-if="opts" class="opts small">
       <slot name="opts">
@@ -114,6 +166,11 @@ function send() {
   .cmd .ds { flex-basis: 100%; white-space: normal; }
   .cmd .tag { display: none; }
 }
+.att { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 6px 31px; }
+.th { position: relative; }
+.th img { display: block; height: 52px; max-width: 110px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
+.th button { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--muted); font-size: 10px; line-height: 1; padding: 0; cursor: pointer; }
+@media (max-width: 640px) { .att { padding-left: 0; } }
 .line { display: flex; align-items: flex-end; gap: 6px; }
 .line > .spark { align-self: center; }
 .spark { color: var(--accent); margin: 0 4px 0 2px; }

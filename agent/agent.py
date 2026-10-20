@@ -1456,7 +1456,7 @@ def _cc_cleanup():
             pass
 
 
-def claude_send(chat, session, prompt, auto, model=None, effort=None):
+def claude_send(chat, session, prompt, auto, model=None, effort=None, images=None):
     unit = _cc_unit(chat)
     if not CC_UUID.fullmatch(session or ""):
         raise ValueError("bad session id")
@@ -1471,6 +1471,18 @@ def claude_send(chat, session, prompt, auto, model=None, effort=None):
     turn = f"{chat}-{int(time.time() * 1000)}"
     # a session Claude Code already stored is resumed, an unknown id starts one under that id
     known = any(Path("/root/.claude/projects").glob(f"*/{session}.jsonl"))
+    # screenshots pasted into the chat: saved next to the turn, Claude opens them with Read (it sees images)
+    paths = []
+    for i, im in enumerate((images or [])[:8]):
+        ext = str(im.get("name", "")).rsplit(".", 1)[-1]
+        if ext not in ("jpg", "png", "webp"):
+            continue
+        f = CC_DIR / f"{turn}-{i}.{ext}"
+        f.write_bytes(base64.b64decode(im.get("data", "")))
+        paths.append(str(f))
+    if paths:
+        prompt += "\n\n[The owner attached " + ("a screenshot" if len(paths) == 1 else f"{len(paths)} screenshots") + \
+                  ". Look at " + ("it" if len(paths) == 1 else "them") + " with the Read tool first: " + ", ".join(paths) + "]"
     cmd = [CLAUDE, "-p", prompt, "--output-format", "stream-json", "--verbose", "--include-partial-messages",
            "--resume" if known else "--session-id", session, "--permission-prompts", "none",
            "--append-system-prompt", CC_SYSTEM + (CC_AUTO if auto else CC_RO),
@@ -1664,7 +1676,8 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, term_close(body["id"]))
             if u.path == "/claude/send":
                 return self._send(200, claude_send(str(body.get("chat")), str(body.get("session")), body.get("prompt"),
-                                                   body.get("auto") is True, body.get("model"), body.get("effort")))
+                                                   body.get("auto") is True, body.get("model"), body.get("effort"),
+                                                   [i for i in body.get("images") or [] if isinstance(i, dict)]))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage(refresh=True))
             if u.path == "/claude/stop":

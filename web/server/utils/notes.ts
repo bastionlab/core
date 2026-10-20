@@ -121,13 +121,13 @@ export function undoAi(id: number) {
 const IMG_NAME = /^[a-f0-9]{24}\.(jpg|png|webp)$/
 export const imgOk = (name: string) => IMG_NAME.test(name)
 
-export function saveImage(data: string, type: string) {
+export function saveImage(data: string, type: string, dir = IMG_DIR) {
   const ext = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' } as Record<string, string>)[type]
   if (!ext) throw createError({ statusCode: 400, statusMessage: 'only jpeg, png or webp' })
   const buf = Buffer.from(data, 'base64')
   if (!buf.length || buf.length > 8 * 2 ** 20) throw createError({ statusCode: 400, statusMessage: 'image is empty or over 8 MB' })
   const name = `${randomBytes(12).toString('hex')}.${ext}`
-  writeFileSync(join(IMG_DIR, name), buf)
+  writeFileSync(join(dir, name), buf)
   return name
 }
 

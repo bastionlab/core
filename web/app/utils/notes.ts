@@ -10,7 +10,7 @@ export const kindIcon = (k: string) => NOTE_KINDS.find(x => x.id === k)?.icon ??
 export const noteImg = (name: string) => `/api/notes/img/${name}`
 
 /** shrink a pasted/dropped image to ≤2000 px JPEG (screenshots stay readable for the model) and upload it */
-export async function uploadNoteImage(file: Blob) {
+export async function uploadNoteImage(file: Blob, url = '/api/notes/image') {
   const bmp = await createImageBitmap(file)
   const k = Math.min(1, 2000 / Math.max(bmp.width, bmp.height))
   const c = document.createElement('canvas')
@@ -26,7 +26,7 @@ export async function uploadNoteImage(file: Blob) {
     r.onload = () => ok(String(r.result).split(',')[1] ?? '')
     r.readAsDataURL(blob)
   })
-  const { name } = await $fetch<{ name: string }>('/api/notes/image', { method: 'POST', body: { data, type: 'image/jpeg' } })
+  const { name } = await $fetch<{ name: string }>(url, { method: 'POST', body: { data, type: 'image/jpeg' } })
   return name
 }
 

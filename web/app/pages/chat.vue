@@ -64,9 +64,9 @@ const canRetry = computed(() => !busy.value && !!turns.value.at(-1)?.q && (!isCl
 function retry() {
   const c = current.value
   if (!c || !canRetry.value) return
-  const q = c.turns.pop()!.q
+  const { q, imgs } = c.turns.pop()!
   save()
-  send(q)
+  send(q, imgs)
 }
 const STATUS = { busy: 'working…', input: 'needs your answer' } as const
 
@@ -118,14 +118,14 @@ function command(text: string): boolean {
   if (cmd.prompt) { deliver(cmd.prompt(arg)); return true }
   return false
 }
-function send(q: string) {
-  if (q.trim().startsWith('/') && command(q)) return
-  deliver(q)
+function send(q: string, imgs: string[] = []) {
+  if (!imgs.length && q.trim().startsWith('/') && command(q)) return
+  deliver(q, imgs)
 }
-function deliver(q: string) {
+function deliver(q: string, imgs: string[] = []) {
   if (isClaude.value && current.value) {
     Object.assign(current.value, { engine: 'claude', model: ccModel.value, effort: ccEffort.value })
-    claude.ask(current.value, q)
+    claude.ask(current.value, q, imgs)
   } else ask(q)
   nextTick(touch)
 }
@@ -229,6 +229,7 @@ function answer(text: string, picked: Record<number, string[]>) {
         <div v-if="flash" class="flash small">{{ flash }}</div>
         <AskBar
           :busy="busy" :models="isClaude ? [{ name: 'claude' }] : models" :commands="commands"
+          :draft-key="current ? `chat:draft:${current.id}` : undefined" :images="isClaude"
           :placeholder="pending ? 'Or type your own answer…' : !isClaude ? 'Message the local model…' : auto ? 'Tell Claude what to change…' : 'Ask Claude (read-only)…'"
           @submit="send" @stop="stop"
         >

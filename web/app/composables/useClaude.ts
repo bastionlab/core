@@ -123,20 +123,20 @@ export function useClaude(save: () => void) {
     }
   }
 
-  async function ask(c: Chat, text: string) {
+  async function ask(c: Chat, text: string, imgs: string[] = []) {
     text = text.trim()
-    if (!text || c.turns.some(t => t.busy)) return
-    let prompt = text
+    if ((!text && !imgs.length) || c.turns.some(t => t.busy)) return
+    let prompt = text || 'Here is a screenshot.'
     if (!c.session) {
       // switching an existing local-model chat over to Claude: hand it what was said so far
       const prior = sinceClear(c.turns).filter(t => !t.error).map(t => `Owner: ${t.q}\nAssistant (${t.model || 'local model'}): ${t.a}`).join('\n\n')
       if (prior) prompt = `Earlier in this chat, with a local model:\n\n${prior.slice(-12000)}\n\n---\n\n${text}`
       c.session = crypto.randomUUID()
     }
-    c.turns.push({ q: text, a: '', r: '', tools: [], busy: true, at: Date.now(), auto: !!c.auto, model: 'claude', effort: c.effort })
+    c.turns.push({ q: text, a: '', r: '', tools: [], busy: true, at: Date.now(), auto: !!c.auto, model: 'claude', effort: c.effort, ...(imgs.length ? { imgs } : {}) })
     const t = c.turns[c.turns.length - 1]!
     try {
-      const r = await $fetch<{ turn: string }>('/api/claude/send', { method: 'POST', body: { chat: c.id, session: c.session, prompt, auto: !!c.auto, model: c.model, effort: c.effort } })
+      const r = await $fetch<{ turn: string }>('/api/claude/send', { method: 'POST', body: { chat: c.id, session: c.session, prompt, auto: !!c.auto, model: c.model, effort: c.effort, images: imgs } })
       t.ct = r.turn
       save()
       await attach(t)
