@@ -1671,7 +1671,7 @@ def claude_usage(refresh=False):
     if not best:
         return {"at": None, "windows": {}}
     i = best["info"]
-    return {"at": int(best["at"]), "status": i.get("status"), "limited": i.get("rateLimitType") if i.get("status") != "allowed" else None,
+    return {"at": int(best["at"]), "status": i.get("status"), "limited": i.get("rateLimitType") if i.get("status") == "rejected" else None,
             "windows": {k: {"used": v.get("utilization"), "resets": v.get("resetsAt")} for k, v in (i.get("unifiedWindows") or {}).items()}}
 
 

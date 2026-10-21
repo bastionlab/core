@@ -17,7 +17,7 @@ export function useClaudeUsage() {
   function seen(info: any) {
     if (!info?.unifiedWindows) return
     usage.value = {
-      at: Math.floor(Date.now() / 1000), status: info.status, limited: info.status !== 'allowed' ? info.rateLimitType : null,
+      at: Math.floor(Date.now() / 1000), status: info.status, limited: info.status === 'rejected' ? info.rateLimitType : null,
       windows: Object.fromEntries(Object.entries(info.unifiedWindows).map(([k, v]: any) => [k, { used: v.utilization, resets: v.resetsAt }])),
     }
   }
