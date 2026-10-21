@@ -30,6 +30,11 @@ export default defineEventHandler(async (event) => {
       if (!/^\d+:[\w-]{20,}$/.test(token)) throw createError({ statusCode: 400, statusMessage: 'Das sieht nicht nach einem Bot-Token aus (123456:ABC…)' })
       return post('/telegram/config', { token })
     }
+    case 'discordConfig': {
+      const url = str(body.url, 200)
+      if (url && !/^https:\/\/(ptb\.|canary\.)?discord(app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(url)) throw createError({ statusCode: 400, statusMessage: 'Das sieht nicht nach einer Discord-Webhook-URL aus' })
+      return post('/discord/config', { url })
+    }
     case 'telegramTest': return post('/telegram/test')
     case 'reportSend': return post('/report/send', { month: /^\d{4}-\d{2}$/.test(body.month) ? body.month : '' }, 60_000)
     case 'subRemove': return post('/subs/remove', { key: str(body.key, 80) })

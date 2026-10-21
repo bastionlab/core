@@ -1,8 +1,9 @@
 <script setup lang="ts">
-/** where money pushes go (own bot or the Schnäppchen bot), set it up, test it, send/preview the month report */
+/** where money pushes go (Discord webhook, else own Telegram bot, else the Schnäppchen bot), set it up, test it, send/preview the month report */
 const props = defineProps<{ tg: any }>()
 const emit = defineEmits<{ changed: [] }>()
 const token = ref('')
+const hook = ref('')
 const msg = ref('')
 const busy = ref(false)
 const preview = ref('')
@@ -16,7 +17,11 @@ async function save() {
   const r = await call('telegramConfig', { token: token.value.trim() })
   if (r) { token.value = ''; msg.value = r.chat ? `✓ @${r.bot} verbunden` : `✓ @${r.bot} gespeichert – schick dem Bot jetzt einmal „/start“, dann „Testen“` }
 }
-async function test() { const r = await call('telegramTest'); if (r) msg.value = r.sent ? '✓ Testnachricht gesendet' : r.own && !r.chat ? 'Schick dem Bot erst „/start“ in Telegram' : 'Senden fehlgeschlagen' }
+async function saveHook(url: string) {
+  const r = await call('discordConfig', { url })
+  if (r) { hook.value = ''; msg.value = r.discord ? `✓ Discord-Webhook ${r.discord_name || ''} gespeichert – „Testen“ schickt eine Nachricht` : '✓ Discord entfernt – wieder über Telegram' }
+}
+async function test() { const r = await call('telegramTest'); if (r) msg.value = r.sent ? '✓ Testnachricht gesendet' : !r.discord && r.own && !r.chat ? 'Schick dem Bot erst „/start“ in Telegram' : 'Senden fehlgeschlagen' }
 async function send() { const r = await call('reportSend', { month: lastMonth }); if (r) msg.value = r.sent ? `✓ Bericht ${monthTitle(lastMonth)} gesendet` : 'Senden fehlgeschlagen' }
 async function show() {
   if (preview.value) { preview.value = ''; return }
@@ -26,8 +31,15 @@ const html = computed(() => preview.value.replace(/&/g, '&amp;').replace(/</g, '
 </script>
 
 <template>
-  <Panel title="Telegram" :sub="tg?.own ? (tg.chat ? `eigener Bot @${tg.bot}` : `@${tg.bot} – wartet auf /start`) : 'über den Schnäppchen-Bot'" id="money-telegram" fold="closed">
-    <p class="small muted">Abo-Preise, auffällige Abbuchungen, Bank-Logins und am Monatsanfang der Bericht. Ein eigener Bot hält das getrennt von den Schnäppchen:
+  <Panel title="Benachrichtigungen" :sub="tg?.discord ? `Discord · ${tg.discord_name || 'Webhook'}` : tg?.own ? (tg.chat ? `eigener Bot @${tg.bot}` : `@${tg.bot} – wartet auf /start`) : 'über den Schnäppchen-Bot'" id="money-telegram" fold="closed">
+    <p class="small muted">Abo-Preise, auffällige Abbuchungen, Bank-Logins und am Monatsanfang der Bericht.
+      <b>Discord:</b> Kanal → Bearbeiten → Integrationen → Webhooks → Neuer Webhook → URL kopieren und hier einfügen. Ist einer gesetzt, geht alles dorthin statt zu Telegram.</p>
+    <div class="row">
+      <input v-model="hook" placeholder="https://discord.com/api/webhooks/…" autocomplete="off" spellcheck="false">
+      <button class="btn primary" :disabled="busy || !hook.trim()" @click="saveHook(hook.trim())">Speichern</button>
+      <button v-if="tg?.discord" class="btn" :disabled="busy" @click="saveHook('')">Discord entfernen</button>
+    </div>
+    <p class="small muted" style="margin-top:10px"><b>Telegram:</b> Ein eigener Bot hält das getrennt von den Schnäppchen:
       in Telegram <b>@BotFather</b> → <code>/newbot</code>, Token hier einfügen, dann dem neuen Bot <code>/start</code> schicken.</p>
     <div class="row">
       <input v-model="token" placeholder="Bot-Token 123456:ABC…" autocomplete="off" spellcheck="false">
