@@ -10,6 +10,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
+import hooks
+
 HERE = Path(__file__).resolve().parent
 BIND = os.environ.get("AGENT_BIND", "192.168.1.50")
 PORT = int(os.environ.get("AGENT_PORT", "7070"))
@@ -1767,6 +1769,8 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, claude_usage())
             if u.path == "/claude/stream":
                 return self._claude_stream(q["turn"], int(q.get("from", 0)))
+            if u.path == "/discord":
+                return self._send(200, hooks.view())
             if u.path == "/term/stream":
                 return self._term_stream(term_get(q["id"]), int(q.get("from", 0)))
             self._send(404, {"error": "not found"})
@@ -1813,6 +1817,11 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, claude_usage(refresh=True))
             if u.path == "/claude/stop":
                 return self._send(200, claude_stop(str(body.get("chat"))))
+            if u.path == "/discord":
+                return self._send(200, hooks.set_hook(str(body.get("channel")), str(body.get("url") or "")))
+            if u.path == "/discord/test":
+                ch = str(body.get("channel"))
+                return self._send(200, {"sent": ch in hooks.CHANNELS and hooks.send(ch, f"✅ #{ch} ist mit dem Dashboard verbunden.")})
             if u.path == "/action/check":
                 return self._send(200, {"desc": check_action(str(body.get("name")), body.get("args"))})
             if u.path == "/action/run":

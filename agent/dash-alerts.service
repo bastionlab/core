@@ -1,0 +1,6 @@
+[Unit]
+Description=dashboard host alerts (backups, disks) -> Discord #alerts
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /root/dashboard/agent/alerts.py
