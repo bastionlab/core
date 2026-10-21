@@ -1,7 +1,9 @@
 <script setup lang="ts">
 /** value over time (+ cost basis dashed, same € axis) on a real time axis, so weekly and daily points
  * don't stretch the picture; € ticks on the right, crosshair tooltip on hover/touch */
-const props = defineProps<{ series: [string, number, number][], height?: number }>()
+// mode 'worth': first number = net worth, second = the part on accounts (the rest is the depot)
+const props = defineProps<{ series: [string, number, number][], height?: number, mode?: 'depot' | 'worth' }>()
+const worth = computed(() => props.mode === 'worth')
 const W = 600
 const H = computed(() => props.height ?? 180)
 const P = { l: 2, r: 2, t: 10, b: 6 }
@@ -25,7 +27,7 @@ const y = (v: number) => P.t + (1 - (v - range.value.lo) / (range.value.hi - ran
 const line = (k: 'value' | 'invested') => pts.value.map((s, i) => `${i ? 'L' : 'M'}${x(s.t).toFixed(1)},${y(s[k]).toFixed(1)}`).join('')
 const area = computed(() => pts.value.length < 2 ? '' : `${line('value')}L${x(pts.value.at(-1)!.t).toFixed(1)},${H.value - P.b}L${x(pts.value[0]!.t).toFixed(1)},${H.value - P.b}Z`)
 const ticks = computed(() => [0, 0.5, 1].map(f => range.value.lo + f * (range.value.hi - range.value.lo)))
-const up = computed(() => (pts.value.at(-1)?.value ?? 0) >= (pts.value.at(-1)?.invested ?? 0))
+const up = computed(() => worth.value ? (pts.value.at(-1)?.value ?? 0) >= (pts.value[0]?.value ?? 0) : (pts.value.at(-1)?.value ?? 0) >= (pts.value.at(-1)?.invested ?? 0))
 
 const hover = ref<number | null>(null)
 function move(e: PointerEvent) {
@@ -43,7 +45,8 @@ const dm = (d: string) => new Date(d + 'T12:00').toLocaleDateString('de-DE', { d
 <template>
   <div class="lc">
     <div class="legend small">
-      <template v-if="!h"><span><i class="sw v" :class="{ down: !up }" />Wert</span><span><i class="sw inv" />eingezahlt</span></template>
+      <template v-if="!h"><span><i class="sw v" :class="{ down: !up }" />{{ worth ? 'Vermögen' : 'Wert' }}</span><span><i class="sw inv" />{{ worth ? 'davon Konten' : 'eingezahlt' }}</span></template>
+      <span v-else-if="worth" class="tip">{{ dm(h.day) }} · <b>{{ fmtEur(h.value, 0) }}</b> · Konten {{ fmtEur(h.invested, 0) }} · Depot {{ fmtEur(h.value - h.invested, 0) }}</span>
       <span v-else class="tip">{{ dm(h.day) }} · <b>{{ fmtEur(h.value, 0) }}</b> · eingezahlt {{ fmtEur(h.invested, 0) }} ·
         <b :class="h.value - h.invested >= 0 ? 'ok' : 'bad'">{{ fmtSigned(h.value - h.invested) }}</b></span>
     </div>

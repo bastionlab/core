@@ -23,6 +23,15 @@ export default defineEventHandler(async (event) => {
     case 'trCode': return post('/tr/code', { code: str(body.code, 10) }, 60_000)
     case 'category': return post('/tx/category', { group_id: str(body.groupId, 20), journal_id: str(body.journalId, 20), category: str(body.category, 40), scope: body.scope === 'payee' ? 'payee' : 'one' })
     case 'subDismiss': return post('/subs/dismiss', { key: str(body.key, 80) })
+    case 'rename': return post('/payee/rename', { name: str(body.name, 200), alias: str(body.alias, 60) })
+    case 'anomalyOk': return post('/anomalies/ok', { journal_id: str(body.journalId, 20) })
+    case 'telegramConfig': {
+      const token = str(body.token, 100)
+      if (!/^\d+:[\w-]{20,}$/.test(token)) throw createError({ statusCode: 400, statusMessage: 'Das sieht nicht nach einem Bot-Token aus (123456:ABC…)' })
+      return post('/telegram/config', { token })
+    }
+    case 'telegramTest': return post('/telegram/test')
+    case 'reportSend': return post('/report/send', { month: /^\d{4}-\d{2}$/.test(body.month) ? body.month : '' }, 60_000)
     case 'subRemove': return post('/subs/remove', { key: str(body.key, 80) })
     case 'subRestore': return post('/subs/restore', { key: str(body.key, 80) })
     case 'subEdit': return post('/subs/edit', { key: str(body.key, 80), period: body.period == null ? null : str(body.period, 12), name: body.name == null ? null : str(body.name, 80) })

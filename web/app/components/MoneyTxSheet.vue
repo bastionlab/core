@@ -37,8 +37,24 @@ function applyCat(scope: 'one' | 'payee') {
   emit('category', props.tx, c, scope)
   if (scope === 'payee' && p.value) {
     for (const t of p.value.transactions) if ((t.amount > 0) === (props.tx.amount > 0) && !['Umbuchung', 'Investments'].includes(t.category)) t.category = c
-    msg.value = `✓ ${samePayee.value} Buchungen mit ${props.tx.payee} → ${c}, künftige auch`
+    msg.value = `✓ ${samePayee.value} Buchungen mit ${shown.value} → ${c}, künftige auch`
   }
+}
+
+// a readable name for the payee, shown everywhere (the bank's stays underneath)
+const shown = computed(() => props.tx.alias || props.tx.payee)
+const renaming = ref(false)
+const alias = ref('')
+const renBox = ref<HTMLInputElement>()
+function startRename() { alias.value = props.tx.alias || ''; renaming.value = true; nextTick(() => renBox.value?.focus()) }
+async function saveRename() {
+  renaming.value = false
+  if ((props.tx.alias || '') === alias.value.trim()) return
+  try {
+    await $fetch('/api/money/action', { method: 'POST', body: { action: 'rename', name: props.tx.payee, alias: alias.value.trim() } })
+    props.tx.alias = alias.value.trim() || null  // eslint-disable-line vue/no-mutating-props
+    emit('changed')
+  } catch (e: any) { msg.value = e?.data?.statusMessage || e?.message }
 }
 
 function toggle(id: string) {
@@ -69,7 +85,12 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     <div class="sheet">
       <header>
         <div class="tt">
-          <span class="py">{{ tx.payee }}</span>
+          <span v-if="!renaming" class="py">{{ shown }} <button class="lnk small" title="Anzeigenamen ändern" @click="startRename">✎</button></span>
+          <span v-else class="ren">
+            <input ref="renBox" v-model="alias" :placeholder="tx.payee" maxlength="60" @keydown.enter="saveRename" @keydown.esc="renaming = false">
+            <button class="btn primary small" @click="saveRename">OK</button>
+          </span>
+          <span v-if="tx.alias || renaming" class="faint small">Bank: {{ tx.payee }}</span>
           <span class="faint small">{{ tx.date ? dayTitle(tx.date) : '' }}{{ tx.account ? ` · ${tx.account}` : '' }}</span>
         </div>
         <span class="num big" :class="tx.amount > 0 ? 'ok' : ''">{{ fmtEur(tx.amount) }}</span>
@@ -83,7 +104,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
       </label>
       <div v-if="pendingCat" class="scope">
         <span class="small">{{ pendingCat }} für…</span>
-        <button class="btn primary" @click="applyCat('payee')">Alle {{ samePayee }} mit {{ tx.payee }}<span class="faint2"> + künftige</span></button>
+        <button class="btn primary" @click="applyCat('payee')">Alle {{ samePayee }} mit {{ shown }}<span class="faint2"> + künftige</span></button>
         <button class="btn" @click="applyCat('one')">Nur diese</button>
         <button class="btn ghost" @click="pendingCat = ''">Abbrechen</button>
       </div>
@@ -102,7 +123,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
           </span>
         </div>
 
-        <h3 class="small muted">Alle Buchungen mit {{ tx.payee }} <span class="faint">– haken = gehört zum Abo</span></h3>
+        <h3 class="small muted">Alle Buchungen mit {{ shown }} <span class="faint">– haken = gehört zum Abo</span></h3>
         <div class="list">
           <label v-for="t in p.transactions" :key="t.journal_id" class="li" :class="{ cur: t.journal_id === tx.journal_id }">
             <input type="checkbox" :disabled="t.amount > 0" :checked="picked.has(t.journal_id)" @change="toggle(t.journal_id)">
@@ -138,6 +159,10 @@ header { display: flex; align-items: flex-start; gap: 10px; }
 .desc { margin: 0; overflow-wrap: anywhere; }
 .row { display: flex; align-items: center; gap: 10px; }
 .row select { padding: 4px 8px; }
+.ren { display: flex; gap: 6px; }
+.ren input { flex: 1; min-width: 0; padding: 4px 8px; }
+.lnk { border: 0; background: none; padding: 0 2px; color: var(--accent); cursor: pointer; font: inherit; }
+.btn.small { font-size: 12px; padding: 4px 10px; }
 .scope { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); }
 .scope .btn.primary { white-space: normal; text-align: left; }
 .faint2 { font-weight: 400; opacity: .75; }

@@ -152,6 +152,33 @@ async function setCat(tx: any, c: string, scope: 'one' | 'payee' = 'one') {
 }
 function tapTx(t: any) { if (selecting.value) toggleSel(t); else open.value = t }
 
+// unusual charges of the shown month (far above the payee's usual, or twice the same day)
+const odd = ref<any[]>([])
+async function loadOdd() { try { odd.value = (await $fetch<any>('/api/money/anomalies', { query: { month: month.value } })).anomalies } catch { odd.value = [] } }
+watch(month, loadOdd, { immediate: true })
+const txOf = (a: any) => (L.value?.transactions ?? []).find((t: any) => t.journal_id === a.journal_id) ?? { ...a, description: '', account: '' }
+async function oddOk(a: any) { odd.value = odd.value.filter(x => x !== a); await act('anomalyOk', { journalId: a.journal_id }) }
+
+// CSV for Excel (semicolon, German decimals): what's on screen, or a whole year
+const exporting = ref(false)
+function csv(rows: any[], name: string) {
+  const esc = (v: any) => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x }
+  const lines = [['Datum', 'Empfänger', 'Name', 'Betrag', 'Kategorie', 'Konto', 'Verwendungszweck'].join(';'),
+    ...rows.map((t: any) => [t.date, t.payee, t.alias || '', t.amount.toFixed(2).replace('.', ','), t.category || '', t.account, t.description].map(esc).join(';'))]
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }))
+  a.download = name
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+function exportView() { csv([...txShown.value].reverse(), `buchungen-${found.value ? 'suche' : month.value}${cat.value ? '-' + cat.value : ''}.csv`) }
+async function exportYear() {
+  exporting.value = true
+  const y = month.value.slice(0, 4)
+  try { csv((await $fetch<any>('/api/money/export', { query: { start: `${y}-01-01`, end: `${y}-12-31` } })).transactions, `buchungen-${y}.csv`) }
+  catch (e: any) { toast.value = e?.data?.statusMessage || e?.message } finally { exporting.value = false }
+}
+
 const dayTx = computed(() => (day.value ? (L.value?.transactions ?? []).filter((t: any) => t.date === day.value) : []))
 const run = computed(() => d.value?.last_run)
 const runErrors = computed(() => Object.entries(run.value?.summary ?? {}).filter(([, v]) => typeof v === 'string' && /error|login/.test(v as string)))
@@ -215,6 +242,21 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
         <p v-if="moved.tr || moved.inv" class="small faint excl">
           ohne <button class="lnk" @click="goTab('buchungen', { k: 'tr' })">Umbuchungen {{ fmtEur(moved.tr, 0) }}</button><template v-if="moved.inv"> und Investments {{ fmtEur(moved.inv, 0) }}</template>
         </p>
+        <div v-if="L.forecast" class="fc">
+          <span class="lbl">Prognose Monatsende</span>
+          <span>Ausgaben ~<b class="num">{{ fmtEur(L.forecast.spending, 0) }}</b> · Saldo ~<b class="num" :class="L.forecast.saldo >= 0 ? 'ok' : 'bad'">{{ fmtSigned(L.forecast.saldo) }}</b>
+            · Konten ~<b class="num">{{ fmtEur(d.cash + L.forecast.rest_in - L.forecast.rest_out, 0) }}</b></span>
+          <span class="faint small">noch {{ L.forecast.days_left }} Tage: Abos {{ fmtEur(L.forecast.subs_due, 0) }} + ~{{ fmtEur(L.forecast.pace_day, 0) }}/Tag<template v-if="L.forecast.rest_in > 1"> · Gehalt erwartet ~{{ fmtEur(L.forecast.rest_in, 0) }}</template></span>
+        </div>
+        <Panel v-if="odd.length" title="Auffällig" :sub="`${odd.length} Abbuchung${odd.length > 1 ? 'en' : ''}`" id="money-odd" class="oddp">
+          <div v-for="a in odd" :key="a.journal_id" class="odd">
+            <button class="ob" @click="open = txOf(a)">
+              <span class="tp"><span class="py">{{ a.alias || a.payee }}</span><span class="faint small">{{ dayTitle(a.date) }} · {{ a.reason }}</span></span>
+              <span class="num">{{ fmtEur(a.amount) }}</span>
+            </button>
+            <button class="btn ghost small" title="ist in Ordnung" @click="oddOk(a)">ok</button>
+          </div>
+        </Panel>
         <div class="grid cols-2">
           <Panel title="Kalender" :sub="day ? dayTitle(day) : 'Tag antippen'" id="money-cal">
             <MoneyCalendar :month="month" :txs="L.transactions" :subs="activeSubs" :selected="day" @pick="x => setQ({ d: x || undefined })" />
@@ -222,7 +264,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
             <div v-if="day" class="daylist">
               <div v-if="!dayTx.length" class="faint small">Keine Buchungen an diesem Tag.</div>
               <button v-for="t in dayTx" :key="t.journal_id" class="dtx" @click="open = t">
-                <span class="tp"><span class="py">{{ t.payee }}</span><span class="faint small">{{ t.category || '—' }}</span></span>
+                <span class="tp"><span class="py">{{ t.alias || t.payee }}</span><span class="faint small">{{ t.category || '—' }}</span></span>
                 <span class="num" :class="t.amount > 0 ? 'ok' : ''">{{ fmtEur(t.amount) }}</span>
               </button>
               <button v-if="dayTx.length" class="btn ghost small" @click="goTab('buchungen', { d: day })">in Buchungen öffnen →</button>
@@ -279,6 +321,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
           <template v-if="searching">suche…</template>
           <template v-else>{{ txShown.length }} Buchungen{{ found ? ` mit „${search.trim()}“ (alle Monate)` : '' }} · Summe <b class="num" :class="shownSum >= 0 ? 'ok' : ''">{{ fmtEur(shownSum) }}</b></template>
           <template v-if="selecting"> · <span class="accent">Buchungen antippen zum Auswählen</span></template>
+          <span class="exp"><button class="lnk" @click="exportView">CSV</button> · <button class="lnk" :disabled="exporting" @click="exportYear">{{ exporting ? '…' : `Jahr ${month.slice(0, 4)}` }}</button></span>
         </p>
         <div class="txs">
           <div v-if="!groups.length && !searching" class="faint small pad2">Keine Buchungen.</div>
@@ -287,7 +330,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
             <button v-for="tx in g.txs" :key="tx.journal_id" class="tx" :class="{ picked: sel.has(tx.journal_id) }" @click="tapTx(tx)">
               <span v-if="selecting" class="ck">{{ sel.has(tx.journal_id) ? '✓' : '' }}</span>
               <span class="tp">
-                <span class="py">{{ tx.payee }}</span>
+                <span class="py">{{ tx.alias || tx.payee }}</span>
                 <span class="faint small ds">{{ tx.description !== tx.payee ? tx.description : '' }}</span>
               </span>
               <span class="tr">
@@ -333,6 +376,8 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
             <span class="num ab">{{ fmtEur(a.balance) }}</span>
           </div>
         </Panel>
+        <MoneyWorth class="gap" />
+        <MoneyTelegram class="gap" :tg="d.setup?.telegram" @changed="load" />
       </template>
 
       <MoneyTxSheet v-if="open" :tx="open" :categories="d.categories" @close="open = null" @category="setCat" @changed="load" />
@@ -371,6 +416,14 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 .sums { display: flex; gap: 8px 22px; flex-wrap: wrap; margin-bottom: 14px; }
 .sums > span { display: flex; flex-direction: column; }
 .excl { margin: -8px 0 14px; }
+.fc { display: flex; flex-direction: column; gap: 2px; margin: 0 0 14px; padding: 10px 12px; border: 1px dashed var(--line-2); border-radius: 10px; font-size: 13px; }
+.oddp { margin-bottom: 14px; border-color: var(--warn-soft); }
+.odd { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--line); }
+.odd:first-of-type { border-top: 0; }
+.ob { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; padding: 7px 2px; border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.ob .tp { flex: 1; }
+.count { display: flex; flex-wrap: wrap; gap: 0 4px; }
+.exp { margin-left: auto; }
 .lnk { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
 .sums b { font-size: 17px; font-weight: 600; text-align: left; }
 .calkey { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; }

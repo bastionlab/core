@@ -42,4 +42,4 @@ export function subCharges(s: any, until: string) {
   }
   return out
 }
-export const subName = (s: any) => s.name || s.payee
+export const subName = (s: any) => s.name || s.alias || s.payee
