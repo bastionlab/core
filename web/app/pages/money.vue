@@ -222,7 +222,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
             <div v-if="day" class="daylist">
               <div v-if="!dayTx.length" class="faint small">Keine Buchungen an diesem Tag.</div>
               <button v-for="t in dayTx" :key="t.journal_id" class="dtx" @click="open = t">
-                <span class="py">{{ t.payee }}</span><span class="pill">{{ t.category || '—' }}</span>
+                <span class="tp"><span class="py">{{ t.payee }}</span><span class="faint small">{{ t.category || '—' }}</span></span>
                 <span class="num" :class="t.amount > 0 ? 'ok' : ''">{{ fmtEur(t.amount) }}</span>
               </button>
               <button v-if="dayTx.length" class="btn ghost small" @click="goTab('buchungen', { d: day })">in Buchungen öffnen →</button>
@@ -257,7 +257,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
       <!-- ── Buchungen ── -->
       <template v-if="tab === 'buchungen'">
         <div class="find">
-          <input v-model="search" type="search" placeholder="Suchen in allen Buchungen: Empfänger, Zweck, Betrag…" enterkeyhint="search">
+          <input v-model="search" type="search" placeholder="Alle Buchungen durchsuchen: Empfänger, Betrag…" enterkeyhint="search">
           <button class="btn" :class="{ on: selecting }" @click="selecting ? stopSelect() : (selecting = true)">{{ selecting ? 'Fertig' : 'Auswählen' }}</button>
         </div>
         <div class="filters">
@@ -328,8 +328,8 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
                 <template v-if="linkFor(a)?.valid_until"> · Zugriff noch {{ daysLeft(linkFor(a).valid_until) }} Tage</template>
               </span>
               <span v-if="a.error" class="bad small">{{ a.error }}</span>
+              <button class="lnk small" @click="goTab('buchungen', { a: a.name })">Buchungen →</button>
             </span>
-            <button class="btn ghost small" @click="goTab('buchungen', { a: a.name })">Buchungen</button>
             <span class="num ab">{{ fmtEur(a.balance) }}</span>
           </div>
         </Panel>
@@ -429,4 +429,27 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 .acc:first-of-type { border-top: 0; }
 .an { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .ab { min-width: 90px; }
+
+.dtx { grid-template-columns: 1fr auto; }
+.dtx .tp { display: flex; flex-direction: column; min-width: 0; }
+.acc { align-items: flex-start; }
+.acc .dot { margin-top: 6px; }
+.an .lnk { align-self: flex-start; margin-top: 2px; }
+@media (max-width: 640px) {
+  .tiles { gap: 8px; margin: 10px 0; }
+  .tile { padding: 9px 11px; }
+  .big { font-size: 17px; }
+  .tile .small { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabs { gap: 0; }
+  .tab { flex: 1 1 0; min-width: 0; padding: 7px 2px; font-size: 12.5px; }
+  .mt { min-width: 0; font-size: 15px; }
+  .sums { gap: 6px 16px; }
+  .sums b { font-size: 15px; }
+  .find input { padding: 7px 10px; }
+  .txs { padding: 2px 10px 8px; }
+  .cat { grid-template-columns: minmax(80px, 42%) 1fr auto; gap: 8px; }
+  .filters { flex-wrap: wrap; overflow: visible; }
+  .chip.sel { flex: 1 1 140px; min-width: 0; }
+  .find input::placeholder { font-size: 14px; }
+}
 </style>

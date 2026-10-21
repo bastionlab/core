@@ -61,20 +61,30 @@ const tip = (d: string) => {
 </template>
 
 <style scoped>
-.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .wd { text-align: center; font-size: 11px; color: var(--faint); padding-bottom: 2px; }
-.cell { position: relative; aspect-ratio: 1 / .82; min-height: 40px; border: 1px solid transparent; border-radius: 8px; padding: 3px 4px; font: inherit; color: var(--text); cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between;
-  background: color-mix(in srgb, var(--accent) calc(var(--a, 0) * 100%), var(--panel-2)); }
+.cell { position: relative; aspect-ratio: 1 / .8; min-width: 0; border: 1px solid transparent; border-radius: 8px; padding: 4px 5px; font: inherit; color: var(--text); cursor: pointer;
+  display: flex; flex-direction: column; justify-content: space-between; overflow: hidden;
+  background: color-mix(in srgb, var(--accent) calc(var(--a, 0) * 70%), var(--panel-2)); }
 .cell.empty { background: none; cursor: default; }
-.cell.future { opacity: .75; background: transparent; border-color: var(--line); }
+.cell.future { background: transparent; border-color: var(--line); }
 .cell.today { border-color: var(--accent); }
 .cell.on { outline: 2px solid var(--text); outline-offset: -2px; }
-.dn { font-size: 11px; color: var(--muted); line-height: 1; }
-.today .dn { color: var(--accent); font-weight: 700; }
-.amt { font-size: 12px; font-weight: 600; line-height: 1; align-self: flex-end; }
+.dn { font-size: 11px; line-height: 1; color: var(--text); opacity: .7; text-align: left; }
+.future .dn { opacity: .45; }
+.today .dn { color: var(--accent); opacity: 1; font-weight: 700; }
+.amt { font-size: 12px; font-weight: 600; line-height: 1; text-align: right; white-space: nowrap; }
 .marks { position: absolute; top: 4px; right: 4px; display: flex; gap: 2px; }
 .marks i { width: 5px; height: 5px; border-radius: 50%; }
 .marks .in { background: var(--ok); }
 .marks .due { background: var(--warn); }
-@media (max-width: 560px) { .amt { font-size: 10.5px; } .cell { min-height: 36px; padding: 2px 3px; } }
+/* phone: square cells, day number and amount stacked in the middle, marks as a row underneath */
+@media (max-width: 560px) {
+  .cal { gap: 3px; }
+  .cell { aspect-ratio: 1; padding: 3px 2px; border-radius: 7px; align-items: center; justify-content: flex-start; gap: 2px; }
+  .dn { font-size: 11px; text-align: center; }
+  .amt { font-size: 10.5px; text-align: center; letter-spacing: -.2px; }
+  .marks { position: static; margin-top: auto; justify-content: center; min-height: 4px; }
+  .marks i { width: 4px; height: 4px; }
+}
 </style>

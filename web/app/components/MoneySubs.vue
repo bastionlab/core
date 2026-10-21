@@ -91,7 +91,7 @@ const showHidden = ref(false)
 .lbl { font-size: 12px; color: var(--muted); }
 .add { margin-left: auto; }
 .gap { margin-top: 16px; }
-.due { display: grid; grid-template-columns: 110px 1fr auto; gap: 10px; padding: 5px 0; border-top: 1px solid var(--line); }
+.due { display: grid; grid-template-columns: minmax(84px, auto) minmax(0, 1fr) auto; gap: 10px; padding: 5px 0; border-top: 1px solid var(--line); }
 .due:first-of-type { border-top: 0; }
 .dn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub { border-top: 1px solid var(--line); }
@@ -109,4 +109,5 @@ const showHidden = ref(false)
 .btn.small { font-size: 12px; padding: 4px 10px; }
 .more { display: flex; gap: 6px; margin-top: 8px; }
 .hid { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
+@media (max-width: 560px) { .sum { gap: 8px 16px; } .sum b { font-size: 16px; } .add { margin-left: 0; width: 100%; } .row { padding: 8px 2px; } }
 </style>
