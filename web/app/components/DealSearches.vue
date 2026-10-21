@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { armed, arm } = useArm()
 const props = defineProps<{ searches: any[] }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
 
@@ -150,7 +151,7 @@ async function submit() {
   setTimeout(() => (note.value = ''), 6000)
 }
 
-const remove = (s: any) => confirm(`Delete "${s.name}" and its matches?`) && act('delete', { id: s.id })
+const remove = (s: any) => arm(String(s.id)) && act('delete', { id: s.id })
 /** everything that used to be spelled out under the row */
 function tip(s: any) {
   const sp = s.spec ?? {}
@@ -260,7 +261,7 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
           @click="act('rejudge', { id: s.id, all: true })"
         >{{ busy === 'rejudge' + s.id ? '…' : '✦' }}</button>
         <button class="btn ghost ic" :disabled="!!busy" :title="s.enabled ? 'Pause' : 'Resume'" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? '❙❙' : '▶' }}</button>
-        <button class="btn ghost ic danger" :disabled="!!busy" title="Delete" @click="remove(s)">✕</button>
+        <button class="btn ghost ic danger" :disabled="!!busy" :class="{ sure: armed === String(s.id) }" :title="armed === String(s.id) ? 'delete the search and its matches' : 'Delete'" @click="remove(s)">{{ armed === String(s.id) ? 'Sure?' : '✕' }}</button>
       </div>
     </div>
   </Panel>

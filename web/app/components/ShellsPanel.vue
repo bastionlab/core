@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { armed, arm } = useArm()
 /** Termius-style shells: a fresh login shell in any dev box, as max. Each one is a tmux session the
  *  agent keeps on a private socket, so it survives closing the tab or the phone dropping off; ✕ ends it. */
 const { data: boxes, refresh } = useFetch<any[]>('/api/shells', { server: false, immediate: false, default: () => [] })
@@ -23,8 +24,8 @@ async function create(b: any) {
   if (r?.session) show(b, r)
 }
 function kill(b: any, s: any) {
-  // something other than the bare shell is running — ask first
-  if (!/^(zsh|bash|sh)$/.test(s.command) && !confirm(`${s.session} on ${b.name} is running ${s.command}. End it?`)) return
+  // something other than the bare shell is running — tap twice
+  if (!/^(zsh|bash|sh)$/.test(s.command) && !arm(`${b.vmid}:${s.session}`)) return
   busy.value = `kill:${b.vmid}:${s.session}`
   post('kill', { vmid: b.vmid, session: s.session })
 }
@@ -49,7 +50,7 @@ function kill(b: any, s: any) {
             <span class="what mono">{{ /^(zsh|bash|sh)$/.test(s.command) ? s.cwd : s.command }}</span>
             <span class="faint small age">{{ ago(s.created) }}</span>
           </button>
-          <button class="x" :disabled="busy === `kill:${b.vmid}:${s.session}`" title="end this shell" @click="kill(b, s)">✕</button>
+          <button class="x" :disabled="busy === `kill:${b.vmid}:${s.session}`" :class="{ sure: armed === `${b.vmid}:${s.session}` }" :title="armed === `${b.vmid}:${s.session}` ? `still running ${s.command} — tap again to end it` : 'end this shell'" @click="kill(b, s)">{{ armed === `${b.vmid}:${s.session}` ? 'Sure?' : '✕' }}</button>
         </div>
       </div>
       <div v-if="!boxes?.length" class="faint small">No running dev boxes.</div>

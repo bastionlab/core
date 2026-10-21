@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { armed, arm } = useArm()
 const props = defineProps<{ searches: any[] }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
 
@@ -116,7 +117,7 @@ async function submit() {
   setTimeout(() => (note.value = ''), 9000)
 }
 
-const remove = (s: any) => confirm(`„${s.name}“ und ihre Treffer löschen?`) && act('delete', { id: s.id })
+const remove = (s: any) => arm(String(s.id)) && act('delete', { id: s.id })
 
 const eur = (v: number) => `${Math.round(v).toLocaleString('de-DE')} €`
 function summary(sp: any) {
@@ -217,7 +218,7 @@ function summary(sp: any) {
         <a v-if="s.url" class="btn ghost ic" :href="s.url" target="_blank" rel="noopener" title="Auf Kleinanzeigen öffnen">↗</a>
         <button class="btn ghost ic" title="Bearbeiten" @click="openEdit(s)">✎</button>
         <button class="btn ghost ic" :disabled="!!busy" :title="s.enabled ? 'Pausieren' : 'Weiter'" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? '❙❙' : '▶' }}</button>
-        <button class="btn ghost ic danger" :disabled="!!busy" title="Löschen" @click="remove(s)">✕</button>
+        <button class="btn ghost ic danger" :disabled="!!busy" :class="{ sure: armed === String(s.id) }" :title="armed === String(s.id) ? 'Suche und Treffer löschen' : 'Löschen'" @click="remove(s)">{{ armed === String(s.id) ? 'Sicher?' : '✕' }}</button>
       </div>
     </div>
   </Panel>

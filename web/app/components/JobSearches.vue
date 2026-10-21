@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { armed, arm } = useArm()
 const props = defineProps<{ searches: any[], sources: { id: string, label: string }[], hasCv: boolean }>()
 const emit = defineEmits<{ (e: 'changed'): void }>()
 
@@ -96,7 +97,7 @@ async function submit() {
   setTimeout(() => (note.value = ''), 12000)
 }
 
-const remove = (s: any) => confirm(`„${s.name}“ und ihre Treffer löschen?`) && act('delete', { id: s.id })
+const remove = (s: any) => arm(String(s.id)) && act('delete', { id: s.id })
 
 const eur = (v: number) => `${Math.round(v).toLocaleString('de-DE')} €`
 function summary(sp: any) {
@@ -207,7 +208,7 @@ function summary(sp: any) {
         <button class="btn ghost ic" :disabled="!!busy || !s.enabled" title="Jetzt suchen" @click="act('run', { id: s.id })">⟳</button>
         <button class="btn ghost ic" title="Bearbeiten" @click="openEdit(s)">✎</button>
         <button class="btn ghost ic" :disabled="!!busy" :title="s.enabled ? 'Pausieren' : 'Weiter'" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? '❙❙' : '▶' }}</button>
-        <button class="btn ghost ic danger" :disabled="!!busy" title="Löschen" @click="remove(s)">✕</button>
+        <button class="btn ghost ic danger" :disabled="!!busy" :class="{ sure: armed === String(s.id) }" :title="armed === String(s.id) ? 'Suche und Treffer löschen' : 'Löschen'" @click="remove(s)">{{ armed === String(s.id) ? 'Sicher?' : '✕' }}</button>
       </div>
     </div>
   </Panel>

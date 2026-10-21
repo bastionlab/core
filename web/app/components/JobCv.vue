@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { armed, arm } = useArm()
 /** the CV every posting is read against; CT 107 keeps the text and the profile the model made of it */
 const emit = defineEmits<{ (e: 'changed'): void }>()
 
@@ -71,7 +72,7 @@ async function save() {
 }
 
 async function remove() {
-  if (!confirm('Lebenslauf löschen? Neue Treffer werden dann nur gegen den Suchwunsch bewertet.')) return
+  if (!arm('cv')) return
   busy.value = 'del'
   try {
     await $fetch('/api/jobs/action', { method: 'POST', body: { action: 'cvdelete' } })
@@ -112,7 +113,7 @@ async function remove() {
       <div class="bar">
         <span class="small faint">{{ cv.filename }} · {{ ago(cv.uploaded_at) }} · {{ cv.chars.toLocaleString('de-DE') }} Zeichen</span>
         <button class="btn ghost" @click="edit">✎ Korrigieren</button>
-        <button class="btn ghost danger" :disabled="!!busy" @click="remove">✕</button>
+        <button class="btn ghost danger" :class="{ sure: armed === 'cv' }" :disabled="!!busy" :title="armed === 'cv' ? 'Neue Treffer werden dann nur gegen den Suchwunsch bewertet' : 'Lebenslauf löschen'" @click="remove">{{ armed === 'cv' ? 'Sicher?' : '✕' }}</button>
       </div>
     </template>
 
