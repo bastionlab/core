@@ -23,6 +23,13 @@ export default defineEventHandler(async (event) => {
     case 'trCode': return post('/tr/code', { code: str(body.code, 10) }, 60_000)
     case 'category': return post('/tx/category', { group_id: str(body.groupId, 20), journal_id: str(body.journalId, 20), category: str(body.category, 40) })
     case 'subDismiss': return post('/subs/dismiss', { key: str(body.key, 80) })
+    case 'subRemove': return post('/subs/remove', { key: str(body.key, 80) })
+    case 'subRestore': return post('/subs/restore', { key: str(body.key, 80) })
+    case 'subEdit': return post('/subs/edit', { key: str(body.key, 80), period: body.period == null ? null : str(body.period, 12), name: body.name == null ? null : str(body.name, 80) })
+    case 'subAdd': {
+      const ids = (Array.isArray(body.journalIds) ? body.journalIds : []).slice(0, 200).map((x: any) => str(x, 20)).filter(Boolean)
+      return post('/subs/add', { journal_ids: ids, period: body.period ? str(body.period, 12) : null, name: body.name ? str(body.name, 80) : null })
+    }
   }
   throw createError({ statusCode: 400, statusMessage: `unknown action: ${action}` })
 })

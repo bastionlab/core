@@ -3,7 +3,29 @@ useHead({ title: 'Money · pve' })
 const route = useRoute()
 const router = useRouter()
 
-const month = ref(new Date().toISOString().slice(0, 7))
+// everything you navigate to lives in the URL (?t=tab&m=month&d=day&c=category), so back/forward and reloads keep your place
+const q = (k: string) => (typeof route.query[k] === 'string' ? (route.query[k] as string) : '')
+const setQ = (patch: Record<string, string | undefined>, push = false) => {
+  const query: Record<string, any> = { ...route.query, ...patch }
+  for (const k in query) if (!query[k]) delete query[k]
+  ;(push ? router.push : router.replace)({ query })
+}
+const TABS = [['monat', 'Monat'], ['buchungen', 'Buchungen'], ['abos', 'Abos'], ['depot', 'Depot'], ['konten', 'Konten']] as const
+const tab = computed(() => q('t') || 'monat')
+const goTab = (t: string, extra: Record<string, string | undefined> = {}) => { setQ({ t: t === 'monat' ? undefined : t, ...extra }, true); window.scrollTo({ top: 0 }) }
+
+const thisMonth = isoMonth()
+const month = computed(() => (/^\d{4}-\d{2}$/.test(q('m')) ? q('m') : thisMonth))
+const setMonth = (m: string) => setQ({ m: m === thisMonth ? undefined : m, d: undefined })
+function shift(n: number) {
+  const [y, m] = month.value.split('-').map(Number) as [number, number]
+  setMonth(isoMonth(new Date(y, m - 1 + n, 1)))
+}
+function today() { setQ({ m: undefined, d: tab.value === 'monat' ? isoDay() : undefined }) }
+const isNow = computed(() => month.value >= thisMonth)
+const day = computed(() => (q('d').startsWith(month.value) ? q('d') : ''))
+const cat = computed(() => q('c'))
+
 const d = ref<any>(null)
 const error = ref<any>(null)
 const pending = ref(false)
@@ -35,48 +57,98 @@ onMounted(async () => {
   load()
 })
 
+const toast = ref('')
 async function act(action: string, body: Record<string, any> = {}) {
-  try { await $fetch('/api/money/action', { method: 'POST', body: { action, ...body } }) } finally { load() }
+  try { await $fetch('/api/money/action', { method: 'POST', body: { action, ...body } }) }
+  catch (e: any) { toast.value = e?.data?.statusMessage || e?.message; setTimeout(() => (toast.value = ''), 4000) }
+  finally { load() }
 }
 
-const eur = (n?: number | null, frac = 2) => (n == null ? '–' : n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: frac, maximumFractionDigits: frac }))
 const L = computed(() => d.value?.ledger)
-const monthName = (m: string) => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
-const monthShort = (m: string) => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'short' })
-function shift(n: number) {
-  const [y, m] = month.value.split('-').map(Number)
-  const dt = new Date(y!, m! - 1 + n, 1)
-  month.value = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
-}
-const isNow = computed(() => month.value >= new Date().toISOString().slice(0, 7))
-
-const catMax = computed(() => Math.max(1, ...(L.value?.categories ?? []).map((c: any) => c.amount)))
+const monthShort = (m: string) => new Date(m + '-01T12:00').toLocaleDateString('de-DE', { month: 'short' })
+const catMax = computed(() => Math.max(1, ...(L.value?.categories ?? []).flatMap((c: any) => [c.amount, c.avg ?? 0])))
 const trendMax = computed(() => Math.max(1, ...(L.value?.trend ?? []).flatMap((t: any) => [t.income, t.spending])))
+const vsAvg = computed(() => (L.value?.avg_spending ? L.value.spending - L.value.avg_spending : null))
 
 const pf = computed(() => d.value?.portfolio)
-const pfLast = computed(() => pf.value?.series?.at(-1))
-const gain = computed(() => (pfLast.value ? pfLast.value.value - (pfLast.value.cash ?? 0) - pfLast.value.invested : null))
-
+const depotIn = computed(() => (pf.value?.positions ?? []).reduce((a: number, p: any) => a + (p.buyin || 0), 0))
+const gain = computed(() => (pf.value?.positions?.length ? d.value.invested_value - depotIn.value : null))
+const trCash = computed(() => d.value?.accounts?.find((a: any) => a.key === 'tr:cash')?.balance ?? null)
 const activeSubs = computed(() => (d.value?.subs ?? []).filter((s: any) => s.state === 'active'))
-const endedSubs = computed(() => (d.value?.subs ?? []).filter((s: any) => s.state !== 'active'))
-const PER: Record<string, string> = { weekly: 'Woche', monthly: 'Monat', quarterly: 'Quartal', yearly: 'Jahr' }
-const priceUp = (s: any) => s.prev_amount != null && Math.abs(s.amount - s.prev_amount) >= 0.01 && s.changed && Date.now() / 1000 - s.changed < 60 * 86400
+const nextDue = computed(() => {
+  const end = new Date(); end.setDate(end.getDate() + 7)
+  return activeSubs.value.flatMap((s: any) => subCharges(s, isoDay(end)).filter(x => x >= isoDay())).length
+})
 
-const txFilter = ref('')
-const txShown = computed(() => (L.value?.transactions ?? []).filter((t: any) => !txFilter.value || t.category === txFilter.value).slice(0, 150))
-const editTx = ref<string | null>(null)
-async function setCat(t: any, cat: string) {
-  editTx.value = null
-  t.category = cat
-  await act('category', { groupId: t.group_id, journalId: t.journal_id, category: cat })
+// ---- bookings: month list or a search across all history, filters, grouped by day
+const search = ref(q('q'))
+const found = ref<any[] | null>(null)
+const searching = ref(false)
+let st: any
+watch(search, (v) => {
+  clearTimeout(st)
+  if (v.trim() !== q('q')) setQ({ q: v.trim() || undefined })
+  if (v.trim().length < 2) { found.value = null; return }
+  st = setTimeout(async () => {
+    searching.value = true
+    try { found.value = (await $fetch<any>('/api/money/search', { query: { q: v.trim() } })).transactions } catch { found.value = [] } finally { searching.value = false }
+  }, 300)
+}, { immediate: true })
+const kind = computed(() => q('k'))  // '' | out | in
+const acct = computed(() => q('a'))
+const accounts = computed(() => [...new Set((L.value?.transactions ?? []).map((t: any) => t.account))].sort())
+const txAll = computed<any[]>(() => found.value ?? L.value?.transactions ?? [])
+const txShown = computed(() => txAll.value.filter((t: any) =>
+  (!cat.value || t.category === cat.value) && (found.value || !day.value || t.date === day.value) &&
+  (!kind.value || (kind.value === 'in' ? t.amount > 0 : t.amount < 0)) && (!acct.value || t.account === acct.value)))
+const LIMIT = ref(200)
+watch([txAll, cat, day, kind, acct], () => (LIMIT.value = 200))
+const groups = computed(() => {
+  const out: { day: string, sum: number, txs: any[] }[] = []
+  for (const t of txShown.value.slice(0, LIMIT.value)) {
+    let g = out.at(-1)
+    if (!g || g.day !== t.date) out.push(g = { day: t.date, sum: 0, txs: [] })
+    g.txs.push(t)
+    if (!['Umbuchung', 'Investments'].includes(t.category)) g.sum += t.amount
+  }
+  return out
+})
+const shownSum = computed(() => txShown.value.filter((t: any) => !['Umbuchung', 'Investments'].includes(t.category)).reduce((a: number, t: any) => a + t.amount, 0))
+
+// select mode: tick bookings, then make them one subscription or recategorize them together
+const selecting = ref(false)
+const sel = ref<Set<string>>(new Set())
+const selTx = computed(() => txAll.value.filter((t: any) => sel.value.has(t.journal_id)))
+function toggleSel(t: any) { const s = new Set(sel.value); s.has(t.journal_id) ? s.delete(t.journal_id) : s.add(t.journal_id); sel.value = s }
+function stopSelect() { selecting.value = false; sel.value = new Set() }
+const subPeriod = ref('')
+async function selAsSub() {
+  await act('subAdd', { journalIds: [...sel.value], period: subPeriod.value || null })
+  if (!toast.value) { stopSelect(); goTab('abos') }
 }
-const dd = (s: string) => new Date(s).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+async function selCategory(c: string) {
+  for (const t of selTx.value) { t.category = c; await $fetch('/api/money/action', { method: 'POST', body: { action: 'category', groupId: t.group_id, journalId: t.journal_id, category: c } }) }
+  stopSelect(); load()
+}
+function addSub() { goTab('buchungen'); selecting.value = true; nextTick(() => document.querySelector<HTMLInputElement>('.find input')?.focus()) }
+
+const open = ref<any>(null)
+async function setCat(tx: any, c: string) {
+  tx.category = c
+  for (const list of [L.value?.transactions, found.value]) for (const x of list ?? []) if (x.journal_id === tx.journal_id) x.category = c
+  await act('category', { groupId: tx.group_id, journalId: tx.journal_id, category: c })
+}
+function tapTx(t: any) { if (selecting.value) toggleSel(t); else open.value = t }
+
+const dayTx = computed(() => (day.value ? (L.value?.transactions ?? []).filter((t: any) => t.date === day.value) : []))
 const run = computed(() => d.value?.last_run)
 const runErrors = computed(() => Object.entries(run.value?.summary ?? {}).filter(([, v]) => typeof v === 'string' && /error|login/.test(v as string)))
+const linkFor = (a: any) => d.value?.links?.find((l: any) => l.session_id === a.session_id)
+const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now()) / 86400000)
 </script>
 
 <template>
-  <div>
+  <div class="money">
     <div v-if="!d && pending" class="muted pad">Lade…</div>
     <div v-else-if="error && !d" class="bad pad">Die Money-API in CT 108 ist nicht erreichbar: {{ error.statusMessage || error.message }}</div>
 
@@ -93,40 +165,70 @@ const runErrors = computed(() => Object.entries(run.value?.summary ?? {}).filter
       <MoneySetup :d="d" @changed="load" />
 
       <div class="tiles">
-        <div class="tile"><span class="lbl">Vermögen</span><span class="big num">{{ eur(d.net_worth, 0) }}</span></div>
-        <div class="tile"><span class="lbl">Konten</span><span class="big num">{{ eur(d.cash, 0) }}</span></div>
-        <div class="tile"><span class="lbl">Depot</span><span class="big num">{{ eur(d.invested_value, 0) }}</span>
-          <span v-if="gain != null" class="small num" :class="gain >= 0 ? 'ok' : 'bad'">{{ gain >= 0 ? '+' : '' }}{{ eur(gain, 0) }}</span></div>
-        <div class="tile"><span class="lbl">Abos / Monat</span><span class="big num">{{ eur(d.subs_monthly) }}</span>
-          <span class="small faint">{{ activeSubs.length }} aktiv</span></div>
+        <button class="tile" @click="goTab('konten')"><span class="lbl">Vermögen</span><span class="big num">{{ fmtEur(d.net_worth, 0) }}</span>
+          <span class="small faint">Konten {{ fmtEur(d.cash, 0) }}</span></button>
+        <button class="tile" @click="goTab('monat')"><span class="lbl">{{ monthTitle(thisMonth).split(' ')[0] }}</span>
+          <span class="big num">{{ L && month === thisMonth ? fmtEur(-L.spending, 0) : '–' }}</span>
+          <span v-if="L && month === thisMonth" class="small num" :class="L.income - L.spending >= 0 ? 'ok' : 'bad'">Saldo {{ fmtSigned(L.income - L.spending) }}</span></button>
+        <button class="tile" @click="goTab('depot')"><span class="lbl">Depot</span><span class="big num">{{ fmtEur(d.invested_value, 0) }}</span>
+          <span v-if="gain != null" class="small num" :class="gain >= 0 ? 'ok' : 'bad'">{{ fmtSigned(gain) }} · {{ depotIn ? fmtPct(100 * gain / depotIn) : '' }}</span></button>
+        <button class="tile" @click="goTab('abos')"><span class="lbl">Abos / Monat</span><span class="big num">{{ fmtEur(d.subs_monthly, 0) }}</span>
+          <span class="small faint">{{ activeSubs.length }} aktiv{{ nextDue ? ` · ${nextDue} diese Woche` : '' }}</span></button>
       </div>
 
-      <h2 class="sec">
-        <button class="btn ghost mn" @click="shift(-1)">‹</button>
-        {{ monthName(month) }}
-        <button class="btn ghost mn" :disabled="isNow" @click="shift(1)">›</button>
-      </h2>
-      <div v-if="d.ledger_error" class="bad small">Firefly: {{ d.ledger_error }}</div>
-      <div v-else-if="L" class="grid cols-2">
-        <Panel title="Ausgaben nach Kategorie" id="money-cats">
-          <div class="sums small">
-            <span>Einnahmen <b class="num">{{ eur(L.income, 0) }}</b></span>
-            <span>Ausgaben <b class="num">{{ eur(L.spending, 0) }}</b></span>
-            <span>Saldo <b class="num" :class="L.income - L.spending >= 0 ? 'ok' : 'bad'">{{ eur(L.income - L.spending, 0) }}</b></span>
-          </div>
-          <div v-if="!L.categories.length" class="faint small">Noch keine Ausgaben in diesem Monat.</div>
-          <button v-for="c in L.categories" :key="c.name" class="cat" :class="{ on: txFilter === c.name }"
-                  :title="`${c.name}: ${eur(c.amount)}`" @click="txFilter = txFilter === c.name ? '' : c.name">
-            <span class="cn">{{ c.name }}</span>
-            <span class="bar"><i :style="{ width: (100 * c.amount / catMax) + '%' }" /></span>
-            <span class="num cv">{{ eur(c.amount, 0) }}</span>
-          </button>
-        </Panel>
-        <Panel title="Letzte Monate" id="money-trend">
+      <nav class="tabs">
+        <button v-for="[k, l] in TABS" :key="k" class="tab" :class="{ on: tab === k }" @click="goTab(k)">{{ l }}</button>
+      </nav>
+
+      <div v-if="tab === 'monat' || (tab === 'buchungen' && !found)" class="mbar">
+        <button class="btn ghost mn" title="Vormonat" @click="shift(-1)">‹</button>
+        <label class="mt">
+          {{ monthTitle(month) }}
+          <input type="month" :value="month" :max="thisMonth" @change="setMonth(($event.target as HTMLInputElement).value || thisMonth)">
+        </label>
+        <button class="btn ghost mn" :disabled="isNow" title="nächster Monat" @click="shift(1)">›</button>
+        <button class="btn today" :class="{ on: isNow && (tab !== 'monat' || day === isoDay()) }" @click="today">Heute</button>
+      </div>
+      <p v-if="toast" class="bad small">{{ toast }}</p>
+      <div v-if="d.ledger_error && (tab === 'monat' || tab === 'buchungen')" class="bad small">Firefly: {{ d.ledger_error }}</div>
+
+      <!-- ── Monat ── -->
+      <template v-if="tab === 'monat' && L">
+        <div class="sums">
+          <span><span class="lbl">Einnahmen</span><b class="num ok">{{ fmtEur(L.income, 0) }}</b></span>
+          <span><span class="lbl">Ausgaben</span><b class="num">{{ fmtEur(L.spending, 0) }}</b></span>
+          <span><span class="lbl">Saldo</span><b class="num" :class="L.income - L.spending >= 0 ? 'ok' : 'bad'">{{ fmtSigned(L.income - L.spending) }}</b></span>
+          <span v-if="vsAvg != null"><span class="lbl">vs. Ø 3 Monate</span><b class="num" :class="vsAvg <= 0 ? 'ok' : 'warn'">{{ fmtSigned(vsAvg) }}</b></span>
+        </div>
+        <div class="grid cols-2">
+          <Panel title="Kalender" :sub="day ? dayTitle(day) : 'Tag antippen'" id="money-cal">
+            <MoneyCalendar :month="month" :txs="L.transactions" :subs="activeSubs" :selected="day" @pick="x => setQ({ d: x || undefined })" />
+            <div class="calkey small faint"><span><i class="k in" />Eingang</span><span><i class="k due" />Abo fällig</span><span>Zahl = Ausgaben €</span></div>
+            <div v-if="day" class="daylist">
+              <div v-if="!dayTx.length" class="faint small">Keine Buchungen an diesem Tag.</div>
+              <button v-for="t in dayTx" :key="t.journal_id" class="dtx" @click="open = t">
+                <span class="py">{{ t.payee }}</span><span class="pill">{{ t.category || '—' }}</span>
+                <span class="num" :class="t.amount > 0 ? 'ok' : ''">{{ fmtEur(t.amount) }}</span>
+              </button>
+              <button v-if="dayTx.length" class="btn ghost small" @click="goTab('buchungen', { d: day })">in Buchungen öffnen →</button>
+            </div>
+          </Panel>
+          <Panel title="Ausgaben nach Kategorie" sub="Strich = Ø der 3 Vormonate" id="money-cats">
+            <div v-if="!L.categories.length" class="faint small">Noch keine Ausgaben in diesem Monat.</div>
+            <button v-for="c in L.categories" :key="c.name" class="cat"
+                    :title="`${c.name}: ${fmtEur(c.amount)} (Ø ${fmtEur(c.avg)})`" @click="goTab('buchungen', { c: c.name, d: undefined })">
+              <span class="cn">{{ c.name }}</span>
+              <span class="bar"><i :style="{ width: (100 * c.amount / catMax) + '%' }" :class="{ over: c.avg && c.amount > c.avg * 1.2 }" />
+                <b v-if="c.avg" class="avg" :style="{ left: (100 * c.avg / catMax) + '%' }" /></span>
+              <span class="num cv">{{ fmtEur(c.amount, 0) }}</span>
+            </button>
+          </Panel>
+        </div>
+        <Panel title="Letzte 12 Monate" id="money-trend" class="gap">
           <div class="legend small"><span><i class="sw in" />Einnahmen</span><span><i class="sw out" />Ausgaben</span></div>
           <div class="trend">
             <button v-for="t in L.trend" :key="t.month" class="tm" :class="{ on: t.month === month }"
-                    :title="`${monthName(t.month)}: +${eur(t.income, 0)} / −${eur(t.spending, 0)}`" @click="month = t.month">
+                    :title="`${monthTitle(t.month)}: +${fmtEur(t.income, 0)} / −${fmtEur(t.spending, 0)}`" @click="setMonth(t.month)">
               <span class="bars">
                 <i class="in" :style="{ height: (100 * t.income / trendMax) + '%' }" />
                 <i class="out" :style="{ height: (100 * t.spending / trendMax) + '%' }" />
@@ -135,107 +237,175 @@ const runErrors = computed(() => Object.entries(run.value?.summary ?? {}).filter
             </button>
           </div>
         </Panel>
-      </div>
+      </template>
 
-      <div class="grid cols-2 gap">
-        <Panel title="Abos & wiederkehrend" :sub="activeSubs.length ? `${eur(d.subs_monthly)} / Monat` : ''" id="money-subs">
-          <div v-if="!d.subs.length" class="faint small">Wird aus den Buchungen erkannt (gleicher Empfänger, fester Rhythmus).</div>
-          <div v-for="s in [...activeSubs, ...endedSubs]" :key="s.key" class="sub" :class="{ ended: s.state !== 'active' }">
-            <span class="sp">{{ s.payee }}<span v-if="priceUp(s)" class="pill warn">{{ eur(s.prev_amount) }} → {{ eur(s.amount) }}</span></span>
-            <span class="num">{{ eur(s.amount) }}<span class="faint"> / {{ PER[s.period] }}</span></span>
-            <span class="faint small nx">{{ s.state === 'active' ? `nächste ~${dd(s.next_date)}` : 'beendet?' }}</span>
-            <button class="btn ghost x" title="kein Abo – ausblenden" @click="act('subDismiss', { key: s.key })">×</button>
-          </div>
-        </Panel>
-        <Panel title="Depot" :sub="pfLast ? eur(pfLast.value, 0) : ''" id="money-depot">
-          <MoneyLine :series="pf.series" />
-          <div v-for="p in pf.positions.slice(0, 12)" :key="p.isin" class="pos small">
-            <span class="pn">{{ p.name }}</span>
-            <span class="num">{{ eur(p.value, 0) }}</span>
-            <span class="num" :class="p.value - p.buyin >= 0 ? 'ok' : 'bad'">{{ p.buyin ? ((100 * (p.value - p.buyin)) / p.buyin).toFixed(1) + ' %' : '' }}</span>
-          </div>
-          <div v-if="!pf.positions.length" class="faint small">Trade Republic verbinden, dann kommt hier der tägliche Depotwert.</div>
-        </Panel>
-      </div>
-
-      <Panel title="Buchungen" :sub="txFilter || `${L?.transactions.length ?? 0} im Monat`" id="money-tx" class="gap">
-        <template #actions><button v-if="txFilter" class="btn ghost" @click="txFilter = ''">alle</button></template>
-        <div v-if="!txShown.length" class="faint small">Keine Buchungen.</div>
-        <div v-for="t in txShown" :key="t.journal_id" class="tx">
-          <span class="faint small dt">{{ dd(t.date) }}</span>
-          <span class="tp">
-            <span class="py">{{ t.payee }}</span>
-            <span class="faint small ds">{{ t.description !== t.payee ? t.description : '' }} · {{ t.account }}</span>
-          </span>
-          <select v-if="editTx === t.journal_id" class="cs" :value="t.category" @change="setCat(t, ($event.target as HTMLSelectElement).value)" @blur="editTx = null">
+      <!-- ── Buchungen ── -->
+      <template v-if="tab === 'buchungen'">
+        <div class="find">
+          <input v-model="search" type="search" placeholder="Suchen in allen Buchungen: Empfänger, Zweck, Betrag…" enterkeyhint="search">
+          <button class="btn" :class="{ on: selecting }" @click="selecting ? stopSelect() : (selecting = true)">{{ selecting ? 'Fertig' : 'Auswählen' }}</button>
+        </div>
+        <div class="filters">
+          <button class="chip" :class="{ on: !kind }" @click="setQ({ k: undefined })">Alle</button>
+          <button class="chip" :class="{ on: kind === 'out' }" @click="setQ({ k: 'out' })">Ausgaben</button>
+          <button class="chip" :class="{ on: kind === 'in' }" @click="setQ({ k: 'in' })">Eingänge</button>
+          <select class="chip sel" :value="cat" @change="setQ({ c: ($event.target as HTMLSelectElement).value || undefined })">
+            <option value="">Alle Kategorien</option>
             <option v-for="c in d.categories" :key="c" :value="c">{{ c }}</option>
           </select>
-          <button v-else class="pill catp" title="Kategorie ändern" @click="editTx = t.journal_id">{{ t.category || '—' }}</button>
-          <span class="num amt" :class="t.amount > 0 ? 'ok' : ''">{{ eur(t.amount) }}</span>
+          <select v-if="accounts.length > 1" class="chip sel" :value="acct" @change="setQ({ a: ($event.target as HTMLSelectElement).value || undefined })">
+            <option value="">Alle Konten</option>
+            <option v-for="a in accounts" :key="a" :value="a">{{ a }}</option>
+          </select>
+          <button v-if="day && !found" class="chip on" @click="setQ({ d: undefined })">{{ dayTitle(day) }} ✕</button>
         </div>
-      </Panel>
+        <p class="small faint count">
+          <template v-if="searching">suche…</template>
+          <template v-else>{{ txShown.length }} Buchungen{{ found ? ` mit „${search.trim()}“ (alle Monate)` : '' }} · Summe <b class="num" :class="shownSum >= 0 ? 'ok' : ''">{{ fmtEur(shownSum) }}</b></template>
+          <template v-if="selecting"> · <span class="accent">Buchungen antippen zum Auswählen</span></template>
+        </p>
+        <div class="txs">
+          <div v-if="!groups.length && !searching" class="faint small pad2">Keine Buchungen.</div>
+          <section v-for="g in groups" :key="g.day" class="dg">
+            <header class="dh small"><span>{{ dayTitle(g.day) }}</span><span class="num faint">{{ g.sum ? fmtEur(g.sum) : '' }}</span></header>
+            <button v-for="tx in g.txs" :key="tx.journal_id" class="tx" :class="{ picked: sel.has(tx.journal_id) }" @click="tapTx(tx)">
+              <span v-if="selecting" class="ck">{{ sel.has(tx.journal_id) ? '✓' : '' }}</span>
+              <span class="tp">
+                <span class="py">{{ tx.payee }}</span>
+                <span class="faint small ds">{{ tx.description !== tx.payee ? tx.description : '' }}</span>
+              </span>
+              <span class="tr">
+                <span class="num amt" :class="tx.amount > 0 ? 'ok' : ''">{{ fmtEur(tx.amount) }}</span>
+                <span class="pill catp">{{ tx.category || '—' }}</span>
+              </span>
+            </button>
+          </section>
+          <button v-if="txShown.length > LIMIT" class="btn ghost more" @click="LIMIT += 300">mehr ({{ txShown.length - LIMIT }})</button>
+        </div>
+        <div v-if="selecting && sel.size" class="selbar">
+          <span class="small"><b>{{ sel.size }}</b> · {{ fmtEur(selTx.reduce((a: number, t: any) => a + t.amount, 0)) }}</span>
+          <select v-model="subPeriod" class="small"><option value="">Rhythmus auto</option><option v-for="(v, k) in PERIODS" :key="k" :value="k">{{ v.label }}</option></select>
+          <button class="btn primary" @click="selAsSub">Als Abo</button>
+          <select class="small" value="" @change="selCategory(($event.target as HTMLSelectElement).value)">
+            <option value="" disabled>Kategorie…</option>
+            <option v-for="c in d.categories" :key="c" :value="c">{{ c }}</option>
+          </select>
+        </div>
+      </template>
 
-      <Panel title="Konten" id="money-accounts" fold="phone" class="gap">
-        <div v-if="!d.accounts.length" class="faint small">Noch keine Konten verbunden.</div>
-        <div v-for="a in d.accounts" :key="a.key" class="acc">
-          <span class="dot" :class="a.error ? 'bad' : a.last_sync ? 'ok' : ''" />
-          <span class="an">{{ a.name }}<span v-if="a.iban" class="faint small"> · {{ a.iban.slice(-4) }}</span></span>
-          <span v-if="a.error" class="bad small">{{ a.error }}</span>
-          <span class="num ab">{{ eur(a.balance) }}</span>
-        </div>
-      </Panel>
+      <MoneySubs v-if="tab === 'abos'" :subs="d.subs" :hidden="d.subs_hidden ?? []" @act="act" @open="x => (open = x)" @add="addSub" />
+
+      <MoneyDepot v-if="tab === 'depot'" :positions="pf?.positions ?? []" :cash="trCash" />
+
+      <template v-if="tab === 'konten'">
+        <Panel title="Konten" :sub="`${fmtEur(d.cash, 0)} gesamt`" id="money-accounts">
+          <div v-if="!d.accounts.length" class="faint small">Noch keine Konten verbunden.</div>
+          <div v-for="a in d.accounts" :key="a.key" class="acc">
+            <span class="dot" :class="a.error ? 'bad' : a.last_sync ? 'ok' : ''" />
+            <span class="an">
+              <span>{{ a.name }}<span v-if="a.iban" class="faint small"> · {{ a.iban.slice(-4) }}</span></span>
+              <span class="faint small">
+                {{ a.last_sync ? `Sync ${ago(a.last_sync)}` : 'noch nicht synchronisiert' }}
+                <template v-if="linkFor(a)?.valid_until"> · Zugriff noch {{ daysLeft(linkFor(a).valid_until) }} Tage</template>
+              </span>
+              <span v-if="a.error" class="bad small">{{ a.error }}</span>
+            </span>
+            <button class="btn ghost small" @click="goTab('buchungen', { a: a.name })">Buchungen</button>
+            <span class="num ab">{{ fmtEur(a.balance) }}</span>
+          </div>
+        </Panel>
+      </template>
+
+      <MoneyTxSheet v-if="open" :tx="open" :categories="d.categories" @close="open = null" @category="setCat" @changed="load" />
     </template>
   </div>
 </template>
 
 <style scoped>
 .pad { padding: 48px 0; text-align: center; }
+.pad2 { padding: 24px 0; text-align: center; }
 .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 2px 12px; }
 .strip .ref { margin-left: auto; padding: 2px 8px; }
 .note { margin: 0 2px 12px; color: var(--accent); }
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }
-.tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+.tile:hover { border-color: var(--line-2); }
 .lbl { font-size: 12px; color: var(--muted); }
 .tile .num { text-align: left; }
 .big { font-size: 22px; font-weight: 600; }
-@media (max-width: 760px) { .tiles { grid-template-columns: 1fr 1fr; } .big { font-size: 19px; } }
-.sec { display: flex; align-items: center; gap: 6px; }
-.mn { padding: 0 8px; font-size: 16px; }
+@media (max-width: 760px) { .tiles { grid-template-columns: 1fr 1fr; gap: 8px; } .big { font-size: 19px; } }
+
+.tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; background: var(--bg); padding: 6px 0; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.tab { flex: 1 0 auto; padding: 7px 14px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; }
+.tab:hover { color: var(--text); }
+.tab.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+.mbar { display: flex; align-items: center; gap: 4px; margin: 8px 0 12px; }
+.mn { padding: 2px 10px; font-size: 18px; }
+.mt { position: relative; font-size: 16px; font-weight: 600; padding: 4px 8px; border-radius: 8px; cursor: pointer; min-width: 150px; text-align: center; }
+.mt:hover { background: var(--panel-2); }
+.mt input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.today { margin-left: auto; }
+.today.on { color: var(--accent); border-color: var(--accent); }
+
 .gap { margin-top: 16px; }
-.sums { display: flex; gap: 16px; flex-wrap: wrap; color: var(--muted); margin-bottom: 12px; }
-.sums b { color: var(--text); }
+.sums { display: flex; gap: 8px 22px; flex-wrap: wrap; margin-bottom: 14px; }
+.sums > span { display: flex; flex-direction: column; }
+.sums b { font-size: 17px; font-weight: 600; text-align: left; }
+.calkey { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+.k { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
+.k.in { background: var(--ok); } .k.due { background: var(--warn); }
+.daylist { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
+.dtx { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; align-items: center; width: 100%; padding: 6px 4px; border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; border-radius: 6px; }
+.dtx:hover { background: var(--accent-soft); }
 .cat { display: grid; grid-template-columns: minmax(90px, 38%) 1fr auto; align-items: center; gap: 10px; width: 100%; padding: 5px 4px; border: 0; border-radius: 6px; background: none; color: var(--text); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
-.cat:hover, .cat.on { background: var(--accent-soft); }
+.cat:hover { background: var(--accent-soft); }
 .cn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bar { height: 8px; background: var(--track); border-radius: 4px; overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--accent); border-radius: 0 4px 4px 0; }
+.bar { position: relative; height: 8px; background: var(--track); border-radius: 4px; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.bar i.over { background: var(--warn); }
+.bar .avg { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--text); opacity: .6; border-radius: 1px; }
 .cv { min-width: 64px; text-align: right; }
 .legend { display: flex; gap: 14px; color: var(--muted); margin-bottom: 8px; }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-.sw.in, .bars .in { background: var(--muted); }
+.sw.in, .bars .in { background: var(--ok); opacity: .75; }
 .sw.out, .bars .out { background: var(--accent); }
-.trend { display: flex; gap: 6px; align-items: stretch; height: 170px; }
-.tm { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; border: 0; background: none; font: inherit; font-size: 11.5px; cursor: pointer; border-radius: 6px; padding: 4px 0; }
+.trend { display: flex; gap: 4px; align-items: stretch; height: 160px; }
+.tm { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; border: 0; background: none; font: inherit; font-size: 11px; cursor: pointer; border-radius: 6px; padding: 4px 0; }
 .tm.on, .tm:hover { background: var(--accent-soft); }
-.bars { flex: 1; display: flex; align-items: flex-end; gap: 2px; width: 70%; justify-content: center; }
-.bars i { width: 45%; max-width: 18px; border-radius: 4px 4px 0 0; min-height: 1px; }
-.sub { display: grid; grid-template-columns: 1fr auto auto 26px; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; }
-.sub:first-of-type { border-top: 0; }
-.sub.ended { opacity: .5; }
-.sp { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; min-width: 0; }
-.x { padding: 0 6px; }
-@media (max-width: 560px) { .nx { display: none; } .sub { grid-template-columns: 1fr auto 26px; } }
-.pos { display: grid; grid-template-columns: 1fr auto 64px; gap: 10px; padding: 4px 0; border-top: 1px solid var(--line); }
-.pos .num:last-child { text-align: right; }
-.pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tx { display: grid; grid-template-columns: 44px 1fr auto auto; gap: 10px; align-items: center; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
-.tx:first-of-type { border-top: 0; }
-.tp { display: flex; flex-direction: column; min-width: 0; }
+.bars { flex: 1; display: flex; align-items: flex-end; gap: 2px; width: 80%; justify-content: center; }
+.bars i { width: 45%; max-width: 16px; border-radius: 3px 3px 0 0; min-height: 1px; }
+
+.find { display: flex; gap: 8px; margin: 4px 0 10px; }
+.find input { flex: 1; min-width: 0; padding: 8px 12px; }
+.find .btn.on { color: var(--accent); border-color: var(--accent); }
+.filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-bottom: 6px; }
+.chip { flex: none; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.chip.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
+.chip.sel { padding: 4px 8px; font-size: 12.5px; }
+.count { margin: 4px 2px 8px; }
+.count b { color: var(--text); }
+.accent { color: var(--accent); }
+.txs { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 14px 10px; }
+.dg + .dg { margin-top: 4px; }
+.dh { position: sticky; top: 48px; z-index: 2; display: flex; justify-content: space-between; padding: 8px 0 4px; background: var(--panel); color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+.tx { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.tx:last-child { border-bottom: 0; }
+.tx:hover { background: var(--panel-2); }
+.tx.picked { background: var(--accent-soft); }
+.ck { flex: none; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--line-2); display: grid; place-items: center; font-size: 12px; color: var(--accent); }
+.picked .ck { border-color: var(--accent); }
+.tp { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .py, .ds { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.catp { cursor: pointer; border: 0; font: inherit; font-size: 11.5px; }
-.cs { max-width: 160px; font-size: 12px; }
-.amt { min-width: 80px; text-align: right; }
-@media (max-width: 560px) { .tx { grid-template-columns: 1fr auto; } .dt { display: none; } .catp, .cs { grid-column: 1; justify-self: start; } .amt { grid-row: 1; grid-column: 2; } }
-.acc { display: flex; align-items: center; gap: 8px; padding: 6px 0; flex-wrap: wrap; }
-.ab { margin-left: auto; }
+.tr { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.catp { font-size: 11px; }
+.amt { font-weight: 500; }
+.more { width: 100%; margin-top: 6px; }
+.selbar { position: sticky; bottom: calc(var(--tabbar) + 10px); z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--accent); border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, .5); }
+.selbar select { padding: 5px 8px; }
+.btn.small { font-size: 12px; padding: 4px 10px; }
+.acc { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
+.acc:first-of-type { border-top: 0; }
+.an { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.ab { min-width: 90px; }
 </style>
