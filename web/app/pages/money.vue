@@ -68,6 +68,15 @@ const L = computed(() => d.value?.ledger)
 const monthShort = (m: string) => new Date(m + '-01T12:00').toLocaleDateString('de-DE', { month: 'short' })
 const catMax = computed(() => Math.max(1, ...(L.value?.categories ?? []).flatMap((c: any) => [c.amount, c.avg ?? 0])))
 const trendMax = computed(() => Math.max(1, ...(L.value?.trend ?? []).flatMap((t: any) => [t.income, t.spending])))
+// what the month's in/out leaves out: money moved between your own accounts, and into the depot (net)
+const moved = computed(() => {
+  let tr = 0, inv = 0
+  for (const t of L.value?.transactions ?? []) {
+    if (t.category === 'Umbuchung' && t.amount > 0) tr += t.amount
+    if (t.category === 'Investments') inv -= t.amount
+  }
+  return { tr, inv }
+})
 const vsAvg = computed(() => (L.value?.avg_spending ? L.value.spending - L.value.avg_spending : null))
 
 const pf = computed(() => d.value?.portfolio)
@@ -94,13 +103,14 @@ watch(search, (v) => {
     try { found.value = (await $fetch<any>('/api/money/search', { query: { q: v.trim() } })).transactions } catch { found.value = [] } finally { searching.value = false }
   }, 300)
 }, { immediate: true })
-const kind = computed(() => q('k'))  // '' | out | in
+const kind = computed(() => q('k'))  // '' | out | in | tr
+const MOVE = ['Umbuchung', 'Investments']  // moving your own money, never income or spending
 const acct = computed(() => q('a'))
 const accounts = computed(() => [...new Set((L.value?.transactions ?? []).map((t: any) => t.account))].sort())
 const txAll = computed<any[]>(() => found.value ?? L.value?.transactions ?? [])
 const txShown = computed(() => txAll.value.filter((t: any) =>
   (!cat.value || t.category === cat.value) && (found.value || !day.value || t.date === day.value) &&
-  (!kind.value || (kind.value === 'in' ? t.amount > 0 : t.amount < 0)) && (!acct.value || t.account === acct.value)))
+  (!kind.value || (kind.value === 'tr' ? MOVE.includes(t.category) : !MOVE.includes(t.category) && (kind.value === 'in' ? t.amount > 0 : t.amount < 0))) && (!acct.value || t.account === acct.value)))
 const LIMIT = ref(200)
 watch([txAll, cat, day, kind, acct], () => (LIMIT.value = 200))
 const groups = computed(() => {
@@ -202,6 +212,9 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
           <span><span class="lbl">Saldo</span><b class="num" :class="L.income - L.spending >= 0 ? 'ok' : 'bad'">{{ fmtSigned(L.income - L.spending) }}</b></span>
           <span v-if="vsAvg != null"><span class="lbl">vs. Ø 3 Monate</span><b class="num" :class="vsAvg <= 0 ? 'ok' : 'warn'">{{ fmtSigned(vsAvg) }}</b></span>
         </div>
+        <p v-if="moved.tr || moved.inv" class="small faint excl">
+          ohne <button class="lnk" @click="goTab('buchungen', { k: 'tr' })">Umbuchungen {{ fmtEur(moved.tr, 0) }}</button><template v-if="moved.inv"> und Investments {{ fmtEur(moved.inv, 0) }}</template>
+        </p>
         <div class="grid cols-2">
           <Panel title="Kalender" :sub="day ? dayTitle(day) : 'Tag antippen'" id="money-cal">
             <MoneyCalendar :month="month" :txs="L.transactions" :subs="activeSubs" :selected="day" @pick="x => setQ({ d: x || undefined })" />
@@ -251,6 +264,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
           <button class="chip" :class="{ on: !kind }" @click="setQ({ k: undefined })">Alle</button>
           <button class="chip" :class="{ on: kind === 'out' }" @click="setQ({ k: 'out' })">Ausgaben</button>
           <button class="chip" :class="{ on: kind === 'in' }" @click="setQ({ k: 'in' })">Eingänge</button>
+          <button class="chip" :class="{ on: kind === 'tr' }" @click="setQ({ k: 'tr' })">Umbuchungen</button>
           <select class="chip sel" :value="cat" @change="setQ({ c: ($event.target as HTMLSelectElement).value || undefined })">
             <option value="">Alle Kategorien</option>
             <option v-for="c in d.categories" :key="c" :value="c">{{ c }}</option>
@@ -356,6 +370,8 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 .gap { margin-top: 16px; }
 .sums { display: flex; gap: 8px 22px; flex-wrap: wrap; margin-bottom: 14px; }
 .sums > span { display: flex; flex-direction: column; }
+.excl { margin: -8px 0 14px; }
+.lnk { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
 .sums b { font-size: 17px; font-weight: 600; text-align: left; }
 .calkey { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
 .k { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
