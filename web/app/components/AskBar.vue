@@ -4,7 +4,7 @@ const props = defineProps<{ busy: boolean, models: any[], placeholder?: string, 
 const emit = defineEmits<{ submit: [string, string[]], stop: [], focus: [boolean] }>()
 const { model, think, web } = useAskSettings()
 const q = ref('')
-const imgs = ref<string[]>([]) // pasted/picked screenshots, already uploaded
+const imgs = ref<string[]>([]) // pasted/picked/dropped screenshots and files, already uploaded
 const opts = ref(false)
 
 // an unsent draft survives switching tabs and reloads, one per draftKey (the chat page keys it by chat)
@@ -26,21 +26,24 @@ watch([q, imgs], () => {
 const uploading = ref(0)
 const imgErr = ref('')
 const file = ref<HTMLInputElement>()
+const isImg = (n: string) => /\.(jpg|png|webp)$/.test(n) && !n.includes('-')
+const fileLabel = (n: string) => n.replace(/^[a-f0-9]{24}-/, '')
+// photos get shrunk in the page first; anything else (pdf, text, zip…) goes up as it is
+const shrinkable = (f: File) => /^image\/(jpeg|png|webp|gif|bmp|avif)$/.test(f.type)
 async function addImages(files: Iterable<File>) {
   imgErr.value = ''
   for (const f of files) {
-    if (!f.type.startsWith('image/')) continue
     uploading.value++
-    try { imgs.value.push(await uploadNoteImage(f, '/api/chat/image')) } catch (e: any) { imgErr.value = `image failed: ${e?.statusMessage || e?.message}` } finally { uploading.value-- }
+    try { imgs.value.push(shrinkable(f) ? await uploadNoteImage(f, '/api/chat/image') : await uploadChatFile(f)) } catch (e: any) { imgErr.value = `${f.name || 'file'} failed: ${e?.data?.statusMessage || e?.statusMessage || e?.message}` } finally { uploading.value-- }
   }
 }
 function onPaste(e: ClipboardEvent) {
   if (!props.images) return
-  const files = [...(e.clipboardData?.files ?? [])].filter(f => f.type.startsWith('image/'))
+  const files = [...(e.clipboardData?.files ?? [])]
   if (files.length) { e.preventDefault(); addImages(files) }
 }
 function onDrop(e: DragEvent) { if (props.images) addImages(e.dataTransfer?.files ?? []) }
-function onPick() { addImages(file.value?.files ?? []); file.value!.value = '' }
+function onPick() { const fs = [...(file.value?.files ?? [])]; file.value!.value = ''; addImages(fs) } // copy before clearing empties the list
 // grows with what is typed (up to ~8 lines); Enter sends, Shift+Enter starts a new line
 const box = ref<HTMLTextAreaElement>()
 const fit = () => { const el = box.value; if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px' }
@@ -115,7 +118,8 @@ function send() {
     </div>
     <div v-if="images && (imgs.length || uploading || imgErr)" class="att">
       <span v-for="(n, i) in imgs" :key="n" class="th">
-        <img :src="`/api/chat/img/${n}`" alt="screenshot">
+        <img v-if="isImg(n)" :src="`/api/chat/img/${n}`" alt="screenshot">
+        <span v-else class="fchip small" :title="fileLabel(n)"><Icon name="clip" :size="13" /> {{ fileLabel(n) }}</span>
         <button type="button" title="remove" @click="imgs.splice(i, 1)">✕</button>
       </span>
       <span v-if="uploading" class="small faint">uploading…</span>
@@ -128,10 +132,11 @@ function send() {
         @keydown="key" @paste="onPaste" @focus="emit('focus', true)" @blur="emit('focus', false)"
       />
       <template v-if="images">
-        <input ref="file" type="file" accept="image/*" multiple hidden @change="onPick">
-        <button type="button" class="btn ghost ico" title="attach screenshots (or paste / drop them)" @click="file?.click()">
-          <Icon name="image" :size="16" />
-        </button>
+        <!-- a label opens the picker natively; .click() on a display:none input is ignored by some browsers (iOS Safari) -->
+        <label class="btn ghost ico pick" title="attach screenshots or files (or paste / drop them)">
+          <input ref="file" type="file" multiple class="vh" @change="onPick">
+          <Icon name="clip" :size="16" />
+        </label>
       </template>
       <button type="button" class="btn ghost ico" :class="{ on: opts }" title="model and tools" @click="opts = !opts">
         <Icon name="settings" :size="16" />
@@ -169,6 +174,7 @@ function send() {
 .att { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 0 6px 31px; }
 .th { position: relative; }
 .th img { display: block; height: 52px; max-width: 110px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
+.fchip { display: flex; align-items: center; gap: 5px; height: 30px; max-width: 180px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .th button { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--muted); font-size: 10px; line-height: 1; padding: 0; cursor: pointer; }
 @media (max-width: 640px) { .att { padding-left: 0; } }
 .line { display: flex; align-items: flex-end; gap: 6px; }
@@ -177,6 +183,8 @@ function send() {
 .askbar textarea.q { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; line-height: 20px; padding: 7px 0; outline: none; resize: none; max-height: 200px; overflow-y: auto; }
 .askbar textarea.q::placeholder { color: var(--faint); }
 .ico { padding: 0; width: 34px; height: 34px; border-radius: 9px; }
+.pick { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
+.vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 .ghost.on { color: var(--accent); background: var(--accent-soft); }
 .opts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 0 2px 31px; color: var(--muted); }
 .opts select { padding: 5px 8px; font-size: 12px; max-width: 220px; }

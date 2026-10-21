@@ -4,7 +4,7 @@
 Serves JSON to the dashboard CT only (source IP + bearer token). It never runs caller-supplied
 commands: previews go through `pv` inside a CT tagged `dev`, for a project path that `pv ls` listed.
 """
-import base64, fcntl, json, os, pty, re, secrets, select, shlex, signal, struct, subprocess, termios, threading, tty, time, urllib.error, urllib.request
+import base64, fcntl, json, os, pty, re, secrets, select, shlex, shutil, signal, struct, subprocess, termios, threading, tty, time, urllib.error, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -1574,7 +1574,7 @@ def _cc_cleanup():
     for f in CC_DIR.glob("*"):
         try:
             if f.stat().st_mtime < cutoff:
-                f.unlink()
+                shutil.rmtree(f) if f.is_dir() else f.unlink()
         except OSError:
             pass
 
@@ -1594,18 +1594,25 @@ def claude_send(chat, session, prompt, auto, model=None, effort=None, images=Non
     turn = f"{chat}-{int(time.time() * 1000)}"
     # a session Claude Code already stored is resumed, an unknown id starts one under that id
     known = any(Path("/root/.claude/projects").glob(f"*/{session}.jsonl"))
-    # screenshots pasted into the chat: saved next to the turn, Claude opens them with Read (it sees images)
-    paths = []
+    # screenshots / files dropped into the chat: saved next to the turn, Claude opens them with Read (it sees images and PDFs)
+    paths, shots = [], 0
     for i, im in enumerate((images or [])[:8]):
-        ext = str(im.get("name", "")).rsplit(".", 1)[-1]
-        if ext not in ("jpg", "png", "webp"):
+        name = str(im.get("name", ""))
+        if re.fullmatch(r"[a-f0-9]{24}\.(jpg|png|webp)", name):
+            f, shots = CC_DIR / f"{turn}-{i}.{name.rsplit('.', 1)[-1]}", shots + 1
+        elif m := re.fullmatch(r"[a-f0-9]{24}-([\w.-]{1,100})", name):
+            d = CC_DIR / f"{turn}-{i}"  # own folder so the file keeps its real name
+            d.mkdir(mode=0o700, exist_ok=True)
+            f = d / m[1].lstrip(".")
+        else:
             continue
-        f = CC_DIR / f"{turn}-{i}.{ext}"
         f.write_bytes(base64.b64decode(im.get("data", "")))
         paths.append(str(f))
     if paths:
-        prompt += "\n\n[The owner attached " + ("a screenshot" if len(paths) == 1 else f"{len(paths)} screenshots") + \
-                  ". Look at " + ("it" if len(paths) == 1 else "them") + " with the Read tool first: " + ", ".join(paths) + "]"
+        what = "a screenshot" if shots == len(paths) == 1 else f"{len(paths)} screenshots" if shots == len(paths) else \
+               "a file" if len(paths) == 1 else f"{len(paths)} files"
+        prompt += f"\n\n[The owner attached {what}. Look at " + ("it" if len(paths) == 1 else "them") + \
+                  " first (Read handles images, PDFs and text; use Bash for archives or binaries): " + ", ".join(paths) + "]"
     cmd = [CLAUDE, "-p", prompt, "--output-format", "stream-json", "--verbose", "--include-partial-messages",
            "--resume" if known else "--session-id", session, "--permission-prompts", "none",
            "--append-system-prompt", CC_SYSTEM + (CC_AUTO if auto else CC_RO),

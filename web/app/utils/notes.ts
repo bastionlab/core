@@ -30,6 +30,19 @@ export async function uploadNoteImage(file: Blob, url = '/api/notes/image') {
   return name
 }
 
+/** any other file for the Claude chat, sent as it is (max 20 MB) */
+export async function uploadChatFile(file: File) {
+  if (file.size > 20 * 2 ** 20) throw new Error('over 20 MB')
+  const data = await new Promise<string>((ok, no) => {
+    const r = new FileReader()
+    r.onload = () => ok(String(r.result).split(',')[1] ?? '')
+    r.onerror = () => no(new Error('could not read file'))
+    r.readAsDataURL(file)
+  })
+  const { name } = await $fetch<{ name: string }>('/api/chat/file', { method: 'POST', body: { data, name: file.name || 'file' } })
+  return name
+}
+
 const TASK = /^(\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/gm
 
 /** "- [ ]" items: done / total */
