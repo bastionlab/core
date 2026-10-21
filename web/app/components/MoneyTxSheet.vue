@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** one booking: change its category, see everything else with that payee, and tick the charges that make up a subscription */
 const props = defineProps<{ tx: any, categories: string[] }>()
-const emit = defineEmits<{ close: [], category: [any, string], changed: [] }>()
+const emit = defineEmits<{ close: [], category: [any, string, 'one' | 'payee'], changed: [] }>()
 
 const p = ref<any>(null)
 const err = ref('')
@@ -21,6 +21,25 @@ async function load() {
   } catch (e: any) { err.value = e?.data?.statusMessage || e?.message }
 }
 watch(() => props.tx.journal_id, load, { immediate: true })
+
+// a new category asks: just this booking, or every booking with this payee (same direction) + future ones
+const pendingCat = ref('')
+watch(() => props.tx.journal_id, () => (pendingCat.value = ''))
+const samePayee = computed(() => (p.value?.transactions ?? []).filter((t: any) => (t.amount > 0) === (props.tx.amount > 0) && !['Umbuchung', 'Investments'].includes(t.category)).length)
+function pickCat(c: string) {
+  if (c === props.tx.category) { pendingCat.value = ''; return }
+  if (samePayee.value > 1) pendingCat.value = c
+  else emit('category', props.tx, c, 'one')
+}
+function applyCat(scope: 'one' | 'payee') {
+  const c = pendingCat.value
+  pendingCat.value = ''
+  emit('category', props.tx, c, scope)
+  if (scope === 'payee' && p.value) {
+    for (const t of p.value.transactions) if ((t.amount > 0) === (props.tx.amount > 0) && !['Umbuchung', 'Investments'].includes(t.category)) t.category = c
+    msg.value = `✓ ${samePayee.value} Buchungen mit ${props.tx.payee} → ${c}, künftige auch`
+  }
+}
 
 function toggle(id: string) {
   const s = new Set(picked.value)
@@ -58,10 +77,16 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
       </header>
       <p v-if="tx.description && tx.description !== tx.payee" class="small muted desc">{{ tx.description }}</p>
       <label v-if="!String(tx.journal_id).startsWith('sub:')" class="row small"><span class="muted">Kategorie</span>
-        <select :value="tx.category" @change="emit('category', tx, ($event.target as HTMLSelectElement).value)">
+        <select :value="pendingCat || tx.category" @change="pickCat(($event.target as HTMLSelectElement).value)">
           <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
         </select>
       </label>
+      <div v-if="pendingCat" class="scope">
+        <span class="small">{{ pendingCat }} für…</span>
+        <button class="btn primary" @click="applyCat('payee')">Alle {{ samePayee }} mit {{ tx.payee }}<span class="faint2"> + künftige</span></button>
+        <button class="btn" @click="applyCat('one')">Nur diese</button>
+        <button class="btn ghost" @click="pendingCat = ''">Abbrechen</button>
+      </div>
 
       <div v-if="err" class="bad small">{{ err }}</div>
       <div v-else-if="!p" class="faint small">Lade Verlauf…</div>
@@ -113,6 +138,9 @@ header { display: flex; align-items: flex-start; gap: 10px; }
 .desc { margin: 0; overflow-wrap: anywhere; }
 .row { display: flex; align-items: center; gap: 10px; }
 .row select { padding: 4px 8px; }
+.scope { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); }
+.scope .btn.primary { white-space: normal; text-align: left; }
+.faint2 { font-weight: 400; opacity: .75; }
 .stats { display: flex; gap: 6px 14px; flex-wrap: wrap; align-items: center; color: var(--muted); }
 .stats b { color: var(--text); }
 .mbars { display: flex; gap: 3px; height: 44px; align-items: flex-end; }

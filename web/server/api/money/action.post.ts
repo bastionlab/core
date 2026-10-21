@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
     case 'trConfig': return post('/tr/config', { phone: str(body.phone, 20), pin: str(body.pin, 8) })
     case 'trLogin': return post('/tr/login')
     case 'trCode': return post('/tr/code', { code: str(body.code, 10) }, 60_000)
-    case 'category': return post('/tx/category', { group_id: str(body.groupId, 20), journal_id: str(body.journalId, 20), category: str(body.category, 40) })
+    case 'category': return post('/tx/category', { group_id: str(body.groupId, 20), journal_id: str(body.journalId, 20), category: str(body.category, 40), scope: body.scope === 'payee' ? 'payee' : 'one' })
     case 'subDismiss': return post('/subs/dismiss', { key: str(body.key, 80) })
     case 'subRemove': return post('/subs/remove', { key: str(body.key, 80) })
     case 'subRestore': return post('/subs/restore', { key: str(body.key, 80) })

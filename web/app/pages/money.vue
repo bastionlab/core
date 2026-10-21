@@ -133,10 +133,12 @@ async function selCategory(c: string) {
 function addSub() { goTab('buchungen'); selecting.value = true; nextTick(() => document.querySelector<HTMLInputElement>('.find input')?.focus()) }
 
 const open = ref<any>(null)
-async function setCat(tx: any, c: string) {
+async function setCat(tx: any, c: string, scope: 'one' | 'payee' = 'one') {
+  // optimistic: this booking, or every booking with the same payee in the same direction (transfers stay as they are)
+  const hit = (x: any) => x.journal_id === tx.journal_id || (scope === 'payee' && x.payee === tx.payee && (x.amount > 0) === (tx.amount > 0) && !['Umbuchung', 'Investments'].includes(x.category))
   tx.category = c
-  for (const list of [L.value?.transactions, found.value]) for (const x of list ?? []) if (x.journal_id === tx.journal_id) x.category = c
-  await act('category', { groupId: tx.group_id, journalId: tx.journal_id, category: c })
+  for (const list of [L.value?.transactions, found.value]) for (const x of list ?? []) if (hit(x)) x.category = c
+  await act('category', { groupId: tx.group_id, journalId: tx.journal_id, category: c, scope })
 }
 function tapTx(t: any) { if (selecting.value) toggleSel(t); else open.value = t }
 
