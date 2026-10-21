@@ -158,7 +158,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
         <span class="muted">{{ d.syncing ? 'synchronisiert…' : run ? `Sync ${ago(run.finished)}` : 'noch kein Sync' }}</span>
         <span v-for="[k, v] in runErrors" :key="k" class="bad">{{ k }}: {{ v }}</span>
         <a class="faint" href="http://192.168.1.58:8080" target="_blank" rel="noopener">Firefly ↗</a>
-        <button class="btn ghost ref" :disabled="d.syncing" title="jetzt synchronisieren" @click="act('sync')">↻</button>
+        <button class="btn ghost ref" :disabled="d.syncing" title="jetzt synchronisieren" @click="act('sync')">{{ d.syncing ? '…' : '↻ Sync' }}</button>
       </div>
       <p v-if="linkMsg" class="small note">{{ linkMsg }}</p>
 
@@ -299,6 +299,9 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 
       <template v-if="tab === 'konten'">
         <Panel title="Konten" :sub="`${fmtEur(d.cash, 0)} gesamt`" id="money-accounts">
+          <template #actions>
+            <button class="btn small" :disabled="d.syncing" @click="act('sync')">{{ d.syncing ? 'synchronisiert…' : '↻ Jetzt synchronisieren' }}</button>
+          </template>
           <div v-if="!d.accounts.length" class="faint small">Noch keine Konten verbunden.</div>
           <div v-for="a in d.accounts" :key="a.key" class="acc">
             <span class="dot" :class="a.error ? 'bad' : a.last_sync ? 'ok' : ''" />
