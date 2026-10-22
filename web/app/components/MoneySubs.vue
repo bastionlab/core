@@ -1,25 +1,34 @@
 <script setup lang="ts">
-/** Abos tab: what's due next, every subscription with its monthly weight, edit/rename/hide, and the hidden ones back */
+/** Abos tab: what's due next, every subscription with its monthly weight (net of friends' shares), regular income,
+ *  edit/rename/hide, and the hidden ones back */
 const props = defineProps<{ subs: any[], hidden: any[] }>()
 const emit = defineEmits<{ act: [string, Record<string, any>], open: [any], add: [] }>()
 const { armed, arm } = useArm()
 
 const monthly = (s: any) => s.amount * (PERIODS[s.period]?.perMonth ?? 1)
-const active = computed(() => props.subs.filter(s => s.state === 'active').sort((a, b) => monthly(b) - monthly(a)))
-const ended = computed(() => props.subs.filter(s => s.state !== 'active'))
-const perMonth = computed(() => active.value.reduce((a, s) => a + monthly(s), 0))
+const net = (s: any) => monthly(s) - (s.share_monthly || 0)
+const isIn = (s: any) => s.kind === 'in'
+const active = computed(() => props.subs.filter(s => s.state === 'active' && !isIn(s)).sort((a, b) => net(b) - net(a)))
+const ended = computed(() => props.subs.filter(s => s.state !== 'active' && !isIn(s)))
+const income = computed(() => props.subs.filter(s => isIn(s)).sort((a, b) => (a.state === 'active' ? 0 : 1) - (b.state === 'active' ? 0 : 1) || monthly(b) - monthly(a)))
+const perMonth = computed(() => active.value.reduce((a, s) => a + net(s), 0))
+const inMonth = computed(() => income.value.filter(s => s.state === 'active').reduce((a, s) => a + monthly(s), 0))
 const upcoming = computed(() => {
   const end = new Date(); end.setDate(end.getDate() + 31)
   const today = isoDay()
-  return active.value.flatMap(s => subCharges(s, isoDay(end)).filter(d => d >= today).map(d => ({ d, s }))).sort((a, b) => a.d.localeCompare(b.d))
+  return [...active.value, ...income.value].flatMap(s => subCharges(s, isoDay(end)).filter(d => d >= today).map(d => ({ d, s }))).sort((a, b) => a.d.localeCompare(b.d))
 })
+const sections = computed(() => [
+  { id: 'money-subs', title: 'Abos & wiederkehrend', sub: `${active.value.length} aktiv`, list: [...active.value, ...(showEnded.value ? ended.value : [])] },
+  ...(income.value.length ? [{ id: 'money-income', title: 'Regelmäßige Einnahmen', sub: `≈ ${fmtEur(inMonth.value, 0)} / Monat`, list: income.value }] : []),
+])
 const priceUp = (s: any) => s.prev_amount != null && Math.abs(s.amount - s.prev_amount) >= 0.01 && s.changed && Date.now() / 1000 - s.changed < 60 * 86400
 
 const open = ref('')
 const nameDraft = ref('')
 function expand(s: any) { open.value = open.value === s.key ? '' : s.key; nameDraft.value = s.name || '' }
 function rename(s: any) { if ((s.name || '') !== nameDraft.value.trim()) emit('act', 'subEdit', { key: s.key, name: nameDraft.value.trim() }) }
-const asTx = (s: any) => ({ journal_id: `sub:${s.key}`, payee: s.payee, amount: -s.amount, date: s.last_date, account: '', description: '', category: s.category })
+const asTx = (s: any) => ({ journal_id: `sub:${s.key}`, payee: s.payee, amount: isIn(s) ? s.amount : -s.amount, date: s.last_date, account: '', description: '', category: s.category })
 const showEnded = ref(false)
 const showHidden = ref(false)
 </script>
@@ -27,9 +36,10 @@ const showHidden = ref(false)
 <template>
   <div>
     <div class="sum">
-      <div><span class="lbl">pro Monat</span><b class="num">{{ fmtEur(perMonth) }}</b></div>
+      <div><span class="lbl">Abos / Monat</span><b class="num">{{ fmtEur(perMonth) }}</b></div>
       <div><span class="lbl">pro Jahr</span><b class="num">{{ fmtEur(perMonth * 12, 0) }}</b></div>
-      <div><span class="lbl">aktiv</span><b>{{ active.length }}</b></div>
+      <div v-if="income.length"><span class="lbl">Einnahmen / Monat</span><b class="num ok">{{ fmtEur(inMonth, 0) }}</b></div>
+      <div v-else><span class="lbl">aktiv</span><b>{{ active.length }}</b></div>
       <button class="btn add" @click="emit('add')">＋ Abo aus Buchungen</button>
     </div>
 
@@ -38,13 +48,13 @@ const showHidden = ref(false)
       <div v-for="u in upcoming" :key="u.s.key + u.d" class="due small">
         <span class="faint dd">{{ dayTitle(u.d) }}</span>
         <span class="dn">{{ subName(u.s) }}</span>
-        <span class="num">{{ fmtEur(u.s.amount) }}</span>
+        <span class="num" :class="{ ok: isIn(u.s) }">{{ isIn(u.s) ? '+' : '' }}{{ fmtEur(u.s.amount) }}</span>
       </div>
     </Panel>
 
-    <Panel title="Abos & wiederkehrend" :sub="`${active.length} aktiv`" id="money-subs" class="gap">
-      <div v-if="!subs.length" class="faint small">Wird aus den Buchungen erkannt (gleicher Empfänger, fester Rhythmus) – oder selbst hinzufügen.</div>
-      <div v-for="s in [...active, ...(showEnded ? ended : [])]" :key="s.key" class="sub" :class="{ ended: s.state !== 'active', open: open === s.key }">
+    <Panel v-for="sec in sections" :key="sec.id" :title="sec.title" :sub="sec.sub" :id="sec.id" class="gap">
+      <div v-if="!sec.list.length" class="faint small">Wird aus den Buchungen erkannt (gleicher Empfänger, fester Rhythmus) – oder selbst hinzufügen.</div>
+      <div v-for="s in sec.list" :key="s.key" class="sub" :class="{ ended: s.state !== 'active', open: open === s.key }">
         <button class="row" @click="expand(s)">
           <span class="sp">
             <span class="nm">{{ subName(s) }}</span>
@@ -55,10 +65,20 @@ const showHidden = ref(false)
             </span>
           </span>
           <span class="am">
-            <span class="num">{{ fmtEur(s.amount) }}<span class="faint"> / {{ PERIODS[s.period]?.per }}</span></span>
-            <span v-if="s.period !== 'monthly'" class="faint small num">≈ {{ fmtEur(monthly(s)) }} / Monat</span>
+            <span class="num" :class="{ ok: isIn(s) }">{{ isIn(s) ? '+' : '' }}{{ fmtEur(s.amount) }}<span class="faint"> / {{ PERIODS[s.period]?.per }}</span></span>
+            <span v-if="s.share_monthly > 0" class="faint small num">− {{ fmtEur(s.share_monthly) }} Anteile = <b class="netv">{{ fmtEur(net(s)) }}</b></span>
+            <span v-else-if="s.period !== 'monthly'" class="faint small num">≈ {{ fmtEur(monthly(s)) }} / Monat</span>
           </span>
         </button>
+        <div v-if="open === s.key && s.shares?.length" class="shares small">
+          <div v-for="sh in s.shares" :key="sh.pkey" class="sh" :class="{ off: !sh.active }">
+            <span>{{ sh.payee }}</span>
+            <span class="faint">{{ sh.last_date ? `zuletzt ${dayTitle(sh.last_date)}` : 'noch nichts' }}{{ sh.active ? '' : ' · zahlt nicht mehr?' }}</span>
+            <span class="num ok">{{ fmtEur(sh.amount) }}</span>
+            <button class="lnk" title="nicht mehr verrechnen" @click="emit('act', 'subShare', { key: s.key, remove: sh.pkey })">✕</button>
+          </div>
+        </div>
+        <div v-if="open === s.key && !isIn(s)" class="faint small hint">Anteile von Freunden: unter Buchungen ihre Eingänge auswählen → „Anteil an Abo…“</div>
         <div v-if="open === s.key" class="edit">
           <input v-model="nameDraft" :placeholder="s.payee" maxlength="80" class="small" @blur="rename(s)" @keydown.enter="rename(s)">
           <select :value="s.period" class="small" @change="emit('act', 'subEdit', { key: s.key, period: ($event.target as HTMLSelectElement).value })">
@@ -70,11 +90,11 @@ const showHidden = ref(false)
           </button>
         </div>
       </div>
-      <div class="more small">
+      <div v-if="sec.id === 'money-subs'" class="more small">
         <button v-if="ended.length" class="btn ghost" @click="showEnded = !showEnded">{{ showEnded ? 'beendete ausblenden' : `${ended.length} beendet` }}</button>
         <button v-if="hidden.length" class="btn ghost" @click="showHidden = !showHidden">{{ hidden.length }} ausgeblendet</button>
       </div>
-      <div v-if="showHidden">
+      <div v-if="showHidden && sec.id === 'money-subs'">
         <div v-for="h in hidden" :key="h.key" class="hid small">
           <span class="faint">{{ subName(h) }} · {{ fmtEur(h.amount) }} / {{ PERIODS[h.period]?.per }}</span>
           <button class="btn ghost" @click="emit('act', 'subRestore', { key: h.key })">zurückholen</button>
@@ -108,6 +128,12 @@ const showHidden = ref(false)
 .edit select { padding: 5px 8px; }
 .btn.small { font-size: 12px; padding: 4px 10px; }
 .more { display: flex; gap: 6px; margin-top: 8px; }
+.shares { padding: 2px 4px 6px; }
+.sh { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 10px; align-items: center; padding: 3px 0; }
+.sh.off { opacity: .55; }
+.sh .lnk { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 4px; }
+.hint { padding: 0 4px 4px; }
+.netv { font-weight: 600; color: var(--text); }
 .hid { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
 @media (max-width: 560px) { .sum { gap: 8px 16px; } .sum b { font-size: 16px; } .add { margin-left: 0; width: 100%; } .row { padding: 8px 2px; } }
 </style>

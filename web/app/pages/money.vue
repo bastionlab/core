@@ -83,7 +83,7 @@ const pf = computed(() => d.value?.portfolio)
 const depotIn = computed(() => (pf.value?.positions ?? []).reduce((a: number, p: any) => a + (p.buyin || 0), 0))
 const gain = computed(() => (pf.value?.positions?.length ? d.value.invested_value - depotIn.value : null))
 const trCash = computed(() => d.value?.accounts?.find((a: any) => a.key === 'tr:cash')?.balance ?? null)
-const activeSubs = computed(() => (d.value?.subs ?? []).filter((s: any) => s.state === 'active'))
+const activeSubs = computed(() => (d.value?.subs ?? []).filter((s: any) => s.state === 'active' && s.kind !== 'in'))
 const nextDue = computed(() => {
   const end = new Date(); end.setDate(end.getDate() + 7)
   return activeSubs.value.flatMap((s: any) => subCharges(s, isoDay(end)).filter(x => x >= isoDay())).length
@@ -139,6 +139,13 @@ async function selAsSub() {
 async function selCategory(c: string) {
   for (const t of selTx.value) { t.category = c; await $fetch('/api/money/action', { method: 'POST', body: { action: 'category', groupId: t.group_id, journalId: t.journal_id, category: c } }) }
   stopSelect(); load()
+}
+// all ticked are deposits: a regular income (Taschengeld), or friends' parts of an Abo
+const selIn = computed(() => selTx.value.length > 0 && selTx.value.every((t: any) => t.amount > 0))
+const outSubs = computed(() => activeSubs.value)
+async function selShare(key: string) {
+  await act('subShare', { key, journalIds: [...sel.value] })
+  if (!toast.value) { stopSelect(); goTab('abos') }
 }
 function addSub() { goTab('buchungen'); selecting.value = true; nextTick(() => document.querySelector<HTMLInputElement>('.find input')?.focus()) }
 
@@ -246,7 +253,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
           <span class="lbl">Prognose Monatsende</span>
           <span>Ausgaben ~<b class="num">{{ fmtEur(L.forecast.spending, 0) }}</b> · Saldo ~<b class="num" :class="L.forecast.saldo >= 0 ? 'ok' : 'bad'">{{ fmtSigned(L.forecast.saldo) }}</b>
             · Konten ~<b class="num">{{ fmtEur(d.cash + L.forecast.rest_in - L.forecast.rest_out, 0) }}</b></span>
-          <span class="faint small">noch {{ L.forecast.days_left }} Tage: Abos {{ fmtEur(L.forecast.subs_due, 0) }} + ~{{ fmtEur(L.forecast.pace_day, 0) }}/Tag<template v-if="L.forecast.rest_in > 1"> · Gehalt erwartet ~{{ fmtEur(L.forecast.rest_in, 0) }}</template></span>
+          <span class="faint small">noch {{ L.forecast.days_left }} Tage: Abos {{ fmtEur(L.forecast.subs_due, 0) }} + ~{{ fmtEur(L.forecast.pace_day, 0) }}/Tag<template v-if="L.forecast.rest_in > 1"> · Eingänge erwartet ~{{ fmtEur(L.forecast.rest_in, 0) }}</template></span>
         </div>
         <Panel v-if="odd.length" title="Auffällig" :sub="`${odd.length} Abbuchung${odd.length > 1 ? 'en' : ''}`" id="money-odd" class="oddp">
           <div v-for="a in odd" :key="a.journal_id" class="odd">
@@ -264,7 +271,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
             <div v-if="day" class="daylist">
               <div v-if="!dayTx.length" class="faint small">Keine Buchungen an diesem Tag.</div>
               <button v-for="t in dayTx" :key="t.journal_id" class="dtx" @click="open = t">
-                <span class="tp"><span class="py">{{ t.alias || t.payee }}</span><span class="faint small">{{ t.category || '—' }}</span></span>
+                <span class="tp"><span class="py">{{ t.alias || t.payee }}</span><span class="faint small">{{ t.share_of ? `Anteil ${t.share_of}` : t.category || '—' }}</span></span>
                 <span class="num" :class="t.amount > 0 ? 'ok' : ''">{{ fmtEur(t.amount) }}</span>
               </button>
               <button v-if="dayTx.length" class="btn ghost small" @click="goTab('buchungen', { d: day })">in Buchungen öffnen →</button>
@@ -335,7 +342,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
               </span>
               <span class="tr">
                 <span class="num amt" :class="tx.amount > 0 ? 'ok' : ''">{{ fmtEur(tx.amount) }}</span>
-                <span class="pill catp">{{ tx.category || '—' }}</span>
+                <span class="pill catp">{{ tx.share_of ? `Anteil ${tx.share_of}` : tx.category || '—' }}</span>
               </span>
             </button>
           </section>
@@ -344,7 +351,11 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
         <div v-if="selecting && sel.size" class="selbar">
           <span class="small"><b>{{ sel.size }}</b> · {{ fmtEur(selTx.reduce((a: number, t: any) => a + t.amount, 0)) }}</span>
           <select v-model="subPeriod" class="small"><option value="">Rhythmus auto</option><option v-for="(v, k) in PERIODS" :key="k" :value="k">{{ v.label }}</option></select>
-          <button class="btn primary" @click="selAsSub">Als Abo</button>
+          <button class="btn primary" @click="selAsSub">{{ selIn ? 'Als Einnahme' : 'Als Abo' }}</button>
+          <select v-if="selIn && outSubs.length" class="small" value="" @change="selShare(($event.target as HTMLSelectElement).value)">
+            <option value="" disabled>Anteil an Abo…</option>
+            <option v-for="s in outSubs" :key="s.key" :value="s.key">{{ subName(s) }}</option>
+          </select>
           <select class="small" value="" @change="selCategory(($event.target as HTMLSelectElement).value)">
             <option value="" disabled>Kategorie…</option>
             <option v-for="c in d.categories" :key="c" :value="c">{{ c }}</option>
@@ -380,7 +391,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
         <MoneyNotify class="gap" :n="d.setup?.notify" @changed="load" />
       </template>
 
-      <MoneyTxSheet v-if="open" :tx="open" :categories="d.categories" @close="open = null" @category="setCat" @changed="load" />
+      <MoneyTxSheet v-if="open" :tx="open" :categories="d.categories" :subs="activeSubs" @close="open = null" @category="setCat" @changed="load" />
     </template>
   </div>
 </template>

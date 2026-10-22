@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** one booking: change its category, see everything else with that payee, and tick the charges that make up a subscription */
-const props = defineProps<{ tx: any, categories: string[] }>()
+const props = defineProps<{ tx: any, categories: string[], subs?: any[] }>()
 const emit = defineEmits<{ close: [], category: [any, string, 'one' | 'payee'], changed: [] }>()
 
 const p = ref<any>(null)
@@ -15,9 +15,11 @@ async function load() {
   p.value = null; err.value = ''; msg.value = ''
   try {
     p.value = await $fetch('/api/money/payee', { query: { name: props.tx.payee } })
-    // preselect the charges that look like the same subscription: same payee, price within 25 %
-    const a = Math.abs(props.tx.amount)
-    picked.value = new Set(props.tx.amount < 0 ? p.value.transactions.filter((t: any) => t.amount < 0 && Math.abs(Math.abs(t.amount) - a) <= 0.25 * a).map((t: any) => t.journal_id) : [])
+    // preselect the bookings that look like the same subscription / regular income: same payee and direction,
+    // amount within 25 % (income also on the same account: Taschengeld on DKB, not the odd PayPal)
+    const a = Math.abs(props.tx.amount), inc = props.tx.amount > 0
+    picked.value = new Set(p.value.transactions.filter((t: any) => (t.amount > 0) === inc && Math.abs(Math.abs(t.amount) - a) <= 0.25 * a &&
+      (!inc || t.account === props.tx.account) && !['Umbuchung', 'Investments'].includes(t.category)).map((t: any) => t.journal_id))
   } catch (e: any) { err.value = e?.data?.statusMessage || e?.message }
 }
 watch(() => props.tx.journal_id, load, { immediate: true })
@@ -57,17 +59,31 @@ async function saveRename() {
   } catch (e: any) { msg.value = e?.data?.statusMessage || e?.message }
 }
 
-function toggle(id: string) {
+function toggle(t: any) {
   const s = new Set(picked.value)
-  s.has(id) ? s.delete(id) : s.add(id)
+  // one direction at a time: charges make an Abo, deposits a regular income or a share of one
+  for (const x of p.value?.transactions ?? []) if ((x.amount > 0) !== (t.amount > 0)) s.delete(x.journal_id)
+  s.has(t.journal_id) ? s.delete(t.journal_id) : s.add(t.journal_id)
   picked.value = s
+}
+const abos = computed(() => props.subs ?? [])
+const pickedIn = computed(() => (p.value?.transactions ?? []).some((t: any) => picked.value.has(t.journal_id) && t.amount > 0))
+async function saveShare(key: string) {
+  if (!key) return
+  busy.value = true; msg.value = ''
+  try {
+    await $fetch('/api/money/action', { method: 'POST', body: { action: 'subShare', key, journalIds: [...picked.value] } })
+    msg.value = `✓ Als Anteil an ${subName(abos.value.find(s => s.key === key) ?? {})} verrechnet`
+    emit('changed')
+    await load()
+  } catch (e: any) { msg.value = e?.data?.statusMessage || e?.message } finally { busy.value = false }
 }
 const pickedSum = computed(() => (p.value?.transactions ?? []).filter((t: any) => picked.value.has(t.journal_id)).reduce((a: number, t: any) => a + t.amount, 0))
 async function saveSub() {
   busy.value = true; msg.value = ''
   try {
     const r: any = await $fetch('/api/money/action', { method: 'POST', body: { action: 'subAdd', journalIds: [...picked.value], period: period.value || null, name: name.value || null } })
-    msg.value = `✓ Als Abo gespeichert (${PERIODS[r.period]?.label ?? r.period})`
+    msg.value = `✓ Als ${r.kind === 'in' ? 'Einnahme' : 'Abo'} gespeichert (${PERIODS[r.period]?.label ?? r.period})`
     emit('changed')
     await load()
   } catch (e: any) { msg.value = e?.data?.statusMessage || e?.message } finally { busy.value = false }
@@ -115,7 +131,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
         <div class="stats small">
           <span>{{ p.count }} Buchungen</span>
           <span>12 Monate: <b class="num">{{ fmtEur(p.total_12m, 0) }}</b></span>
-          <span v-for="s in subs" :key="s.key" class="pill accent">Abo · {{ fmtEur(s.amount) }} / {{ PERIODS[s.period]?.per }}</span>
+          <span v-for="s in subs" :key="s.key" class="pill accent">{{ s.kind === 'in' ? 'Einnahme' : 'Abo' }} · {{ fmtEur(s.amount) }} / {{ PERIODS[s.period]?.per }}</span>
+          <span v-if="tx.share_of" class="pill accent">Anteil an {{ tx.share_of }}</span>
         </div>
         <div v-if="months.length > 1" class="mbars">
           <span v-for="m in months" :key="m.month" class="mb" :title="`${monthTitle(m.month)}: ${fmtEur(m.amount)}`">
@@ -123,10 +140,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
           </span>
         </div>
 
-        <h3 class="small muted">Alle Buchungen mit {{ shown }} <span class="faint">– haken = gehört zum Abo</span></h3>
+        <h3 class="small muted">Alle Buchungen mit {{ shown }} <span class="faint">– haken = gehört zum Abo / zur Einnahme</span></h3>
         <div class="list">
           <label v-for="t in p.transactions" :key="t.journal_id" class="li" :class="{ cur: t.journal_id === tx.journal_id }">
-            <input type="checkbox" :disabled="t.amount > 0" :checked="picked.has(t.journal_id)" @change="toggle(t.journal_id)">
+            <input type="checkbox" :checked="picked.has(t.journal_id)" @change="toggle(t)">
             <span class="faint small dt">{{ new Date(t.date + 'T12:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' }) }}</span>
             <span class="small ds">{{ t.description }}</span>
             <span class="num small" :class="t.amount > 0 ? 'ok' : ''">{{ fmtEur(t.amount) }}</span>
@@ -140,7 +157,11 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
             <option v-for="(v, k) in PERIODS" :key="k" :value="k">{{ v.label }}</option>
           </select>
           <input v-model="name" class="small nm" placeholder="Name (optional)" maxlength="80">
-          <button class="btn primary" :disabled="!picked.size || busy" @click="saveSub">Als Abo speichern</button>
+          <button class="btn primary" :disabled="!picked.size || busy" @click="saveSub">{{ pickedIn ? 'Als Einnahme speichern' : 'Als Abo speichern' }}</button>
+          <select v-if="pickedIn && abos.length" class="small" value="" :disabled="busy" @change="saveShare(($event.target as HTMLSelectElement).value)">
+            <option value="" disabled>…oder Anteil an Abo</option>
+            <option v-for="s in abos" :key="s.key" :value="s.key">{{ subName(s) }}</option>
+          </select>
         </div>
         <p v-if="msg" class="small" :class="msg.startsWith('✓') ? 'ok' : 'bad'">{{ msg }}</p>
       </template>

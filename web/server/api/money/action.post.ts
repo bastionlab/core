@@ -30,6 +30,10 @@ export default defineEventHandler(async (event) => {
     case 'subRemove': return post('/subs/remove', { key: str(body.key, 80) })
     case 'subRestore': return post('/subs/restore', { key: str(body.key, 80) })
     case 'subEdit': return post('/subs/edit', { key: str(body.key, 80), period: body.period == null ? null : str(body.period, 12), name: body.name == null ? null : str(body.name, 80) })
+    case 'subShare': {
+      const ids = (Array.isArray(body.journalIds) ? body.journalIds : []).slice(0, 200).map((x: any) => str(x, 20)).filter(Boolean)
+      return post('/subs/share', { key: str(body.key, 80), journal_ids: ids, remove: body.remove ? str(body.remove, 80) : null })
+    }
     case 'subAdd': {
       const ids = (Array.isArray(body.journalIds) ? body.journalIds : []).slice(0, 200).map((x: any) => str(x, 20)).filter(Boolean)
       return post('/subs/add', { journal_ids: ids, period: body.period ? str(body.period, 12) : null, name: body.name ? str(body.name, 80) : null })
