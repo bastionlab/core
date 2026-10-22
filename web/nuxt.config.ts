@@ -17,7 +17,7 @@ export default defineNuxtConfig({
   // the SPA shell must be revalidated or phones (iOS home-screen apps especially) keep showing the old build after a deploy;
   // /_nuxt/* is content-hashed and keeps its long cache
   routeRules: {
-    '/**': { headers: { 'cache-control': 'no-cache' } },
+    '/**': { headers: { 'cache-control': 'no-cache', 'x-frame-options': 'SAMEORIGIN', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin', 'permissions-policy': 'camera=(), microphone=(), geolocation=()' } },
     '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
   },
   runtimeConfig: {
@@ -29,5 +29,6 @@ export default defineNuxtConfig({
     moneyUrl: 'http://192.168.1.58:8090', // NUXT_MONEY_URL
     moneyToken: '', // NUXT_MONEY_TOKEN
     pinHash: '', // NUXT_PIN_HASH — scrypt hash written by ../set-pin
+    ownerLogins: 'owner@example.com', // NUXT_OWNER_LOGINS — Tailscale logins let in (comma-separated)
   },
 })

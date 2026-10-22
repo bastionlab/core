@@ -1723,7 +1723,7 @@ def overview():
 
 class H(BaseHTTPRequestHandler):
     def _auth(self):
-        if self.client_address[0] not in ALLOW or self.headers.get("Authorization") != f"Bearer {TOKEN}":
+        if self.client_address[0] not in ALLOW or not secrets.compare_digest(self.headers.get("Authorization", ""), f"Bearer {TOKEN}"):
             self._send(403, {"error": "forbidden"})
             return False
         return True

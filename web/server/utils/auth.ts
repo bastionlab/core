@@ -59,3 +59,18 @@ export function recordAttempt(ok: boolean) {
     guard.until = Date.now() + Math.min(30_000 * 2 ** guard.lockouts++, 15 * 60_000)
   }
 }
+
+/** NUXT_OWNER_LOGINS (comma-separated) — the Tailscale logins allowed past `tailscale serve` */
+export function ownerLogin(event: H3Event) {
+  const login = String(event.node.req.headers['tailscale-user-login'] ?? '').toLowerCase()
+  const allowed = String(useRuntimeConfig(event).ownerLogins || '').toLowerCase().split(',').map(s => s.trim()).filter(Boolean)
+  return !!login && allowed.includes(login)
+}
+
+/** a write's Origin (or Referer, if a browser left Origin out) must be this host */
+export function sameOrigin(event: H3Event) {
+  const h = event.node.req.headers
+  const src = String(h.origin || h.referer || '')
+  if (!src) return false
+  try { return new URL(src).host === String(h['x-forwarded-host'] || h.host || '') } catch { return false }
+}
