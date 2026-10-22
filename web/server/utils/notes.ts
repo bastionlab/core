@@ -249,6 +249,14 @@ Do not repeat or summarise the note. Do not add steps that are already in it.` }
     if (job.type !== 'polish') out = { ...out, topic: n.topic || out.topic, kind: n.kind }
   }
 
+  // the model can take minutes: if the owner edited the note meanwhile, their version wins
+  const cur: any = db.prepare('SELECT title, body, topic, kind FROM notes WHERE id = ?').get(id)
+  if (!cur) return
+  if (cur.title !== r.title || cur.body !== r.body || cur.topic !== r.topic || cur.kind !== r.kind) {
+    db.prepare('UPDATE notes SET job = NULL, ai_error = ? WHERE id = ?').run('edited while the AI was working, so your version was kept', id)
+    return
+  }
+
   // a first polish has nothing worth undoing back to except the raw text, which stays visible as "Original"
   const prev = job.type === 'polish' ? null : JSON.stringify({ title: n.title, body: n.body, topic: n.topic, kind: n.kind })
   db.prepare('UPDATE notes SET title = ?, body = ?, topic = ?, kind = ?, prev = ?, job = NULL, ai_error = NULL, updated = ? WHERE id = ?')

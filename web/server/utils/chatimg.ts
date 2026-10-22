@@ -2,13 +2,18 @@ import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSy
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 
-/** screenshots and files dropped into the chat; kept as long as pve keeps the Claude turn they went with (30 days) */
+/** screenshots and files dropped into the chat; kept while a chat still shows them, else swept after 30 days */
 export const CHAT_IMG_DIR = join(process.env.NOTES_DIR || '/var/lib/dash', 'chat-img')
 mkdirSync(CHAT_IMG_DIR, { recursive: true })
 
 export function sweepChatImages() {
+  let used: string | null = null
   for (const f of readdirSync(CHAT_IMG_DIR)) {
-    try { if (Date.now() - statSync(join(CHAT_IMG_DIR, f)).mtimeMs > 30 * 86_400_000) unlinkSync(join(CHAT_IMG_DIR, f)) } catch {}
+    try {
+      if (Date.now() - statSync(join(CHAT_IMG_DIR, f)).mtimeMs < 30 * 86_400_000) continue
+      used ??= liveChatsText()
+      if (!used.includes(f)) unlinkSync(join(CHAT_IMG_DIR, f))
+    } catch {}
   }
 }
 

@@ -175,7 +175,7 @@ function answer(text: string, picked: Record<number, string[]>) {
           <span class="t"><span v-if="c.engine === 'claude'" class="cl" title="Claude">✳</span>{{ c.title }}</span>
           <span v-if="status(c)" class="small st" :class="status(c)"><span class="sd" />{{ STATUS[status(c) as 'busy'] }}</span>
           <span v-else class="small faint">{{ ago(c.at / 1000) }}</span>
-          <span class="x" title="delete" @click.stop="remove(c.id)">✕</span>
+          <span class="x" title="delete" @click.stop="drop(c.id)">✕</span>
         </button>
       </div>
       <ClaudeUsage />

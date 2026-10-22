@@ -1,29 +1,10 @@
 <script setup lang="ts">
 useHead({ title: 'Wohnungen · pve' })
 
-const selected = ref<number | null>(null)
 const show = ref<'passed' | 'liked' | 'rejected'>('passed')
+const { selected, d, error, pending, load, searches, st, counts, tabs, verdict, isBusy, onChanged } = useHunter('/api/flats', 30000,
+  sel => ({ search: sel ?? undefined, show: show.value === 'rejected' ? 'rejected' : 'passed', limit: 200 }), [show])
 
-// filtered in CT 107, not here: one busy search must not crowd another out of the shared row limit
-const d = ref<any>(null)
-const error = ref<any>(null)
-const pending = ref(false)
-
-async function load() {
-  pending.value = true
-  try {
-    d.value = await $fetch('/api/flats', {
-      query: { search: selected.value ?? undefined, show: show.value === 'rejected' ? 'rejected' : 'passed', limit: 200 },
-    })
-    error.value = null
-  } catch (e: any) { error.value = e } finally { pending.value = false }
-}
-usePoll(load, 30000)
-watch([selected, show], load)
-
-const searches = computed(() => d.value?.searches ?? [])
-const st = computed(() => d.value?.status)
-const counts = computed(() => d.value?.counts ?? { per_search: {}, total: 0 })
 const liked = computed(() => d.value?.liked ?? [])
 const likedLive = computed(() => liked.value.filter((i: any) => i.status !== 'gone').length)
 // 👍 flats come as their own list, so Gemerkt filters and counts per search here
@@ -32,82 +13,41 @@ const feed = computed(() => show.value !== 'liked' ? d.value?.feed ?? []
 const hits = (id: number | null) => show.value !== 'liked'
   ? (id === null ? counts.value.total : counts.value.per_search?.[String(id)] ?? 0)
   : liked.value.filter((i: any) => id === null || i.search_id === id).length
-const tabs = computed(() => [
-  { id: null as number | null, name: 'Alle', hits: hits(null), enabled: true },
-  ...searches.value.map((s: any) => ({ id: s.id, name: s.name, hits: hits(s.id), enabled: !!s.enabled })),
-])
 const VIEWS = computed(() => [
   { v: 'passed', label: 'Passend', n: counts.value.passed },
   { v: 'liked', label: 'Gemerkt', n: liked.value.length },
   { v: 'rejected', label: 'Aussortiert', n: counts.value.rejected },
 ] as const)
 // a cycle is ~2.5 min plus the time it takes; three cycles without a poll means it is stuck
-const pollerOk = computed(() => st.value?.last_poll && Date.now() / 1000 - st.value.last_poll < (st.value.cycle ?? 150) * 3 + 300)
+const maxAge = computed(() => (st.value?.cycle ?? 150) * 3 + 300)
 const sources = computed(() => Object.entries(st.value?.per_source ?? {}).map(([k, v]) => `${v} ${k}`).join(' · '))
-
-const busyItem = ref('')
-async function verdict(item: any, v: 'up' | 'down' | null) {
-  busyItem.value = item.source + item.source_id
-  const before = item.verdict
-  item.verdict = v
-  try {
-    await $fetch('/api/flats/action', {
-      method: 'POST',
-      body: { action: 'feedback', searchId: item.search_id, source: item.source, sourceId: item.source_id, verdict: v },
-    })
-    load()                                 // a 👍 moves the flat between Gemerkt and the list
-  } catch { item.verdict = before } finally { busyItem.value = '' }
-}
-
-function onChanged() {
-  if (selected.value !== null && !searches.value.some((s: any) => s.id === selected.value)) selected.value = null
-  load()
-}
 </script>
 
 <template>
   <div>
     <div v-if="!d && pending" class="muted pad">Lade Wohnungen…</div>
     <div v-else-if="error && !d" class="bad pad">
-      Die Wohnungs-API in CT 107 ist nicht erreichbar: {{ error.statusMessage || error.message }}
+      Die Wohnungs-API in CT 107 ist nicht erreichbar: {{ errText(error) }}
     </div>
 
     <template v-if="d">
-      <div class="strip small">
-        <span class="dot" :class="!st.last_poll ? '' : pollerOk ? 'ok' : 'bad'" />
-        <span :class="!st.last_poll || pollerOk ? 'muted' : 'bad'">
-          <!-- the first cycle walks all of inberlinwohnen before any search counts as polled -->
-          {{ !st.searches ? 'keine Suche' : !st.last_poll ? 'erster Lauf…' : pollerOk ? `sucht · ${ago(st.last_poll)}` : `steht · ${ago(st.last_poll)}` }}
-        </span>
+      <!-- the first cycle walks all of inberlinwohnen before any search counts as polled -->
+      <HunterStrip :st="st" :max-age="maxAge" :pending="pending" @reload="load">
         <span class="muted"><b>{{ st.seen_24h }}</b> neu 24h</span>
         <span class="muted"><b>{{ st.read_by_ai }}</b> von KI gelesen</span>
         <span v-if="sources" class="faint src">{{ sources }}</span>
-        <button class="btn ghost ref" :disabled="pending" title="neu laden" @click="load">↻</button>
-      </div>
-      <div v-for="e in st.errors" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>
+      </HunterStrip>
 
       <FlatSearches :searches="searches" @changed="onChanged" />
       <FlatProfile class="prof" />
 
-      <h2 class="sec">
-        Wohnungen
-        <span class="views">
-          <button v-for="v in VIEWS" :key="v.v" class="vw" :class="{ on: show === v.v }" @click="show = v.v">
-            {{ v.label }} <span class="n">{{ v.n ?? 0 }}</span>
-          </button>
-        </span>
-      </h2>
-      <div v-if="show === 'liked' && liked.length > likedLive" class="small muted q">
-        {{ likedLive }} online · {{ liked.length - likedLive }} nicht mehr online
-      </div>
-
-      <div v-if="tabs.length > 2" class="tabs">
-        <button
-          v-for="t in tabs" :key="t.id ?? 'all'" class="tab"
-          :class="{ on: selected === t.id, off: !t.enabled }"
-          @click="selected = t.id"
-        >{{ t.name }} <span class="n">{{ t.hits }}</span></button>
-      </div>
+      <HunterTabs v-model:show="show" v-model:selected="selected" title="Wohnungen" :views="VIEWS" :tabs="tabs(hits)">
+        <template #note>
+          <div v-if="show === 'liked' && liked.length > likedLive" class="small muted q">
+            {{ likedLive }} online · {{ liked.length - likedLive }} nicht mehr online
+          </div>
+        </template>
+      </HunterTabs>
 
       <div v-if="!feed.length" class="muted pad">
         <template v-if="!searches.length">Noch keine Suche.</template>
@@ -118,7 +58,7 @@ function onChanged() {
       <div v-else class="list">
         <FlatRow
           v-for="i in feed" :key="i.search_id + ':' + i.source + ':' + i.source_id" :item="i" :checked="show === 'liked'"
-          :busy="busyItem === i.source + i.source_id" @verdict="verdict(i, $event)"
+          :busy="isBusy(i)" @verdict="verdict(i, $event)"
         />
       </div>
     </template>
@@ -127,28 +67,7 @@ function onChanged() {
 
 <style scoped>
 .pad { padding: 48px 0; text-align: center; }
-.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 2px 12px; }
-.strip b { color: var(--text); font-weight: 600; }
-.strip .ref { margin-left: auto; padding: 2px 8px; }
-/* phone: the stats wrap, ↻ stays top right instead of dropping onto a line of its own */
-@media (max-width: 640px) {
-  .strip { position: relative; padding-right: 34px; gap: 4px 12px; }
-  .strip .ref { position: absolute; top: -3px; right: 0; }
-}
-.sec { flex-wrap: wrap; }
-.views { margin-left: auto; display: flex; flex-wrap: wrap; gap: 2px; font-weight: 400; }
-.vw { padding: 3px 9px; border-radius: 6px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
-.vw.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.vw .n { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
 .prof { margin-top: 14px; }
-.q { margin: -6px 2px 10px; }
-.sec + .q { margin: -4px 2px 10px; }
-.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-.tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
-.tab:hover { color: var(--text); }
-.tab.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
-.tab.off { opacity: .55; }
-.tab .n { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
+.q { margin: -4px 2px 10px; }
 .list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-@media (max-width: 560px) { .src { display: none; } .views { margin-left: 0; } }
 </style>

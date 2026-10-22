@@ -54,10 +54,12 @@ export function useAskSettings() {
  * One conversation with a local model, streamed as NDJSON. `scope` decides which slice of the
  * homelab the server puts in the system prompt and which actions the model may propose.
  */
+// one running answer per scope, kept outside the component: leave the page mid-answer, come back, Stop still works
+const controllers: Record<string, AbortController | null> = {}
+
 export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void) {
   const { model, think, web, models, refreshModels } = useAskSettings()
   const busy = computed(() => turns.value.some(t => t.busy))
-  let ctl: AbortController | null = null
 
   async function ask(text: string) {
     text = text.trim()
@@ -65,7 +67,8 @@ export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void)
     const history = sinceClear(turns.value).filter(t => !t.error).flatMap(t => [{ role: 'user', content: t.q }, { role: 'assistant', content: t.a }])
     turns.value.push({ q: text, a: '', r: '', tools: [], proposals: [], busy: true, at: Date.now() })
     const t = turns.value[turns.value.length - 1]!
-    ctl = new AbortController()
+    const ctl = controllers[scope] = new AbortController()
+    let saved = 0
     try {
       const res = await fetch('/api/ai/ask', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal,
@@ -82,7 +85,8 @@ export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void)
         buf = lines.pop()!
         for (const line of lines) {
           if (!line) continue
-          const j = JSON.parse(line)
+          let j: any
+          try { j = JSON.parse(line) } catch { continue }
           if (j.r) t.r += j.r
           if (j.c) t.a += j.c
           if (j.proposal) t.proposals!.push({ ...j.proposal, state: 'idle' })
@@ -91,13 +95,14 @@ export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void)
           if (j.error) t.error = j.error
           if (j.done) { t.model = j.model; t.tps = j.tps }
         }
-        onChange?.()
+        // every token would otherwise re-save (and re-sync) every chat: once a second is plenty mid-stream
+        if (Date.now() - saved > 1000) { saved = Date.now(); onChange?.() }
       }
     } catch (e: any) {
       t.error = e.name === 'AbortError' ? 'stopped' : e.message
     } finally {
       t.busy = false
-      ctl = null
+      if (controllers[scope] === ctl) controllers[scope] = null
       refreshModels()
       onChange?.()
     }
@@ -122,6 +127,6 @@ export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void)
     onChange?.()
   }
 
-  const stop = () => ctl?.abort()
+  const stop = () => controllers[scope]?.abort()
   return { ask, run, stop, busy, model, think, web, models }
 }

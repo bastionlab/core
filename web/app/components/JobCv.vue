@@ -15,7 +15,7 @@ const file = ref<HTMLInputElement | null>(null)
 const LEVELS: Record<string, string> = { junior: 'Junior', mid: 'Mid-Level', senior: 'Senior', lead: 'Lead' }
 
 async function load() {
-  try { cv.value = await $fetch('/api/jobs/cv') } catch (e: any) { err.value = e?.statusMessage || e?.message } finally { loaded.value = true }
+  try { cv.value = await $fetch('/api/jobs/cv') } catch (e: any) { err.value = errText(e) } finally { loaded.value = true }
 }
 onMounted(load)
 
@@ -45,7 +45,7 @@ async function upload(ev: Event) {
     await load()
     flash(r.rejudge ? `gelesen · ${r.rejudge} Treffer werden neu bewertet` : 'gelesen')
     emit('changed')
-  } catch (e: any) { err.value = e?.data?.statusMessage || e?.statusMessage || e?.message } finally { busy.value = '' }
+  } catch (e: any) { err.value = errText(e) } finally { busy.value = '' }
 }
 
 function edit() {
@@ -68,7 +68,7 @@ async function save() {
     editing.value = false
     flash(r.rejudge ? `gespeichert · ${r.rejudge} Treffer werden neu bewertet` : 'gespeichert')
     emit('changed')
-  } catch (e: any) { err.value = e?.statusMessage || e?.message } finally { busy.value = '' }
+  } catch (e: any) { err.value = errText(e) } finally { busy.value = '' }
 }
 
 async function remove() {
@@ -78,7 +78,7 @@ async function remove() {
     await $fetch('/api/jobs/action', { method: 'POST', body: { action: 'cvdelete' } })
     await load()
     emit('changed')
-  } catch (e: any) { err.value = e?.statusMessage || e?.message } finally { busy.value = '' }
+  } catch (e: any) { err.value = errText(e) } finally { busy.value = '' }
 }
 </script>
 
@@ -111,7 +111,7 @@ async function remove() {
       <div class="chips"><span class="lbl small faint">Rollen</span><span v-for="r in p.roles ?? []" :key="r" class="chip">{{ r }}</span></div>
       <div class="chips"><span class="lbl small faint">Kenntnisse</span><span v-for="s in p.skills ?? []" :key="s" class="chip sk">{{ s }}</span></div>
       <div class="bar">
-        <span class="small faint">{{ cv.filename }} · {{ ago(cv.uploaded_at) }} · {{ cv.chars.toLocaleString('de-DE') }} Zeichen</span>
+        <span class="small faint">{{ cv.filename }} · {{ vor(cv.uploaded_at) }} · {{ cv.chars.toLocaleString('de-DE') }} Zeichen</span>
         <button class="btn ghost" @click="edit">✎ Korrigieren</button>
         <button class="btn ghost danger" :class="{ sure: armed === 'cv' }" :disabled="!!busy" :title="armed === 'cv' ? 'Neue Treffer werden dann nur gegen den Suchwunsch bewertet' : 'Lebenslauf löschen'" @click="remove">{{ armed === 'cv' ? 'Sicher?' : '✕' }}</button>
       </div>

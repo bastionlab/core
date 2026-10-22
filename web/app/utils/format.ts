@@ -26,10 +26,20 @@ export function ago(ts?: number | string | null, now = Date.now() / 1000) {
   return d >= 0 ? `${duration(d)} ago` : `in ${duration(-d)}`
 }
 
+/** German for the German pages: "vor 3h" / "in 2h" */
+export function vor(ts?: number | null, now = Date.now() / 1000) {
+  if (ts == null) return 'nie'
+  const d = now - ts
+  return d >= 0 ? `vor ${duration(d)}` : `in ${duration(-d)}`
+}
+
+/** the readable part of a failed $fetch: our own createError text first (statusMessage on the error itself is
+ *  taken from the HTTP status line, which HTTP/2 doesn't carry) */
+export const errText = (e: any, fallback = 'failed') => e?.data?.statusMessage || e?.data?.message || e?.statusMessage || e?.message || fallback
+
 export const clock = (ts?: number | null) =>
   ts == null ? '–' : new Date(ts * 1000).toLocaleString('de-DE', { weekday: 'short', hour: '2-digit', minute: '2-digit' })
 
 /** tone for a 0–100 usage value */
 export const tone = (v: number, warn = 75, bad = 90) => (v >= bad ? 'bad' : v >= warn ? 'warn' : 'ok')
 
-export const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g, '')

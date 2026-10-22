@@ -1,3 +1,4 @@
+import type { Scope } from './context'
 /**
  * Actions the model may PROPOSE. It can never run one: the ask endpoint only validates a proposal and shows it,
  * the owner presses Run, and only then does /api/ai/action call the agent. The agent validates again and holds
@@ -5,7 +6,7 @@
  *
  * Each page offers the model the actions that page is about, so it does not propose a git push on the media page.
  */
-type Scope = 'home' | 'media' | 'dev' | 'metrics' | 'chat'
+// every page that may propose actions; the notes page may not
 const ALL: Scope[] = ['home', 'media', 'dev', 'metrics', 'chat']
 
 const CATALOG: { scopes: Scope[], line: string }[] = [
@@ -39,7 +40,7 @@ export function actionTool(scope: Scope = 'metrics') {
         'The "action" argument must be exactly one of these names, with nothing added, and "args" carries its arguments:',
         ...lines,
         'Example call: {"action": "service_restart", "args": {"service": "radarr"}, "why": "it is not responding"}',
-        'Nothing else destructive exists: no deleting containers, models, snapshots or datasets, and nothing that touches GitHub repos. If the owner asks for one of those, say in one line that you have no action for it and give the exact command once.',
+        'Nothing else destructive exists: no deleting containers, models, snapshots or datasets, and no deleting or rewriting GitHub repos (git_push and github_publish only add to them). If the owner asks for one of those, say in one line that you have no action for it and give the exact command once.',
       ].join('\n'),
       parameters: {
         type: 'object',

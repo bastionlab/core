@@ -2,6 +2,6 @@
 export default defineEventHandler(async (event) => {
   const action = getRouterParam(event, 'action')
   if (action !== 'new' && action !== 'kill') throw createError({ statusCode: 404 })
-  const { vmid, session } = await readBody(event)
+  const { vmid, session } = (await readBody(event)) ?? {}
   return agent(event, `/shells/${action}`, { method: 'POST', body: { vmid, session } })
 })

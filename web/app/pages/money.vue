@@ -29,10 +29,13 @@ const cat = computed(() => q('c'))
 const d = ref<any>(null)
 const error = ref<any>(null)
 const pending = ref(false)
+// the 30 s poll, the 3 s sync poll and a month switch can overlap: only the newest answer lands
+let loadSeq = 0
 async function load() {
+  const my = ++loadSeq
   pending.value = true
-  try { d.value = await $fetch('/api/money', { query: { month: month.value } }); error.value = null }
-  catch (e: any) { error.value = e } finally { pending.value = false }
+  try { const r = await $fetch('/api/money', { query: { month: month.value } }); if (my === loadSeq) { d.value = r; error.value = null } }
+  catch (e: any) { if (my === loadSeq) error.value = e } finally { if (my === loadSeq) pending.value = false }
 }
 // fast while a sync or TR login is running, otherwise lazy
 const fast = computed(() => d.value?.syncing || ['waiting_app', 'need_code'].includes(d.value?.setup?.tr_login?.state))
@@ -58,10 +61,11 @@ onMounted(async () => {
 })
 
 const toast = ref('')
-async function act(action: string, body: Record<string, any> = {}) {
-  try { await $fetch('/api/money/action', { method: 'POST', body: { action, ...body } }) }
-  catch (e: any) { toast.value = e?.data?.statusMessage || e?.message; setTimeout(() => (toast.value = ''), 4000) }
-  finally { load() }
+/** true when it went through; a failure shows as a toast */
+async function act(action: string, body: Record<string, any> = {}, reload = true) {
+  try { await $fetch('/api/money/action', { method: 'POST', body: { action, ...body } }); return true }
+  catch (e: any) { toast.value = errText(e); setTimeout(() => (toast.value = ''), 4000); return false }
+  finally { if (reload) load() }
 }
 
 const L = computed(() => d.value?.ledger)
@@ -93,14 +97,17 @@ const nextDue = computed(() => {
 const search = ref(q('q'))
 const found = ref<any[] | null>(null)
 const searching = ref(false)
-let st: any
+let st: any, searchSeq = 0
 watch(search, (v) => {
   clearTimeout(st)
+  const my = ++searchSeq  // a slow earlier query must not land after a newer one (or after the box was cleared)
   if (v.trim() !== q('q')) setQ({ q: v.trim() || undefined })
-  if (v.trim().length < 2) { found.value = null; return }
+  if (v.trim().length < 2) { found.value = null; searching.value = false; return }
   st = setTimeout(async () => {
     searching.value = true
-    try { found.value = (await $fetch<any>('/api/money/search', { query: { q: v.trim() } })).transactions } catch { found.value = [] } finally { searching.value = false }
+    let r: any[] = []
+    try { r = (await $fetch<any>('/api/money/search', { query: { q: v.trim() } })).transactions } catch {}
+    if (my === searchSeq) { found.value = r; searching.value = false }
   }, 300)
 }, { immediate: true })
 const kind = computed(() => q('k'))  // '' | out | in | tr
@@ -133,19 +140,20 @@ function toggleSel(t: any) { const s = new Set(sel.value); s.has(t.journal_id) ?
 function stopSelect() { selecting.value = false; sel.value = new Set() }
 const subPeriod = ref('')
 async function selAsSub() {
-  await act('subAdd', { journalIds: [...sel.value], period: subPeriod.value || null })
-  if (!toast.value) { stopSelect(); goTab('abos') }
+  if (await act('subAdd', { journalIds: [...sel.value], period: subPeriod.value || null })) { stopSelect(); goTab('abos') }
 }
 async function selCategory(c: string) {
-  for (const t of selTx.value) { t.category = c; await $fetch('/api/money/action', { method: 'POST', body: { action: 'category', groupId: t.group_id, journalId: t.journal_id, category: c } }) }
-  stopSelect(); load()
+  // one call per booking, in turn (Firefly); stops at the first failure, the reload shows what really got saved
+  let ok = true
+  for (const t of selTx.value) if (!(ok = await act('category', { groupId: t.group_id, journalId: t.journal_id, category: c }, false))) break
+  if (ok) stopSelect()
+  load()
 }
 // all ticked are deposits: a regular income (Taschengeld), or friends' parts of an Abo
 const selIn = computed(() => selTx.value.length > 0 && selTx.value.every((t: any) => t.amount > 0))
 const outSubs = computed(() => activeSubs.value)
 async function selShare(key: string) {
-  await act('subShare', { key, journalIds: [...sel.value] })
-  if (!toast.value) { stopSelect(); goTab('abos') }
+  if (await act('subShare', { key, journalIds: [...sel.value] })) { stopSelect(); goTab('abos') }
 }
 function addSub() { goTab('buchungen'); selecting.value = true; nextTick(() => document.querySelector<HTMLInputElement>('.find input')?.focus()) }
 
@@ -183,7 +191,7 @@ async function exportYear() {
   exporting.value = true
   const y = month.value.slice(0, 4)
   try { csv((await $fetch<any>('/api/money/export', { query: { start: `${y}-01-01`, end: `${y}-12-31` } })).transactions, `buchungen-${y}.csv`) }
-  catch (e: any) { toast.value = e?.data?.statusMessage || e?.message } finally { exporting.value = false }
+  catch (e: any) { toast.value = errText(e) } finally { exporting.value = false }
 }
 
 const dayTx = computed(() => (day.value ? (L.value?.transactions ?? []).filter((t: any) => t.date === day.value) : []))
@@ -196,12 +204,12 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 <template>
   <div class="money">
     <div v-if="!d && pending" class="muted pad">Lade…</div>
-    <div v-else-if="error && !d" class="bad pad">Die Money-API in CT 108 ist nicht erreichbar: {{ error.statusMessage || error.message }}</div>
+    <div v-else-if="error && !d" class="bad pad">Die Money-API in CT 108 ist nicht erreichbar: {{ errText(error) }}</div>
 
     <template v-if="d">
       <div class="strip small">
         <span class="dot" :class="d.syncing ? 'warn' : run ? (run.ok && !runErrors.length ? 'ok' : 'bad') : ''" />
-        <span class="muted">{{ d.syncing ? 'synchronisiert…' : run ? `Sync ${ago(run.finished)}` : 'noch kein Sync' }}</span>
+        <span class="muted">{{ d.syncing ? 'synchronisiert…' : run ? `Sync ${vor(run.finished)}` : 'noch kein Sync' }}</span>
         <span v-for="[k, v] in runErrors" :key="k" class="bad">{{ k }}: {{ v }}</span>
         <a class="faint" href="http://192.168.1.58:8080" target="_blank" rel="noopener">Firefly ↗</a>
         <button class="btn ghost ref" :disabled="d.syncing" title="jetzt synchronisieren" @click="act('sync')">{{ d.syncing ? '…' : '↻ Sync' }}</button>
@@ -378,7 +386,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
             <span class="an">
               <span>{{ a.name }}<span v-if="a.iban" class="faint small"> · {{ a.iban.slice(-4) }}</span></span>
               <span class="faint small">
-                {{ a.last_sync ? `Sync ${ago(a.last_sync)}` : 'noch nicht synchronisiert' }}
+                {{ a.last_sync ? `Sync ${vor(a.last_sync)}` : 'noch nicht synchronisiert' }}
                 <template v-if="linkFor(a)?.valid_until"> · Zugriff noch {{ daysLeft(linkFor(a).valid_until) }} Tage</template>
               </span>
               <span v-if="a.error" class="bad small">{{ a.error }}</span>

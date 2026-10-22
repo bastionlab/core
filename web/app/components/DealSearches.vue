@@ -9,7 +9,8 @@ const SHIPPING = [
   { v: 'ship', label: 'nur Versand' },
 ]
 
-const blank = () => ({ name: '', keyword: '', terms: '', exclude: '', minPrice: '', maxPrice: '', radius: '10', shipping: 'any', intent: '' })
+// minScore / locationId have no field here (CLI-only) but must survive an edit, or the backend falls back to its defaults
+const blank = () => ({ name: '', keyword: '', terms: '', exclude: '', minPrice: '', maxPrice: '', radius: '10', shipping: 'any', intent: '', minScore: '' as number | '', locationId: '' })
 /** null = closed, 'new' = adding, a number = editing that search */
 const editing = ref<'new' | number | null>(null)
 const form = reactive(blank())
@@ -38,6 +39,8 @@ function openEdit(s: any) {
     intent: sp.intent ?? '',
     // "only" is the old spelling of "ship"
     shipping: sp.shipping === 'only' ? 'ship' : (sp.shipping ?? 'any'),
+    minScore: sp.min_score ?? '',
+    locationId: sp.location_id ?? '',
   })
 }
 
@@ -53,7 +56,7 @@ async function act(action: string, body: Record<string, any> = {}) {
     emit('changed')
     return r ?? true
   } catch (e: any) {
-    err.value = e?.statusMessage || e?.message || 'failed'
+    err.value = errText(e, 'failed')
     return null
   } finally { busy.value = '' }
 }
@@ -135,7 +138,7 @@ async function compose() {
       }
     }
   } catch (e: any) {
-    err.value = e?.message || 'the model could not be reached'
+    err.value = e?.message || 'das Modell ist nicht erreichbar'
   } finally { composing.value = false }
 }
 
@@ -146,7 +149,7 @@ async function submit() {
   // say what the edit did to the feed, since it can remove listings you were looking at
   note.value = isNew
     ? ''
-    : `${r.added || 0} added, ${r.removed || 0} removed from the feed`
+    : `${r.added || 0} neu im Feed, ${r.removed || 0} entfernt`
   editing.value = null
   setTimeout(() => (note.value = ''), 6000)
 }
@@ -157,7 +160,7 @@ function tip(s: any) {
   const sp = s.spec ?? {}
   return [
     sp.keyword,
-    sp.exclude?.length && `not: ${sp.exclude.join(', ')}`,
+    sp.exclude?.length && `ohne: ${sp.exclude.join(', ')}`,
     sp.shipping && sp.shipping !== 'any' && shipLabel(sp),
     sp.intent && `✦ ${sp.intent}`,
   ].filter(Boolean).join('\n')
@@ -166,9 +169,9 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
 </script>
 
 <template>
-  <Panel title="Searches">
+  <Panel title="Suchen">
     <template #actions>
-      <button class="btn" @click="openNew">{{ editing === 'new' ? 'Cancel' : '+ New' }}</button>
+      <button class="btn" @click="openNew">{{ editing === 'new' ? 'Abbrechen' : '+ Neu' }}</button>
     </template>
 
     <form v-if="editing !== null" class="new" @submit.prevent="submit">
@@ -204,11 +207,11 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
 
       <div class="row">
         <label>Name<input v-model="form.name" placeholder="rennrad" required></label>
-        <label>Search words<input v-model="form.keyword" placeholder="rtx 3060, rtx 3090" title="Kleinanzeigen needs every word to appear — use several short keywords, comma-separated; each is polled separately" required></label>
+        <label>Suchwörter<input v-model="form.keyword" placeholder="rtx 3060, rtx 3090" title="Kleinanzeigen verlangt jedes Wort im Inserat: lieber mehrere kurze Stichwörter, mit Komma getrennt; jedes wird einzeln abgefragt" required></label>
       </div>
       <div class="row">
-        <label>Must contain one of<input v-model="form.terms" placeholder="rennrad, gravel (blank = the search words)"></label>
-        <label>Never contain<input v-model="form.exclude" placeholder="kinder, defekt, rahmen"></label>
+        <label>Muss eins davon enthalten<input v-model="form.terms" placeholder="rennrad, gravel (leer = die Suchwörter)"></label>
+        <label>Darf nicht enthalten<input v-model="form.exclude" placeholder="kinder, defekt, rahmen"></label>
       </div>
       <div class="row narrow">
         <label>Min €<input v-model="form.minPrice" type="number" min="0"></label>
@@ -227,12 +230,12 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
       </div>
       <div class="row end">
         <span class="small muted">
-          <template v-if="editing === 'new'">First poll only seeds.</template>
-          <template v-else>Re-checks saved listings, no pushes.</template>
+          <template v-if="editing === 'new'">Der erste Lauf merkt sich nur den Stand.</template>
+          <template v-else>Prüft gespeicherte Inserate neu, ohne Benachrichtigung.</template>
         </span>
-        <button class="btn ghost" type="button" @click="editing = null">Cancel</button>
+        <button class="btn ghost" type="button" @click="editing = null">Abbrechen</button>
         <button class="btn primary" :disabled="!!busy">
-          {{ busy ? 'Saving…' : editing === 'new' ? 'Add search' : 'Save changes' }}
+          {{ busy ? 'Speichert…' : editing === 'new' ? 'Suche anlegen' : 'Speichern' }}
         </button>
       </div>
     </form>
@@ -240,7 +243,7 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
     <div v-if="err" class="small bad pad">{{ err }}</div>
     <div v-if="note" class="small muted pad">{{ note }}</div>
 
-    <div v-if="!props.searches.length && editing === null" class="small muted pad">No searches yet.</div>
+    <div v-if="!props.searches.length && editing === null" class="small muted pad">Noch keine Suche.</div>
     <div v-for="s in props.searches" :key="s.id" class="row-item" :class="{ editing: editing === s.id, off: !s.enabled }">
       <span class="dot" :class="s.last_error ? 'bad' : s.enabled ? 'ok' : ''" />
       <div class="min" :title="tip(s)">
@@ -251,17 +254,17 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
         </div>
         <div v-if="s.last_error" class="small bad ell">{{ s.last_error }}</div>
       </div>
-      <span class="small faint when">{{ s.last_polled_at ? ago(s.last_polled_at) : 'never' }}</span>
+      <span class="small faint when">{{ s.last_polled_at ? vor(s.last_polled_at) : 'noch nie' }}</span>
       <div class="acts">
-        <a class="btn ghost ic" :href="s.url" target="_blank" rel="noopener" title="Open on Kleinanzeigen">↗</a>
-        <button class="btn ghost ic" title="Edit" @click="openEdit(s)">✎</button>
+        <a class="btn ghost ic" :href="s.url" target="_blank" rel="noopener" title="Auf Kleinanzeigen öffnen">↗</a>
+        <button class="btn ghost ic" title="Bearbeiten" @click="openEdit(s)">✎</button>
         <button
           v-if="s.spec?.intent" class="btn ghost ic" :disabled="!!busy"
           title="Alle gespeicherten Inserate neu von der KI prüfen lassen"
           @click="act('rejudge', { id: s.id, all: true })"
         >{{ busy === 'rejudge' + s.id ? '…' : '✦' }}</button>
-        <button class="btn ghost ic" :disabled="!!busy" :title="s.enabled ? 'Pause' : 'Resume'" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? '❙❙' : '▶' }}</button>
-        <button class="btn ghost ic danger" :disabled="!!busy" :class="{ sure: armed === String(s.id) }" :title="armed === String(s.id) ? 'delete the search and its matches' : 'Delete'" @click="remove(s)">{{ armed === String(s.id) ? 'Sure?' : '✕' }}</button>
+        <button class="btn ghost ic" :disabled="!!busy" :title="s.enabled ? 'Pausieren' : 'Weiter'" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? '❙❙' : '▶' }}</button>
+        <button class="btn ghost ic danger" :disabled="!!busy" :class="{ sure: armed === String(s.id) }" :title="armed === String(s.id) ? 'Suche und Treffer löschen' : 'Löschen'" @click="remove(s)">{{ armed === String(s.id) ? 'Sicher?' : '✕' }}</button>
       </div>
     </div>
   </Panel>
@@ -290,8 +293,6 @@ const shipLabel = (sp: any) => SHIPPING.find(x => x.v === (sp?.shipping === 'onl
 .row.narrow { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .row.one { grid-template-columns: 1fr; }
 textarea { resize: vertical; }
-.hint { text-transform: none; opacity: .7; }
-.accent { color: var(--accent); }
 .row.end { display: flex; align-items: center; gap: 10px; }
 .row.end .btn:first-of-type { margin-left: auto; }
 label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); min-width: 0; }

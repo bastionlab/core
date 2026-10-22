@@ -13,7 +13,7 @@ const salary = computed(() => {
   if (i.salary_min || i.salary_max) return `${k(i.salary_min || i.salary_max)} €`
   return i.salary_said || ''
 })
-const when = computed(() => ago(props.item.posted_at ?? props.item.first_seen_at))
+const when = computed(() => vor(props.item.posted_at ?? props.item.first_seen_at))
 const fresh = computed(() => (Date.now() / 1000 - (props.item.posted_at ?? props.item.first_seen_at ?? 0)) < 86400)
 const fitTone = computed(() => {
   const f = props.item.fit
@@ -74,7 +74,7 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
       <span class="small muted chan">{{ apply.label }}</span>
       <a v-if="apply.email && apply.ch !== 'email'" :href="`mailto:${apply.email}`" class="small chan">✉ {{ apply.email }}</a>
       <div class="votes">
-        <button class="btn ghost" :class="{ on: item.applied_at }" :disabled="busy" :title="item.applied_at ? `beworben ${ago(item.applied_at)} – zurücknehmen` : 'als beworben markieren'" @click="emit('applied', !item.applied_at)">
+        <button class="btn ghost" :class="{ on: item.applied_at }" :disabled="busy" :title="item.applied_at ? `beworben ${vor(item.applied_at)} – zurücknehmen` : 'als beworben markieren'" @click="emit('applied', !item.applied_at)">
           {{ item.applied_at ? '✓ beworben' : '✓' }}
         </button>
         <button class="btn ghost" :class="{ on: item.verdict === 'up' }" :disabled="busy" title="Merken" @click="vote('up')">👍</button>

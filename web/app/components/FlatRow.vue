@@ -16,7 +16,7 @@ const breakdown = computed(() => {
   if (i.warm_kind === 'estimated') return `geschätzt${bits.length ? ' · ' + bits.join(' + ') : ''}`
   return i.list_price ? 'Preis laut Inserat, warm unklar' : 'Miete unklar'
 })
-const when = computed(() => ago(props.item.posted_at ?? props.item.first_seen_at))
+const when = computed(() => vor(props.item.posted_at ?? props.item.first_seen_at))
 const fresh = computed(() => (Date.now() / 1000 - (props.item.posted_at ?? 0)) < 6 * 3600)
 const channels = computed(() => (props.item.contact?.channels ?? []).filter((c: any) => c.type === 'email' || c.type === 'phone'))
 const phoneText = (v: string) => v.replace(/^\+49/, '0')
@@ -31,7 +31,7 @@ async function draft(fresh = false) {
       method: 'POST', body: { action: 'message', source: props.item.source, sourceId: props.item.source_id, fresh },
     })
     msg.text = r.text; msg.missing = r.missing ?? []
-  } catch (e: any) { msg.err = e?.data?.statusMessage || e?.statusMessage || e?.message } finally { msg.loading = false }
+  } catch (e: any) { msg.err = errText(e) } finally { msg.loading = false }
 }
 function toggleMsg() {
   if (msg.open) { msg.open = false; return }
@@ -80,7 +80,7 @@ async function copy() {
         </template>
         <span v-if="item.scam === 'mittel'" class="pill warn" title="Die KI hat Auffälligkeiten gesehen">⚠ prüfen</span>
         <span v-if="item.status === 'reserved'" class="pill warn">Reserviert</span>
-        <span v-if="item.status === 'gone'" class="pill bad">nicht mehr online{{ item.gone_at ? ` · ${ago(item.gone_at)}` : '' }}</span>
+        <span v-if="item.status === 'gone'" class="pill bad">nicht mehr online{{ item.gone_at ? ` · ${vor(item.gone_at)}` : '' }}</span>
         <span v-if="item.passed === 0 && item.reason" class="pill bad">{{ item.reason }}</span>
         <span class="pill ghost">{{ item.search_name }}</span>
       </div>
@@ -98,7 +98,7 @@ async function copy() {
       <div class="small muted bd">{{ breakdown }}</div>
       <div class="small" :class="fresh ? 'accent' : 'muted'">{{ when }}</div>
       <div v-if="checked && item.status !== 'gone'" class="small faint" title="zuletzt geprüft, ob die Anzeige noch online ist">
-        {{ item.checked_at ? `✓ geprüft ${ago(item.checked_at)}` : 'noch nicht geprüft' }}
+        {{ item.checked_at ? `✓ geprüft ${vor(item.checked_at)}` : 'noch nicht geprüft' }}
       </div>
       <div class="votes">
         <button class="btn ghost" :class="{ on: msg.open }" title="Nachricht an den Anbieter" @click="toggleMsg">💬</button>

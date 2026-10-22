@@ -9,7 +9,7 @@ const price = computed(() => {
   return `${i.price_eur.toLocaleString('de-DE')} €${i.price_type === 'negotiable' ? ' VB' : ''}`
 })
 // posted_at is what the seller's clock says; first_seen_at is when we caught it
-const when = computed(() => ago(props.item.posted_at ?? props.item.first_seen_at))
+const when = computed(() => vor(props.item.posted_at ?? props.item.first_seen_at))
 const fresh = computed(() => (Date.now() / 1000 - (props.item.posted_at ?? 0)) < 3600)
 const fitTone = computed(() => {
   const f = props.item.score

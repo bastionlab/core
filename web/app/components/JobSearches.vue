@@ -70,7 +70,7 @@ async function act(action: string, body: Record<string, any> = {}) {
     if (action !== 'suggest') emit('changed')
     return r ?? true
   } catch (e: any) {
-    err.value = e?.data?.statusMessage || e?.statusMessage || e?.message || 'failed'
+    err.value = errText(e, 'failed')
     return null
   } finally { busy.value = '' }
 }
@@ -203,7 +203,7 @@ function summary(sp: any) {
         <div class="ell"><b>{{ s.name }}</b><span class="small muted kw">{{ summary(s.spec ?? {}) }}</span></div>
         <div v-if="s.last_error" class="small warn ell" :title="s.last_error">{{ s.last_error }}</div>
       </div>
-      <span class="small faint when">{{ s.last_polled_at ? ago(s.last_polled_at) : 'gleich' }}</span>
+      <span class="small faint when">{{ s.last_polled_at ? vor(s.last_polled_at) : 'gleich' }}</span>
       <div class="acts">
         <button class="btn ghost ic" :disabled="!!busy || !s.enabled" title="Jetzt suchen" @click="act('run', { id: s.id })">⟳</button>
         <button class="btn ghost ic" title="Bearbeiten" @click="openEdit(s)">✎</button>

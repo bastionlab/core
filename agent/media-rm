@@ -23,7 +23,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import agent  # noqa: E402  (helpers only — the server starts under __main__)
+import media  # noqa: E402  (the agent's media helpers; importing them starts nothing)
 
 
 def say(*a):
@@ -31,11 +31,11 @@ def say(*a):
 
 
 def arr_send(method, app, path, body=None, **query):
-    port, ver = agent.ARR[app]
-    headers = {"X-Api-Key": agent.media_keys()[app]}
+    port, ver = media.ARR[app]
+    headers = {"X-Api-Key": media.media_keys()[app]}
     if body is not None:
         headers["Content-Type"] = "application/json"
-    req = urllib.request.Request(f"http://{agent.MEDIA_IP}:{port}/api/{ver}/{path}?{urlencode(query)}",
+    req = urllib.request.Request(f"http://{media.MEDIA_IP}:{port}/api/{ver}/{path}?{urlencode(query)}",
                                  data=None if body is None else json.dumps(body).encode(),
                                  headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=120) as r:
@@ -47,10 +47,10 @@ def arr_delete(app, path, **query):
 
 
 def qb_post(path, **form):
-    agent.qb("app/version")  # logs in / refreshes the cookie
-    port, _ = agent.QB
-    req = urllib.request.Request(f"http://{agent.MEDIA_IP}:{port}/api/v2/{path}", data=urlencode(form).encode(),
-                                 headers={"Cookie": agent._qb_sid[0], "Referer": f"http://{agent.MEDIA_IP}:{port}"})
+    media.qb("app/version")  # logs in / refreshes the cookie
+    port, _ = media.QB
+    req = urllib.request.Request(f"http://{media.MEDIA_IP}:{port}/api/v2/{path}", data=urlencode(form).encode(),
+                                 headers={"Cookie": media._qb_sid[0], "Referer": f"http://{media.MEDIA_IP}:{port}"})
     with urllib.request.urlopen(req, timeout=60) as r:
         return r.status
 
@@ -58,23 +58,23 @@ def qb_post(path, **form):
 def remove_seasons(plan):
     """unmonitor first, then delete — so nothing can re-grab the seasons in between"""
     sid, seasons = plan["id"], set(plan["seasons"])
-    series = agent.arr("sonarr", f"series/{sid}")
+    series = media.arr("sonarr", f"series/{sid}")
     for se in series["seasons"]:
         if se["seasonNumber"] in seasons:
             se["monitored"] = False
     arr_send("PUT", "sonarr", f"series/{sid}", series)
-    eps = [e["id"] for e in agent.arr("sonarr", "episode", seriesId=sid) or [] if e["seasonNumber"] in seasons]
+    eps = [e["id"] for e in media.arr("sonarr", "episode", seriesId=sid) or [] if e["seasonNumber"] in seasons]
     if eps:
         arr_send("PUT", "sonarr", "episode/monitor", {"episodeIds": eps, "monitored": False})
     say(f"sonarr: season {', '.join(map(str, sorted(seasons)))} unmonitored ({len(eps)} episode(s)), "
         f"the series itself stays monitored")
-    files = [f["id"] for f in agent.arr("sonarr", "episodefile", seriesId=sid) or [] if f["seasonNumber"] in seasons]
+    files = [f["id"] for f in media.arr("sonarr", "episodefile", seriesId=sid) or [] if f["seasonNumber"] in seasons]
     if files:
         say(f"sonarr: deleting {len(files)} episode file(s) …")
         arr_send("DELETE", "sonarr", "episodefile/bulk", {"episodeFileIds": files})
     else:
         say("sonarr: no episode files on disk for those seasons")
-    left = [f for f in agent.arr("sonarr", "episodefile", seriesId=sid) or [] if f["seasonNumber"] in seasons]
+    left = [f for f in media.arr("sonarr", "episodefile", seriesId=sid) or [] if f["seasonNumber"] in seasons]
     if left:
         sys.exit(f"sonarr still lists {len(left)} file(s) of those seasons — check its UI")
     say("sonarr: done — Jellyfin is told through its MediaBrowser connection")
@@ -95,13 +95,13 @@ def main():
     if any(not re.fullmatch(r"[0-9a-f]{40}", h) for h in asked):
         sys.exit("torrent hashes must be 40 hex characters")
 
-    plan = agent.media_plan(kind, item_id, seasons)  # re-checked now, not trusted from when the button was drawn
+    plan = media.media_plan(kind, item_id, seasons)  # re-checked now, not trusted from when the button was drawn
     vouched = {t["hash"]: t for t in plan["torrents"]}
     title = plan["title"] + (f" ({plan['year']})" if plan.get("year") else "")
     app = plan["app"]
     if plan["seasons"]:
         title = f"{title} season {', '.join(map(str, plan['seasons']))}"
-        say(f"{title} — {plan['files']} file(s), {agent._gb(plan['size'])}")
+        say(f"{title} — {plan['files']} file(s), {media._gb(plan['size'])}")
         try:
             remove_seasons(plan)
         except urllib.error.HTTPError as e:
@@ -109,7 +109,7 @@ def main():
         for t in plan.get("shared") or []:
             say(f"qBittorrent: {t['name']} also covers a season you keep — left seeding")
     else:
-        say(f"{title} — {plan['files']} file(s), {agent._gb(plan['size'])} in {plan['path']}")
+        say(f"{title} — {plan['files']} file(s), {media._gb(plan['size'])} in {plan['path']}")
         path = f"series/{plan['id']}" if kind == "series" else f"movie/{plan['id']}"
         say(f"{app}: deleting the entry and its files, adding a list exclusion …")
         try:
@@ -125,7 +125,7 @@ def main():
         say(f"qBittorrent: {vouched[h]['name']} also belongs to it but was not in the approved list — left alone")
     if hashes:
         say(f"qBittorrent: removing {len(hashes)} torrent(s) with their data "
-            f"({agent._gb(sum(vouched[h]['size'] for h in hashes))}) …")
+            f"({media._gb(sum(vouched[h]['size'] for h in hashes))}) …")
         for h in hashes:
             say(f"  - {vouched[h]['name']}")
         try:
@@ -133,7 +133,7 @@ def main():
         except urllib.error.HTTPError as e:
             sys.exit(f"qBittorrent refused: HTTP {e.code} — the library files are already gone, "
                      f"remove the torrents in the qBittorrent UI")
-        left = {t["hash"].lower() for t in (agent.qb("torrents/info") or [])} & set(hashes)
+        left = {t["hash"].lower() for t in (media.qb("torrents/info") or [])} & set(hashes)
         if left:
             sys.exit(f"qBittorrent still lists {len(left)} of them — check its UI")
         say("qBittorrent: done")

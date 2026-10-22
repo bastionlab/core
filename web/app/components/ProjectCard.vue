@@ -189,7 +189,7 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
       </div>
       <pre v-else class="empty">{{ live ? '…' : tab === 'ship' ? `no ${ship?.session} session — start /conduct in the repo` : `nothing running in ${tab === 'claude' ? 'Claude' : 'Preview'}` }}</pre>
       <TermFull
-        v-if="full" :vmid="box.vmid" :path="p.path" :target="tab === 'claude' ? 'cc' : tab"" :title="`${p.name} · ${session}`"
+        v-if="full" :vmid="box.vmid" :path="p.path" :target="tab === 'claude' ? 'cc' : tab" :title="`${p.name} · ${session}`"
         @close="full = false; loadLog()"
       />
     </div>

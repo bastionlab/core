@@ -8,6 +8,10 @@ DIR=$(dirname "$(readlink -f "$0")")
 [ -s "$DIR/agent/pin_hash" ] || { echo "no dashboard PIN yet — run $DIR/set-pin first" >&2; exit 1; }
 
 echo "→ agent"
+# the units live in the repo; link them in so an edit to a .service/.timer takes effect on the next deploy
+for u in dash-agent.service dash-alerts.service dash-alerts.timer; do ln -sf "$DIR/agent/$u" /etc/systemd/system/$u; done
+systemctl daemon-reload
+systemctl enable -q --now dash-alerts.timer
 systemctl restart dash-agent
 
 echo "→ pv in dev boxes"
@@ -16,7 +20,8 @@ for id in $(pvesh get /cluster/resources --type vm --output-format json | jq -r 
 done
 
 echo "→ sources → CT $CT"
-tar -C "$DIR/web" --exclude=node_modules --exclude=.nuxt --exclude=.output -cf - . | pct exec $CT -- sh -c 'mkdir -p /opt/dash && tar -C /opt/dash -xf -'
+# app/, server/ and public/ are replaced, not overlaid: a file deleted here must not keep being built there
+tar -C "$DIR/web" --exclude=node_modules --exclude=.nuxt --exclude=.output -cf - . | pct exec $CT -- sh -c 'mkdir -p /opt/dash && cd /opt/dash && rm -rf app server public && tar -xf -'
 
 echo "→ env + service"
 pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_TOKEN=%s\nNUXT_DEALS_TOKEN=%s\nNUXT_MONEY_TOKEN=%s\nNUXT_PIN_HASH=%s\nHOST=127.0.0.1\nPORT=3000\nNODE_ENV=production\n' '$(cat "$DIR/agent/token")' '$(cat /root/deals/token 2>/dev/null)' '$(cat /root/money/token 2>/dev/null)' '$(cat "$DIR/agent/pin_hash")' > /etc/dash.env"

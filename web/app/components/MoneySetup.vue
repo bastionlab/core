@@ -137,7 +137,7 @@ async function trCode() { if (await act('trCode', { code: tr.code })) { tr.code 
         </span>
         <span v-else-if="trState === 'error'" class="bad small">{{ setup.tr_login.error }}</span>
         <span v-else-if="trAcc?.error" class="bad small">{{ trAcc.error }}</span>
-        <span v-else class="faint small">{{ trAcc?.last_sync ? `verbunden · ${ago(trAcc.last_sync)}` : 'eingerichtet – wartet auf ersten Sync' }}</span>
+        <span v-else class="faint small">{{ trAcc?.last_sync ? `verbunden · ${vor(trAcc.last_sync)}` : 'eingerichtet – wartet auf ersten Sync' }}</span>
         <span class="acts"><button class="btn ghost sm" :disabled="trState === 'waiting_app' || !!busy" @click="trLogin">neu einloggen</button></span>
       </div>
     </div>

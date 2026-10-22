@@ -8,7 +8,7 @@ const note = ref('')
 const loaded = ref(false)
 
 onMounted(async () => {
-  try { saved.value = text.value = (await $fetch<any>('/api/flats/profile')).text ?? '' } catch (e: any) { err.value = e?.statusMessage || e?.message } finally { loaded.value = true }
+  try { saved.value = text.value = (await $fetch<any>('/api/flats/profile')).text ?? '' } catch (e: any) { err.value = errText(e) } finally { loaded.value = true }
 })
 
 async function save() {
@@ -18,7 +18,7 @@ async function save() {
     saved.value = text.value
     note.value = 'gespeichert · neue Nachrichten nutzen es'
     setTimeout(() => { note.value = '' }, 3000)
-  } catch (e: any) { err.value = e?.statusMessage || e?.message } finally { busy.value = false }
+  } catch (e: any) { err.value = errText(e) } finally { busy.value = false }
 }
 </script>
 

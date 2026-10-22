@@ -64,7 +64,9 @@ export default defineEventHandler(async (event) => {
   const scope: Scope = SCOPES.includes(body?.scope as Scope) ? body!.scope as Scope : 'metrics'
   const models = await aiModels(event).catch(() => null)
   if (!models?.length) throw createError({ statusCode: 502, statusMessage: 'Ollama is unreachable or has no models' })
+  // the agent being down must not take plain questions with it: the model is told the live data is missing
   const context = await scopeContext(event, scope, models)
+    .catch((e: any) => `(The live server data could not be loaded right now: ${e?.statusMessage || e?.message}. Say so if the question needs it.)`)
   const usable = models.filter(m => !m.uncensored)
   const model = usable.find(m => m.name === body.model)?.name ?? usable.find(m => m.warm)?.name ?? usable[0]?.name
   if (!model) throw createError({ statusCode: 502, statusMessage: 'no usable model installed' })

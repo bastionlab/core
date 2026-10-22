@@ -16,7 +16,7 @@ const WBS = [
 
 const blank = () => ({
   name: '', mode: 'city' as 'city' | 'pin', place: 'Berlin', lat: null as number | null, lon: null as number | null,
-  radius: '0', maxWarm: '', minArea: '', maxArea: '', minRooms: '', maxRooms: '',
+  radius: '0', minWarm: '', maxWarm: '', minArea: '', maxArea: '', minRooms: '', maxRooms: '',
   tausch: 'exclude', wbs: 'any', allowTemporary: false,
 })
 /** null = closed, 'new' = adding, a number = editing that search */
@@ -49,7 +49,7 @@ function openEdit(s: any) {
     lat: sp.mode === 'pin' ? sp.lat : null,
     lon: sp.mode === 'pin' ? sp.lon : null,
     radius: String(sp.radius_km ?? 0),
-    maxWarm: sp.max_warm ?? '', minArea: sp.min_area ?? '', maxArea: sp.max_area ?? '',
+    minWarm: sp.min_warm ?? '', maxWarm: sp.max_warm ?? '', minArea: sp.min_area ?? '', maxArea: sp.max_area ?? '',
     minRooms: sp.min_rooms ?? '', maxRooms: sp.max_rooms ?? '',
     tausch: sp.tausch ?? 'exclude', wbs: sp.wbs ?? 'any', allowTemporary: !!sp.allow_temporary,
   })
@@ -64,7 +64,7 @@ async function locate() {
     err.value = ''
   } catch (e: any) {
     where.value = null
-    err.value = e?.statusMessage || 'Ort nicht gefunden'
+    err.value = e?.data?.statusMessage || 'Ort nicht gefunden'
   } finally { locating.value = false }
 }
 
@@ -98,7 +98,7 @@ async function act(action: string, body: Record<string, any> = {}) {
     emit('changed')
     return r ?? true
   } catch (e: any) {
-    err.value = e?.statusMessage || e?.message || 'failed'
+    err.value = errText(e, 'failed')
     return null
   } finally { busy.value = '' }
 }
@@ -177,6 +177,7 @@ function summary(sp: any) {
       <div v-if="form.mode === 'city' && where?.full" class="small muted">Gesucht wird in: {{ where.full }}</div>
 
       <div class="row narrow">
+        <label title="Billiger als das ist meist ein Fake oder nur ein Zimmer">Warmmiete ab €<input v-model="form.minWarm" type="number" min="0" step="10"></label>
         <label title="Angabe im Inserat, sonst Kalt + NK + Heizung; fehlt etwas, wird geschätzt und markiert.">Warmmiete bis €<input v-model="form.maxWarm" type="number" min="0" step="10" placeholder="1200"></label>
         <label>Zimmer ab<input v-model="form.minRooms" type="number" min="0" step="0.5"></label>
         <label>Zimmer bis<input v-model="form.maxRooms" type="number" min="0" step="0.5"></label>
@@ -213,7 +214,7 @@ function summary(sp: any) {
         <div class="ell"><b>{{ s.name }}</b><span class="small muted kw">{{ summary(s.spec ?? {}) }}</span></div>
         <div v-if="s.last_error" class="small bad ell">{{ s.last_error }}</div>
       </div>
-      <span class="small faint when">{{ s.last_polled_at ? ago(s.last_polled_at) : 'noch nie' }}</span>
+      <span class="small faint when">{{ s.last_polled_at ? vor(s.last_polled_at) : 'noch nie' }}</span>
       <div class="acts">
         <a v-if="s.url" class="btn ghost ic" :href="s.url" target="_blank" rel="noopener" title="Auf Kleinanzeigen öffnen">↗</a>
         <button class="btn ghost ic" title="Bearbeiten" @click="openEdit(s)">✎</button>

@@ -1,13 +1,8 @@
 import type { H3Event } from 'h3'
 
 /** call the Ollama API in CT 105 (ai) */
-export async function ollama<T = any>(event: H3Event, path: string, opts: { method?: 'GET' | 'POST', body?: any, timeout?: number } = {}) {
-  const { ollamaUrl } = useRuntimeConfig(event)
-  try {
-    return await $fetch<T>(path, { baseURL: ollamaUrl, timeout: 10_000, ...opts })
-  } catch (e: any) {
-    throw createError({ statusCode: 502, statusMessage: `ollama: ${e?.data?.error || e?.message}` })
-  }
+export function ollama<T = any>(event: H3Event, path: string, opts: UpstreamOpts = {}) {
+  return upstream<T>('ollama', useRuntimeConfig(event).ollamaUrl, null, path, 10_000, opts)
 }
 
 // abliterated/uncensored models are for Open WebUI only — never offered or defaulted to on the dashboard

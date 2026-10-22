@@ -70,6 +70,9 @@ function refit() {
 onMounted(async () => {
   const [{ Terminal }, { FitAddon }, { Unicode11Addon }] = await Promise.all([
     import('@xterm/xterm'), import('@xterm/addon-fit'), import('@xterm/addon-unicode11')])
+  // closed while the imports / font / attach were still loading: every await below checks, or the stream,
+  // the tmux attach and the listeners outlive the component
+  if (closed) return
   const phone = window.innerWidth < 640
   term = new Terminal({
     cursorBlink: true, fontSize: phone ? 12 : 13, scrollback: 2000, allowProposedApi: true,
@@ -78,6 +81,7 @@ onMounted(async () => {
   })
   // tmux counts emoji like Claude Code's 🟡 / 🟢 as two cells; xterm's default (Unicode 6) as one, which shifted the
   // rest of that line by a cell
+  if (closed) return term.dispose()
   term.loadAddon(new Unicode11Addon())
   term.unicode.activeVersion = '11'
   fit = new FitAddon()
@@ -91,12 +95,14 @@ onMounted(async () => {
     gl.onContextLoss(() => gl.dispose())
     term.loadAddon(gl)
   } catch {}
+  if (closed) return // onBeforeUnmount already disposed term
   fit.fit()
   size = { cols: term.cols, rows: term.rows }
   term.onData(type)
   term.focus()
   try {
     const r: any = await post('open', { vmid: props.vmid, path: props.path, target: props.target, session: props.session, ...size })
+    if (closed) { post('close', { id: r.id }).catch(() => {}); return }
     id = r.id
     connect()
     term.focus()
@@ -119,8 +125,10 @@ function close() {
 onBeforeUnmount(() => {
   ro?.disconnect()
   window.visualViewport?.removeEventListener('resize', refit)
+  clearTimeout(resizeTimer)
   close()
   term?.dispose()
+  fit = undefined
 })
 
 // keys a phone keyboard does not have

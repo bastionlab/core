@@ -45,3 +45,6 @@ export function dropChat(id: string) {
   db.prepare(`INSERT INTO chats (id, data, upd, seq, gone) VALUES (?, NULL, ?, ?, 1)
     ON CONFLICT(id) DO UPDATE SET data = NULL, gone = 1, seq = excluded.seq`).run(id, Date.now(), nextSeq())
 }
+
+/** every live chat's JSON in one string: lets the attachment sweep keep files an old chat still shows */
+export const liveChatsText = () => (db.prepare('SELECT data FROM chats WHERE gone = 0').all() as any[]).map(r => r.data).join('\n')
