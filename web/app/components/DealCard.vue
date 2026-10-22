@@ -17,7 +17,7 @@ const fitTone = computed(() => {
 })
 const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? null : v)
 
-// same text as the Telegram "Nachricht kopieren" button (deals app/notify.py INQUIRY)
+// same text as the copy block in the Discord #deals post (deals app/notify.py INQUIRY)
 const inquiry = 'Hallo, ist es noch verfügbar?'
 const copied = ref(false)
 // the <a> opens the ad natively (no popup blocker); the click only puts the message on the clipboard

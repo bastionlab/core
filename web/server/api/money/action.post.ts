@@ -25,12 +25,7 @@ export default defineEventHandler(async (event) => {
     case 'subDismiss': return post('/subs/dismiss', { key: str(body.key, 80) })
     case 'rename': return post('/payee/rename', { name: str(body.name, 200), alias: str(body.alias, 60) })
     case 'anomalyOk': return post('/anomalies/ok', { journal_id: str(body.journalId, 20) })
-    case 'telegramConfig': {
-      const token = str(body.token, 100)
-      if (!/^\d+:[\w-]{20,}$/.test(token)) throw createError({ statusCode: 400, statusMessage: 'Das sieht nicht nach einem Bot-Token aus (123456:ABC…)' })
-      return post('/telegram/config', { token })
-    }
-    case 'telegramTest': return post('/telegram/test')
+    case 'notifyTest': return post('/notify/test')
     case 'reportSend': return post('/report/send', { month: /^\d{4}-\d{2}$/.test(body.month) ? body.month : '' }, 60_000)
     case 'subRemove': return post('/subs/remove', { key: str(body.key, 80) })
     case 'subRestore': return post('/subs/restore', { key: str(body.key, 80) })

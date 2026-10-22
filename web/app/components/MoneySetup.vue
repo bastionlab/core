@@ -141,7 +141,7 @@ async function trCode() { if (await act('trCode', { code: tr.code })) { tr.code 
         <span class="acts"><button class="btn ghost sm" :disabled="trState === 'waiting_app' || !!busy" @click="trLogin">neu einloggen</button></span>
       </div>
     </div>
-    <p class="faint small">Zugangsdaten liegen nur in CT 108 (/etc/money, root-only) und werden nie zurückgegeben. Läuft ein Zugriff bald ab, kommt eine Telegram-Nachricht.</p>
+    <p class="faint small">Zugangsdaten liegen nur in CT 108 (/etc/money, root-only) und werden nie zurückgegeben. Läuft ein Zugriff bald ab, kommt eine Nachricht in Discord #alerts.</p>
   </Panel>
 </template>
 

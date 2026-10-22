@@ -96,7 +96,7 @@ function onChanged() {
         </span>
         <span class="muted"><b>{{ st.seen_24h }}</b> neu 24h</span>
         <span class="muted" title="von der KI aussortiert"><b>{{ st.filtered ?? 0 }}</b> aussortiert</span>
-        <span v-if="st.queued" class="muted"><b>{{ st.queued }}</b> → Telegram</span>
+        <span v-if="st.queued" class="muted"><b>{{ st.queued }}</b> → Discord</span>
         <button class="btn ghost ref" :disabled="pending" title="neu laden" @click="load">↻</button>
       </div>
       <div v-for="e in st.errors" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>

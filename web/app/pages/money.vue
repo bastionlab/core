@@ -377,7 +377,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
           </div>
         </Panel>
         <MoneyWorth class="gap" />
-        <MoneyTelegram class="gap" :tg="d.setup?.telegram" @changed="load" />
+        <MoneyNotify class="gap" :n="d.setup?.notify" @changed="load" />
       </template>
 
       <MoneyTxSheet v-if="open" :tx="open" :categories="d.categories" @close="open = null" @category="setCat" @changed="load" />

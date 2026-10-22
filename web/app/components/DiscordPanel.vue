@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** one Discord webhook per channel of the homelab server; deals, flats, jobs, money and host alerts post there instead of Telegram */
+/** one Discord webhook per channel of the homelab server; deals, flats, jobs, money and host alerts post there */
 const { data, refresh } = useFetch<any>('/api/discord')
 const what: Record<string, string> = {
   deals: 'Schnäppchen von Kleinanzeigen',
@@ -30,8 +30,7 @@ const count = computed(() => (data.value?.channels || []).filter((c: any) => c.s
 
 <template>
   <Panel title="Discord" :sub="`${count}/5 Kanäle verbunden`" fold="closed">
-    <p class="small muted">Pro Kanal: ⚙️ Kanal bearbeiten → Integrationen → Webhooks → Neuer Webhook → URL kopieren und hier einfügen.
-      Ein gesetzter Kanal ersetzt Telegram für seine Nachrichten.</p>
+    <p class="small muted">Pro Kanal: ⚙️ Kanal bearbeiten → Integrationen → Webhooks → Neuer Webhook → URL kopieren und hier einfügen.</p>
     <div v-for="c in data?.channels || []" :key="c.key" class="ch">
       <div class="head">
         <b>#{{ c.key }}</b>
