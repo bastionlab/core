@@ -58,6 +58,8 @@ watch(() => turns.value.map(t => t.a.length + t.r.length + (t.tools?.length ?? 0
   nextTick(onScroll)
 })
 watch(currentId, () => nextTick(() => { toBottom(false); onScroll() }))
+// opening the page lands on the newest message; again once markdown/images have laid out
+onMounted(() => nextTick(() => { toBottom(false); setTimeout(() => { toBottom(false); onScroll() }, 150) }))
 
 /** ask the last question again: replaces a failed or stopped answer, or rolls the dice again on a local model */
 const canRetry = computed(() => !busy.value && !!turns.value.at(-1)?.q && (!isClaude.value || !!turns.value.at(-1)!.error))

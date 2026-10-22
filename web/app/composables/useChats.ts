@@ -2,12 +2,36 @@ export interface Chat {
   id: string, title: string, at: number, turns: Turn[]
   /** Claude chats: the Claude Code session it resumes, and whether the next message may change things */
   engine?: 'local' | 'claude', session?: string, auto?: boolean, model?: string, effort?: string
+  /** when this device last changed it (ms); the newer copy wins between devices */
+  upd?: number
 }
 export type ChatStatus = 'busy' | 'input' | ''
 const KEY = 'chat.convos'
 const MAX = 40
 
-/** conversations live in this browser only (localStorage); a Claude chat's history also sits in its session on pve */
+/** what gets stored, here and on the server: no live state, long reasoning cut */
+const compact = (c: Chat) => {
+  const { upd, ...rest } = c
+  return {
+    ...rest,
+    turns: c.turns.map(({ q, a, r, model, tps, error, at, tools, ct, auto, secs, denied, fin, effort, answered }) => ({
+      q, a, r: r?.slice(0, 4000) ?? '', model, tps, error, at, ct, auto, secs, denied, fin, effort, answered,
+      tools: tools?.slice(-40).map(({ name, label, done, error }) => ({ name, label, done, error, args: null })),
+    })),
+  }
+}
+// sync bookkeeping (browser only): what the server last saw of each chat, and what still has to go up
+const sent = new Map<string, string>()
+const dirty = new Set<string>()
+const dels = new Set<string>()
+let seq = 0
+let flushing = false
+
+/**
+ * Conversations are shared by every device via /api/chats (sqlite in CT 104); localStorage is only a cache so the
+ * page opens instantly. Every few seconds the page pulls what other devices changed. A Claude chat's history also
+ * sits in its session on pve.
+ */
 export function useChats() {
   const chats = useState<Chat[]>('chats', () => [])
   const currentId = useState<string>('chats:current', () => '')
@@ -22,18 +46,82 @@ export function useChats() {
     } catch {}
     if (!chats.value.length) create()
     else currentId.value = chats.value[0]!.id
+    pull(true)
+    setInterval(() => document.visibilityState === 'visible' && pull(), 4000)
+    document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && pull())
+  }
+
+  /** take what other devices changed; a chat that is answering on this device is left alone until it's done */
+  async function pull(first = false) {
+    let r: { seq: number, chats: Chat[], gone: string[] }
+    try { r = await $fetch('/api/chats', { query: { since: first ? 0 : seq } }) } catch { return }
+    const placeholder = first && chats.value.length === 1 && !chats.value[0]!.turns.length && !sent.has(chats.value[0]!.id)
+      ? chats.value[0]!.id : ''
+    for (const id of r.gone) {
+      sent.delete(id); dirty.delete(id)
+      if (chats.value.some(c => c.id === id)) chats.value = chats.value.filter(c => c.id !== id)
+    }
+    for (const s of r.chats) {
+      const i = chats.value.findIndex(c => c.id === s.id)
+      const local = chats.value[i]
+      const json = JSON.stringify(compact(s))
+      if (local?.turns.some(t => t.busy)) continue
+      if (local && ((local.upd ?? 0) > (s.upd ?? 0) || JSON.stringify(compact(local)) === json)) {
+        if ((local.upd ?? 0) <= (s.upd ?? 0)) sent.set(s.id, json)
+        continue
+      }
+      sent.set(s.id, json)
+      dirty.delete(s.id)
+      if (local) chats.value[i] = s
+      else {
+        const at = chats.value.findIndex(c => c.at < s.at)
+        at < 0 ? chats.value.push(s) : chats.value.splice(at, 0, s)
+      }
+    }
+    // a brand-new device: drop the empty chat it made while loading and continue the latest one
+    if (placeholder && chats.value.length > 1) {
+      chats.value = chats.value.filter(c => c.id !== placeholder)
+      currentId.value = chats.value[0]!.id
+    }
+    if (first) {
+      chats.value.sort((a, b) => b.at - a.at)
+      // chats that only ever lived in this browser go up now (the first time per device)
+      for (const c of chats.value) if (!sent.has(c.id) && c.turns.length) dirty.add(c.id)
+    }
+    if (!chats.value.some(c => c.id === currentId.value)) chats.value.length ? (currentId.value = chats.value[0]!.id) : create()
+    seq = Math.max(seq, r.seq)
+    cache()
+    flush()
+  }
+
+  async function flush() {
+    if (flushing || (!dirty.size && !dels.size)) return
+    flushing = true
+    const put = [...dirty].map(id => chats.value.find(c => c.id === id)).filter(Boolean).map(c => ({ ...compact(c!), upd: c!.upd }))
+    const del = [...dels]
+    dirty.clear(); dels.clear()
+    let ok = true
+    try { await $fetch('/api/chats', { method: 'POST', body: { put, del } }) } catch {
+      ok = false
+      put.forEach(c => dirty.add(c.id)); del.forEach(id => dels.add(id))
+    } finally { flushing = false }
+    if (dirty.size || dels.size) ok ? flush() : setTimeout(flush, 3000)
+  }
+
+  const cache = () => {
+    try { localStorage.setItem(KEY, JSON.stringify(chats.value.slice(0, MAX).map(c => ({ ...compact(c), upd: c.upd })))) } catch {}
   }
 
   const save = () => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(chats.value.slice(0, MAX).map(c => ({
-        ...c,
-        turns: c.turns.map(({ q, a, r, model, tps, error, at, tools, ct, auto, secs, denied, fin, effort, answered }) => ({
-          q, a, r: r?.slice(0, 4000) ?? '', model, tps, error, at, ct, auto, secs, denied, fin, effort, answered,
-          tools: tools?.slice(-40).map(({ name, label, done, error }) => ({ name, label, done, error, args: null })),
-        })),
-      }))))
-    } catch {}
+    for (const c of chats.value) {
+      const json = JSON.stringify(compact(c))
+      if (sent.get(c.id) === json || (!c.turns.length && !sent.has(c.id))) continue
+      sent.set(c.id, json)
+      c.upd = Date.now()
+      dirty.add(c.id)
+    }
+    cache()
+    flush()
   }
 
   function create() {
@@ -47,6 +135,7 @@ export function useChats() {
 
   function remove(id: string) {
     chats.value = chats.value.filter(c => c.id !== id)
+    sent.delete(id); dirty.delete(id); dels.add(id)
     if (!chats.value.length) create()
     else if (currentId.value === id) currentId.value = chats.value[0]!.id
     save()

@@ -35,9 +35,18 @@ const perf = computed(() => {
   const s = series.value
   if (s.length < 2) return null
   const a = s[0]!, b = s.at(-1)!
-  const gain = (b[1] - a[1]) - (b[2] - a[2])
-  const base = a[1] + Math.max(0, b[2] - a[2]) / 2
-  return { gain, pct: base > 0 ? (100 * gain) / base : 0, paid: b[2] - a[2] }
+  const paid = b[2] - a[2]
+  const gain = (b[1] - a[1]) - paid
+  // Max = TR's "insgesamt": gain over the cost basis
+  if (!from.value) return { gain, pct: b[2] > 0 ? (100 * gain) / b[2] : 0, paid }
+  // Modified Dietz: each deposit counts for the share of the span it was invested
+  const t0 = Date.parse(a[0]), T = Date.parse(b[0]) - t0 || 1
+  let base = a[1]
+  for (let i = 1; i < s.length; i++) {
+    const f = s[i]![2] - s[i - 1]![2]
+    if (f) base += f * (1 - (Date.parse(s[i]![0]) - t0) / T)
+  }
+  return { gain, pct: base > 0 ? (100 * gain) / base : 0, paid }
 })
 const now = computed(() => series.value.at(-1))
 const sel = computed(() => (pick.value ? props.positions.find(p => p.isin === pick.value) : null))

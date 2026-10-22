@@ -25,6 +25,10 @@ onMounted(() => {
   loadChats()
   for (const c of chats.value) for (const t of c.turns) if (t.ct && !t.fin) claude.attach(t)
 })
+// a turn started on another device shows up via sync: follow it here too
+watch(() => chats.value.flatMap(c => c.turns.filter(t => t.ct && !t.fin && !t.busy).map(t => t.ct)).join(), () => {
+  for (const c of chats.value) for (const t of c.turns) if (t.ct && !t.fin && !t.busy) claude.attach(t)
+})
 const mark = (to: string) => (to === '/chat' ? overall.value : '')
 const markTitle = (m: string) => (m === 'input' ? 'a chat is waiting for your answer' : 'a chat is working')
 
