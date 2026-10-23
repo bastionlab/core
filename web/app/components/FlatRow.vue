@@ -3,7 +3,7 @@
 const props = defineProps<{ item: any, busy?: boolean, checked?: boolean }>()
 const emit = defineEmits<{ (e: 'verdict', v: 'up' | 'down' | null): void }>()
 
-const SOURCES: Record<string, string> = { kleinanzeigen: 'Kleinanzeigen', inberlinwohnen: 'inberlinwohnen', immoscout24: 'ImmoScout24' }
+const SOURCES: Record<string, string> = { kleinanzeigen: 'Kleinanzeigen', inberlinwohnen: 'inberlinwohnen', immoscout24: 'ImmoScout24', bienici: "Bien'ici" }
 const eur = (v?: number | null) => (v == null ? '' : `${Math.round(v).toLocaleString('de-DE')} €`)
 
 const warm = computed(() => props.item.warm == null ? (props.item.list_price ? eur(props.item.list_price) : '—') : eur(props.item.warm))
@@ -19,7 +19,7 @@ const breakdown = computed(() => {
 const when = computed(() => vor(props.item.posted_at ?? props.item.first_seen_at))
 const fresh = computed(() => (Date.now() / 1000 - (props.item.posted_at ?? 0)) < 6 * 3600)
 const channels = computed(() => (props.item.contact?.channels ?? []).filter((c: any) => c.type === 'email' || c.type === 'phone'))
-const phoneText = (v: string) => v.replace(/^\+49/, '0')
+const phoneText = (v: string) => v.replace(/^\+49/, '0').replace(/^\+33(\d)(\d{2})(\d{2})(\d{2})(\d{2})$/, '0$1 $2 $3 $4 $5')
 const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? null : v)
 
 // 💬: a draft written in CT 107 from the "Über uns" profile, cached there per flat
@@ -28,7 +28,7 @@ async function draft(fresh = false) {
   msg.open = true; msg.loading = true; msg.err = ''
   try {
     const r = await $fetch<any>('/api/flats/action', {
-      method: 'POST', body: { action: 'message', source: props.item.source, sourceId: props.item.source_id, fresh },
+      method: 'POST', body: { action: 'message', source: props.item.source, sourceId: props.item.source_id, searchId: props.item.search_id, fresh },
     })
     msg.text = r.text; msg.missing = r.missing ?? []
   } catch (e: any) { msg.err = errText(e) } finally { msg.loading = false }

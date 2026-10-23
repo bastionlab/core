@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
     const data = String(body.data ?? '')
     if (!data || data.length > 12_000_000 || !/^[A-Za-z0-9+/=]+$/.test(data))
       throw createError({ statusCode: 400, statusMessage: 'PDF fehlt oder ist zu groß (max. 8 MB)' })
-    return deals(event, '/jobs/cv', { method: 'POST', body: { filename: cleanStr(body.filename, 200), data }, timeout: 180_000 })
+    return deals(event, '/jobs/cv', { method: 'POST', body: { filename: cleanStr(body.filename, 200), data, search_id: cleanInt(body.searchId) || null }, timeout: 180_000 })
   }
   if (action === 'profile') {
     const p = body.profile ?? {}
@@ -73,10 +73,10 @@ export default defineEventHandler(async (event) => {
       level: cleanPick(p.level, LEVELS, 'mid'),
       years: Math.min(Math.max(cleanInt(p.years) ?? 0, 0), 60),
     }
-    return deals(event, '/jobs/cv/profile', { method: 'POST', body: { profile } })
+    return deals(event, '/jobs/cv/profile', { method: 'POST', body: { profile, search_id: cleanInt(body.searchId) || null } })
   }
   if (action === 'cvdelete')
-    return deals(event, '/jobs/cv/delete', { method: 'POST' })
+    return deals(event, '/jobs/cv/delete', { method: 'POST', query: cleanInt(body.searchId) ? { search: cleanInt(body.searchId) } : {} })
 
   const id = cleanNum(body.id)
   if (!id) throw createError({ statusCode: 400, statusMessage: 'missing search id' })

@@ -2,6 +2,10 @@
 const { armed, arm } = useArm()
 /** the CV every posting is read against; CT 107 keeps the text and the profile the model made of it */
 const emit = defineEmits<{ (e: 'changed'): void }>()
+/** with a search tab selected: that search's own CV (or the shared one it falls back to) */
+const props = defineProps<{ search?: number | null, searches?: any[] }>()
+const sname = computed(() => props.searches?.find((s: any) => s.id === props.search)?.name)
+const scoped = computed(() => (props.search ? { searchId: props.search } : {}))
 
 const cv = ref<any>(null)
 const loaded = ref(false)
@@ -15,9 +19,10 @@ const file = ref<HTMLInputElement | null>(null)
 const LEVELS: Record<string, string> = { junior: 'Junior', mid: 'Mid-Level', senior: 'Senior', lead: 'Lead' }
 
 async function load() {
-  try { cv.value = await $fetch('/api/jobs/cv') } catch (e: any) { err.value = errText(e) } finally { loaded.value = true }
+  try { cv.value = await $fetch('/api/jobs/cv', { query: props.search ? { search: props.search } : {} }) } catch (e: any) { err.value = errText(e) } finally { loaded.value = true }
 }
 onMounted(load)
+watch(() => props.search, () => { editing.value = false; load() })
 
 const p = computed(() => cv.value?.profile ?? {})
 
@@ -41,7 +46,7 @@ async function upload(ev: Event) {
       r.onerror = () => reject(r.error)
       r.readAsDataURL(f)
     })
-    const r: any = await $fetch('/api/jobs/action', { method: 'POST', body: { action: 'cv', filename: f.name, data } })
+    const r: any = await $fetch('/api/jobs/action', { method: 'POST', body: { action: 'cv', filename: f.name, data, ...scoped.value } })
     await load()
     flash(r.rejudge ? `gelesen · ${r.rejudge} Treffer werden neu bewertet` : 'gelesen')
     emit('changed')
@@ -63,7 +68,7 @@ async function save() {
   busy.value = 'save'; err.value = ''
   try {
     const profile = { ...p.value, ...form, roles: split(form.roles), skills: split(form.skills), languages: split(form.languages) }
-    const r: any = await $fetch('/api/jobs/action', { method: 'POST', body: { action: 'profile', profile } })
+    const r: any = await $fetch('/api/jobs/action', { method: 'POST', body: { action: 'profile', profile, ...scoped.value } })
     await load()
     editing.value = false
     flash(r.rejudge ? `gespeichert · ${r.rejudge} Treffer werden neu bewertet` : 'gespeichert')
@@ -75,7 +80,7 @@ async function remove() {
   if (!arm('cv')) return
   busy.value = 'del'
   try {
-    await $fetch('/api/jobs/action', { method: 'POST', body: { action: 'cvdelete' } })
+    await $fetch('/api/jobs/action', { method: 'POST', body: { action: 'cvdelete', ...scoped.value } })
     await load()
     emit('changed')
   } catch (e: any) { err.value = errText(e) } finally { busy.value = '' }
@@ -83,11 +88,15 @@ async function remove() {
 </script>
 
 <template>
-  <Panel v-if="loaded" title="Lebenslauf" id="job-cv" :fold="cv?.present ? 'closed' : 'open'">
+  <Panel
+    v-if="loaded" :title="sname ? `Lebenslauf · ${sname}` : 'Lebenslauf'"
+    :sub="sname ? (cv?.own ? 'eigener für diese Suche' : 'gemeinsamer · hochladen = eigener für diese Suche') : 'gilt für alle Suchen ohne eigenen'"
+    id="job-cv" :fold="cv?.present ? 'closed' : 'open'"
+  >
     <template #actions>
       <span v-if="cv?.present" class="small muted head" :title="cv.filename">{{ p.headline || cv.filename }}</span>
       <button class="btn" :disabled="!!busy" @click.stop="pickFile">
-        {{ busy === 'upload' ? 'liest…' : cv?.present ? '↥ Neu hochladen' : '↥ PDF hochladen' }}
+        {{ busy === 'upload' ? 'liest…' : sname && !cv?.own ? '↥ Eigenen hochladen' : cv?.present ? '↥ Neu hochladen' : '↥ PDF hochladen' }}
       </button>
     </template>
     <input ref="file" type="file" accept="application/pdf,.pdf" hidden @change="upload">
@@ -112,8 +121,9 @@ async function remove() {
       <div class="chips"><span class="lbl small faint">Kenntnisse</span><span v-for="s in p.skills ?? []" :key="s" class="chip sk">{{ s }}</span></div>
       <div class="bar">
         <span class="small faint">{{ cv.filename }} · {{ vor(cv.uploaded_at) }} · {{ cv.chars.toLocaleString('de-DE') }} Zeichen</span>
-        <button class="btn ghost" @click="edit">✎ Korrigieren</button>
-        <button class="btn ghost danger" :class="{ sure: armed === 'cv' }" :disabled="!!busy" :title="armed === 'cv' ? 'Neue Treffer werden dann nur gegen den Suchwunsch bewertet' : 'Lebenslauf löschen'" @click="remove">{{ armed === 'cv' ? 'Sicher?' : '✕' }}</button>
+        <!-- a search on the shared CV: editing it here would change every search, so only from the shared view -->
+        <button v-if="!sname || cv.own" class="btn ghost" @click="edit">✎ Korrigieren</button>
+        <button v-if="!sname || cv.own" class="btn ghost danger" :class="{ sure: armed === 'cv' }" :disabled="!!busy" :title="armed === 'cv' ? (sname ? 'Die Suche nutzt dann wieder den gemeinsamen Lebenslauf' : 'Neue Treffer werden dann nur gegen den Suchwunsch bewertet') : 'Lebenslauf löschen'" @click="remove">{{ armed === 'cv' ? 'Sicher?' : '✕' }}</button>
       </div>
     </template>
 

@@ -19,6 +19,7 @@ export default defineEventHandler(async (event) => {
       name,
       mode,
       place: cleanStr(body.place, 120),
+      ref: mode === 'city' && /^[NWR]\d{1,15}$/.test(String(body.ref ?? '')) ? String(body.ref) : null,
       lat: mode === 'pin' ? cleanNum(body.lat) : null,
       lon: mode === 'pin' ? cleanNum(body.lon) : null,
       radius_km: Math.min(Math.max(cleanNum(body.radius) ?? 0, 0), 100),
@@ -42,18 +43,18 @@ export default defineEventHandler(async (event) => {
     const verdict = body.verdict === 'up' || body.verdict === 'down' ? body.verdict : null
     return deals(event, '/flats/feedback', {
       method: 'POST',
-      body: { search_id: cleanNum(body.searchId), source: cleanStr(body.source, 32), source_id: cleanStr(body.sourceId, 32), verdict },
+      body: { search_id: cleanNum(body.searchId), source: cleanStr(body.source, 32), source_id: cleanStr(body.sourceId, 96), verdict },
     })
   }
 
   if (action === 'profile')
-    return deals(event, '/flats/profile', { method: 'POST', body: { text: String(body.text ?? '').slice(0, 4000) } })
+    return deals(event, '/flats/profile', { method: 'POST', body: { text: String(body.text ?? '').slice(0, 4000), search_id: cleanNum(body.searchId) || null } })
 
   if (action === 'message') {
     // qwen writes it in ~5 s when warm; a cold model load can take a minute
     return deals(event, '/flats/message', {
       method: 'POST',
-      body: { source: cleanStr(body.source, 32), source_id: cleanStr(body.sourceId, 32), fresh: !!body.fresh },
+      body: { source: cleanStr(body.source, 32), source_id: cleanStr(body.sourceId, 96), search_id: cleanNum(body.searchId) || null, fresh: !!body.fresh },
       timeout: 120_000,
     })
   }

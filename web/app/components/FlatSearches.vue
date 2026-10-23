@@ -15,7 +15,7 @@ const WBS = [
 ]
 
 const blank = () => ({
-  name: '', mode: 'city' as 'city' | 'pin', place: 'Berlin', lat: null as number | null, lon: null as number | null,
+  name: '', mode: 'city' as 'city' | 'pin', place: 'Berlin', ref: null as string | null, lat: null as number | null, lon: null as number | null,
   radius: '0', minWarm: '', maxWarm: '', minArea: '', maxArea: '', minRooms: '', maxRooms: '',
   tausch: 'exclude', wbs: 'any', allowTemporary: false,
 })
@@ -27,20 +27,29 @@ const err = ref('')
 const note = ref('')
 
 // what the place field resolved to, so the map can show the area before saving
-const where = ref<{ label?: string, full?: string, bbox?: [number, number, number, number] | null } | null>(null)
+const where = ref<{ label?: string, full?: string, ref?: string, bbox?: [number, number, number, number] | null, shape?: any } | null>(null)
 const locating = ref(false)
+// same name, several places ("Neukölln" the Ortsteil and the Bezirk, "Mitte" in five cities)
+const options = ref<any[]>([])
+const KINDS: Record<string, string> = {
+  suburb: 'Ortsteil', borough: 'Bezirk', city_district: 'Stadtteil', quarter: 'Kiez', neighbourhood: 'Kiez',
+  city: 'Stadt', town: 'Stadt', village: 'Dorf', municipality: 'Gemeinde', county: 'Kreis', state: 'Land', square: 'Platz',
+}
+const located = ref('')     // the text that "where" belongs to; typing something else invalidates it
 
 function openNew() {
   editing.value = editing.value === 'new' ? null : 'new'
   Object.assign(form, blank())
-  err.value = ''; where.value = null
-  if (editing.value) locate()
+  err.value = ''; where.value = null; located.value = ''; options.value = []
+  ++lookups
+  if (editing.value) nextTick(() => locate())
 }
 
 function openEdit(s: any) {
   if (editing.value === s.id) { editing.value = null; return }
   editing.value = s.id
   err.value = ''
+  ++lookups
   const sp = s.spec ?? {}
   Object.assign(form, {
     name: s.name,
@@ -53,20 +62,49 @@ function openEdit(s: any) {
     minRooms: sp.min_rooms ?? '', maxRooms: sp.max_rooms ?? '',
     tausch: sp.tausch ?? 'exclude', wbs: sp.wbs ?? 'any', allowTemporary: !!sp.allow_temporary,
   })
-  where.value = { label: sp.place, bbox: sp.bbox ?? null }
+  form.ref = sp.ref ?? null
+  where.value = { label: sp.place, full: sp.full, ref: sp.ref, bbox: sp.bbox ?? null, shape: sp.shape ?? null }
+  located.value = form.place
+  options.value = []
 }
 
-async function locate() {
-  if (form.mode !== 'city' || !form.place.trim()) return
+let lookups = 0            // only the newest answer may touch the form: older ones arrive late and would undo a pick
+let typeTimer: any
+/** force = "Prüfen": ask again even if the text is unchanged, e.g. to get the other candidates of a saved search */
+async function locate(force = false) {
+  clearTimeout(typeTimer)
+  const q = form.place.trim()
+  if (form.mode !== 'city' || !q || (!force && located.value === form.place && where.value)) return
+  const n = ++lookups
+  const keep = form.ref
   locating.value = true
   try {
-    where.value = await $fetch('/api/flats/geocode', { query: { q: form.place } }) as any
+    const r: any = await $fetch('/api/flats/geocode', { query: { q } })
+    if (n !== lookups || form.mode !== 'city') return
+    options.value = r.options ?? []
+    choose(options.value.find(o => o.ref === keep) ?? options.value[0] ?? r)
+    located.value = form.place
     err.value = ''
   } catch (e: any) {
-    where.value = null
+    if (n !== lookups) return
+    where.value = null; form.ref = null; options.value = []
     err.value = e?.data?.statusMessage || 'Ort nicht gefunden'
-  } finally { locating.value = false }
+  } finally { if (n === lookups) locating.value = false }
 }
+
+function choose(o: any) {
+  where.value = o
+  form.ref = o?.ref ?? null
+}
+// typing makes the old place wrong: drop it from the map at once and look the new text up after a pause
+watch(() => form.place, (v) => {
+  if (v === located.value) return
+  ++lookups
+  locating.value = false
+  form.ref = null; options.value = []; where.value = null; located.value = ''
+  clearTimeout(typeTimer)
+  if (form.mode === 'city' && v.trim().length >= 3) typeTimer = setTimeout(locate, 700)
+})
 
 let revTimer: any
 function pick(p: { lat: number, lon: number }) {
@@ -75,7 +113,10 @@ function pick(p: { lat: number, lon: number }) {
   if (form.radius === '0' || !Number(form.radius)) form.radius = '3'
   clearTimeout(revTimer)
   revTimer = setTimeout(async () => {
-    try { where.value = await $fetch('/api/flats/geocode', { query: { lat: p.lat, lon: p.lon } }) as any } catch {}
+    try {
+      const r: any = await $fetch('/api/flats/geocode', { query: { lat: p.lat, lon: p.lon } })
+      if (form.mode === 'pin' && form.lat === p.lat && form.lon === p.lon) where.value = r
+    } catch {}
   }, 400)
 }
 
@@ -83,7 +124,8 @@ function setMode(m: 'city' | 'pin') {
   if (form.mode === m) return
   form.mode = m
   form.radius = m === 'pin' ? '3' : '0'
-  where.value = null
+  where.value = null; located.value = ''; options.value = []
+  ++lookups; clearTimeout(typeTimer); locating.value = false
   if (m === 'city') locate()
 }
 
@@ -111,7 +153,7 @@ async function submit() {
   const r = await act(isNew ? 'add' : 'edit', isNew ? body : { id: editing.value, ...body })
   if (!r) return
   note.value = isNew
-    ? `Gespeichert — ${r.added || 0} vorhandene Wohnungen passen schon. Kleinanzeigen wird in den nächsten Minuten durchsucht.`
+    ? `Gespeichert — ${r.added || 0} vorhandene Wohnungen passen schon. Die Portale werden in den nächsten Minuten durchsucht.`
     : `${r.added || 0} dazu, ${r.removed || 0} raus`
   editing.value = null
   setTimeout(() => (note.value = ''), 9000)
@@ -142,19 +184,19 @@ function summary(sp: any) {
     <form v-if="editing !== null" class="new" @submit.prevent="submit">
       <div class="row">
         <label>Name<input v-model="form.name" placeholder="2 Zimmer Kreuzberg" required></label>
-        <label>Wo?
+        <div class="lbl">Wo?
           <div class="seg">
             <button type="button" :class="{ on: form.mode === 'city' }" @click="setMode('city')">Ort</button>
             <button type="button" :class="{ on: form.mode === 'pin' }" @click="setMode('pin')">📍 Karte</button>
           </div>
-        </label>
+        </div>
       </div>
 
       <div v-if="form.mode === 'city'" class="row">
         <label>Stadt oder Bezirk
           <span class="inl">
-            <input v-model="form.place" placeholder="Berlin, Potsdam, Neukölln…" @keydown.enter.prevent="locate" @blur="locate">
-            <button class="btn ghost" type="button" :disabled="locating" @click="locate">{{ locating ? '…' : 'Prüfen' }}</button>
+            <input v-model="form.place" placeholder="Berlin, Neukölln, Paris, Lyon…" @keydown.enter.prevent="locate(true)" @blur="locate()">
+            <button class="btn ghost" type="button" :disabled="locating" @click="locate(true)">{{ locating ? '…' : 'Prüfen' }}</button>
           </span>
         </label>
         <label>Zusätzlicher Umkreis km<input v-model="form.radius" type="number" min="0" max="100" step="1"></label>
@@ -171,10 +213,21 @@ function summary(sp: any) {
       <ClientOnly>
         <MapPick
           :mode="form.mode" :lat="mapLat" :lon="mapLon" :radius="Number(form.radius) || 0"
-          :bbox="form.mode === 'city' ? where?.bbox ?? null : null" @pick="pick"
+          :bbox="form.mode === 'city' ? where?.bbox ?? null : null"
+          :shape="form.mode === 'city' ? where?.shape ?? null : null" @pick="pick"
         />
       </ClientOnly>
-      <div v-if="form.mode === 'city' && where?.full" class="small muted">Gesucht wird in: {{ where.full }}</div>
+      <div v-if="form.mode === 'city' && options.length > 1" class="opts">
+        <span class="small faint">Meintest du:</span>
+        <button
+          v-for="o in options" :key="o.ref" type="button" class="chip" :class="{ on: o.ref === form.ref }"
+          :title="o.full" @click="choose(o)"
+        >{{ o.label }}<span class="faint"> · {{ KINDS[o.kind] ?? o.kind }}{{ o.hint ? ', ' + o.hint.split(',')[0] : '' }}</span></button>
+      </div>
+      <div v-if="form.mode === 'city' && where?.full" class="small muted">
+        Gesucht wird in: {{ where.full }}
+        <template v-if="!where.shape"> · nur als Punkt bekannt, gesucht wird im Umkreis von mind. 2 km</template>
+      </div>
 
       <div class="row narrow">
         <label title="Billiger als das ist meist ein Fake oder nur ein Zimmer">Warmmiete ab €<input v-model="form.minWarm" type="number" min="0" step="10"></label>
@@ -231,11 +284,14 @@ function summary(sp: any) {
 .row.narrow { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .row.end { display: flex; align-items: center; gap: 10px; }
 .row.end .btn:first-of-type { margin-left: auto; }
-label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); min-width: 0; }
+label, .lbl { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); min-width: 0; }
 label.chk { flex-direction: row; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; }
 .new input, .new select, .new textarea { background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 8px; color: var(--text); font: inherit; font-size: 13px; min-width: 0; }
 .slider { padding: 0; accent-color: var(--accent); }
 .inl { display: flex; gap: 6px; }
+.opts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.chip { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); cursor: pointer; }
+.chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
 .inl input { flex: 1; }
 .hint2 { padding-bottom: 6px; }
 .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel); }

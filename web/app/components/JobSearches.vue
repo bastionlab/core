@@ -16,7 +16,7 @@ const EMPLOYMENT = [
 const LEVELS = [
   { v: 'junior', label: 'Junior' }, { v: 'mid', label: 'Mid' }, { v: 'senior', label: 'Senior' }, { v: 'lead', label: 'Lead' },
 ]
-const LANGS = [{ v: 'de', label: 'Deutsch' }, { v: 'en', label: 'Englisch' }]
+const LANGS = [{ v: 'de', label: 'Deutsch' }, { v: 'en', label: 'Englisch' }, { v: 'fr', label: 'Französisch' }]
 
 const blank = () => ({
   name: '', wish: '', keywords: '', modes: ['onsite', 'hybrid', 'remote'] as string[], place: 'Berlin', radius: '25',
@@ -159,7 +159,7 @@ function summary(sp: any) {
       <div class="grp">
         <span class="lbl">Sprache der Anzeige</span>
         <button v-for="o in LANGS" :key="o.v" type="button" class="chip" :class="{ on: form.langs.includes(o.v) }" @click="toggle(form.langs, o.v)">{{ o.label }}</button>
-        <span class="faint small">{{ form.langs.length ? '' : 'beide' }}</span>
+        <span class="faint small">{{ form.langs.length ? '' : 'alle' }}</span>
       </div>
 
       <div class="row three">

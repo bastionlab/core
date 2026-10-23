@@ -39,7 +39,7 @@ const sources = computed(() => Object.entries(st.value?.per_source ?? {}).map(([
       </HunterStrip>
 
       <FlatSearches :searches="searches" @changed="onChanged" />
-      <FlatProfile class="prof" />
+      <FlatProfile class="prof" :search="selected" :searches="searches" />
 
       <HunterTabs v-model:show="show" v-model:selected="selected" title="Wohnungen" :views="VIEWS" :tabs="tabs(hits)">
         <template #note>

@@ -36,7 +36,7 @@ function applied(item: any, v: boolean) {
         <span v-if="perSource" class="faint src">{{ perSource }}</span>
       </HunterStrip>
 
-      <JobCv @changed="load" />
+      <JobCv :search="selected" :searches="searches" @changed="load" />
       <JobSearches class="srch" :searches="searches" :sources="st.sources ?? []" :has-cv="st.cv" @changed="onChanged" />
 
       <HunterTabs v-model:show="show" v-model:selected="selected" title="Stellen" :views="VIEWS" :tabs="tabs()" />
