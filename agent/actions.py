@@ -230,6 +230,26 @@ def marketplace_index():
     return _addon_get().index()
 
 
+@cached(1800)
+def _scan(aid, version, installed):
+    try:
+        return _addon_get().preview(aid)
+    except SystemExit as e:  # addon-get's helpers exit on a failed fetch; here that is an answer, not the end
+        raise ValueError(str(e.code))
+
+
+def marketplace_scan(aid):
+    """the safety check of what Install / Update would bring (agent/addon_scan.py), per marketplace version"""
+    ag = _addon_get()
+    if not ag.ID_RE.match(aid):
+        raise ValueError("bad add-on id")
+    e = next((a for a in marketplace_index()["addons"] if a.get("id") == aid), None)
+    if not e:
+        raise ValueError(f"{aid} is not in the marketplace")
+    here = ag.ADDONS / aid / "addon.yaml"
+    return _scan(aid, e.get("version"), ag.manifest(here.parent).get("version") if here.exists() else None)
+
+
 def a_config_set(args):
     """Settings → General: one config.json value, shown old → new on the Run button; config-set checks it again"""
     from config import config_change

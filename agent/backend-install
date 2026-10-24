@@ -36,6 +36,7 @@ mkdir -p "$BACK"
 if [ -d "$DIR/.git" ]; then echo "→ updating $DIR"; git_ -C "$DIR" pull -q --ff-only
 else echo "→ cloning $REPO into $DIR"; git_ clone -q "$REPO" "$DIR"; fi
 [ -x "$DIR/bootstrap.sh" ] && [ -x "$DIR/deploy.sh" ] || { echo "$REPO has no bootstrap.sh / deploy.sh" >&2; exit 1; }
+python3 -I "$DASH/agent/addon_scan.py" "$DIR" --repo --id "$KEY" || { echo "the safety check blocked $REPO; nothing was run (code left in $DIR for a look)" >&2; exit 1; }
 
 # --- the CT -------------------------------------------------------------------------------------------------
 ID=$(pvesh get /cluster/nextid)

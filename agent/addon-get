@@ -10,6 +10,8 @@ sparse-checkout add / drop and a pull.
 
 Where things come from: config.json marketplace.index (the pvedash/addons index.json, or the copy in
 addons/index.json when that is unreachable) names each add-on's folder in marketplace.repo, or its own repo.
+Before anything lands, agent/addon_scan.py checks the code (reverse shells, miners, decode-and-run, planted ssh
+keys, binaries, dashboard secrets, …): a blocking finding stops the install or update; the rest goes in the log.
 Nothing is deleted: a replaced or removed add-on is moved to /var/lib/dash-addons/old/<id>-<version>-<time>.
 The rebuild restarts the agent, which would kill a deploy running as its child, so it gets a unit of its own.
 """
@@ -18,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import CFG, DASHBOARD, DEVBOX  # noqa: E402
+import addon_scan  # noqa: E402
 
 ADDONS = Path(os.environ.get("DASH_ADDONS_DIR") or f"{DASHBOARD}/addons")
 OLD = Path(os.environ.get("DASH_ADDONS_OLD") or "/var/lib/dash-addons/old")
@@ -112,6 +115,50 @@ def fetch(e, tmp: Path) -> Path:
     return d
 
 
+def check(d: Path, aid, old=None):
+    """the safety scan; exits before anything is installed when it finds something blocking"""
+    rep = addon_scan.scan(d, old if old and old.is_dir() else None, aid, MK.get("scan_allow") or [])
+    say(addon_scan.summary(rep))
+    if not rep["ok"]:
+        sys.exit(f"{aid}: the safety check blocked it, nothing was installed")
+    return rep
+
+
+def remote_tree(tmp: Path, *subs) -> Path:
+    """checkout mode: the marketplace repo's fetched tip (FETCH_HEAD) of these folders, unpacked into tmp"""
+    out = tmp / "tree"
+    out.mkdir()
+    there = set(subprocess.run(["git", "ls-tree", "--name-only", "FETCH_HEAD"], cwd=ADDONS, capture_output=True,
+                               text=True, timeout=60).stdout.split())
+    subs = [s for s in subs if s in there]  # a folder gone upstream has nothing to check
+    if not subs:
+        return out
+    r = subprocess.run(f"git archive FETCH_HEAD -- {' '.join(subs)} | tar -x -C {out}", shell=True, cwd=ADDONS,
+                       capture_output=True, text=True, timeout=300)
+    if r.returncode:
+        sys.exit(f"could not unpack the fetched add-on: {r.stderr.strip()[:300]}")
+    return out
+
+
+def preview(aid):
+    """what the Install / Update confirm card shows: the scan of the version the marketplace would bring"""
+    e = entry(aid)
+    here = ADDONS / aid
+    with tempfile.TemporaryDirectory() as t:
+        if checkout_mode():
+            if e.get("repo"):
+                raise ValueError(f"{aid} lives in its own repo")
+            sub = e.get("path") or aid
+            if not PATH_RE.match(sub):
+                raise ValueError(f"bad folder name {sub!r}")
+            git("fetch", "-q", cwd=ADDONS)
+            d = remote_tree(Path(t), sub) / sub
+        else:
+            d = fetch(e, Path(t))
+        rep = addon_scan.scan(d, here if here.is_dir() else None, aid, MK.get("scan_allow") or [])
+    return {**rep, "id": aid, "version": e.get("version")}
+
+
 def stash(aid):
     """move addons/<id> out of the way, never delete it"""
     cur = ADDONS / aid
@@ -176,12 +223,22 @@ def main_checkout(cmd, aid):
     sub = e.get("path") or aid
     if not PATH_RE.match(sub):
         sys.exit(f"bad folder name {sub!r}")
-    say("pulling the marketplace repo")
-    git("pull", "--ff-only", "-q", cwd=ADDONS)
     if cmd == "install":
         if here.exists():
             sys.exit(f"{aid} is already installed")
         need_deps(e)
+    # fetch, check what would land (the new add-on, or on update every installed one: the pull moves them all),
+    # and only then fast-forward
+    say("fetching the marketplace repo")
+    git("fetch", "-q", cwd=ADDONS)
+    subs = [sub] if cmd == "install" else installed_dirs()
+    with tempfile.TemporaryDirectory() as t:
+        tree = remote_tree(Path(t), *subs)
+        for s in subs:
+            if (tree / s).is_dir():
+                check(tree / s, s, ADDONS / s if cmd == "update" else None)
+    git("merge", "--ff-only", "-q", "FETCH_HEAD", cwd=ADDONS)
+    if cmd == "install":
         sparse("add", sub)
         say(f"{aid} {manifest(here).get('version', '?')} is in {here}")
         if (here / "install.sh").exists():
@@ -222,6 +279,7 @@ def main():
             m = manifest(d)
             if m.get("id") != aid:
                 sys.exit(f"addon.yaml says id {m.get('id')!r}, expected {aid!r}")
+            check(d, aid, here if cmd == "update" else None)
             old = stash(aid) if cmd == "update" else None
             shutil.move(str(d), here)
         say(f"{aid} {m.get('version', '?')} is in {here}")

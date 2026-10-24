@@ -12,7 +12,7 @@ from config import HOST_IP, ip
 import hooks
 from core import HERE, POOL, cached
 from metrics import all_updates, backups, cpu_percent, cts, datasets, gpu, host, pools, ports, smart, tailnet
-from actions import check_action, job_status, marketplace_index, service_uptime, start_action
+from actions import check_action, job_status, marketplace_index, marketplace_scan, service_uptime, start_action
 from claude import _alive, _cc_turn, claude_send, claude_stop, claude_usage
 import dash_sdk
 import settings
@@ -80,6 +80,8 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, settings.values(q.get("addon", "")))
             if u.path == "/marketplace/index":
                 return self._send(200, marketplace_index())
+            if u.path == "/marketplace/scan":
+                return self._send(200, marketplace_scan(q["id"]))
             if u.path in dash_sdk.STREAMS:
                 return dash_sdk.STREAMS[u.path](self, q)
             fn, m = dash_sdk.route("GET", u.path)

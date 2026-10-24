@@ -53,6 +53,11 @@ marketplace — plan").
   `marketplace.repo` (one folder per add-on) or the entry's own GitHub repo, keeps every replaced copy in
   `/var/lib/dash-addons/old`, runs `install.sh` once on install, then `deploy.sh` in its own unit `dash-rebuild`
   (an agent restart would kill it as a child). Not offered to the Ask model.
+- Every install / update first passes `agent/addon_scan.py` (reverse shells, miners, decode-and-run, ssh keys,
+  setuid, binaries, symlinks out, the dashboard's own secrets, …; ClamAV too when installed). `block` stops
+  addon-get and backend-install (backend repos are scanned before bootstrap.sh); warnings show on the /addons
+  confirm card (`/marketplace/scan`). Own add-ons must pass it: no `eval`/`exec` of decoded data, read only
+  `/etc/dash/secrets/<own id>.json`. A false positive → `marketplace.scan_allow: ["<id>:<rule>"]` in config.json.
 - New add-on: `templates/new-addon <id> "<Name>"` (or `/new-addon`); release: `/publish-addon`.
 - Shared by several add-ons, so it stays in core: the Ask bar + chat engine (`/api/chat`, `/api/claude`, chats sync,
   `useAsk`/`useChats`), notes and deals server utils (chat images, AI context; Flats/Jobs), the hunter strip/tabs,

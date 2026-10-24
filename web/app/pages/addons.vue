@@ -16,6 +16,21 @@ const count = (n: number | null) => (n == null ? '' : `${n} install${n === 1 ? '
 // (third-party code, root on pve), then deploy.sh rebuilds the app in its own unit
 const { jobs, run, dismiss } = useActions()
 const pending = ref<{ name: string, id: string, desc: string } | null>(null)
+// install / update: agent/addon_scan.py's safety check of what would land; blocking findings disable Run
+// (addon-get checks again and refuses anyway)
+const scan = ref<{ state: 'loading' | 'done' | 'error', rep?: any, error?: string } | null>(null)
+const blocked = computed(() => scan.value?.state === 'done' && !scan.value.rep.ok)
+const shown = computed(() => (scan.value?.rep?.findings ?? []).filter((f: any) => f.level !== 'info'))
+const notes = computed(() => (scan.value?.rep?.findings ?? []).filter((f: any) => f.level === 'info'))
+async function check(id: string) {
+  scan.value = { state: 'loading' }
+  try {
+    const rep = await $fetch<any>('/api/marketplace/scan', { query: { id }, timeout: 200_000 })
+    if (pending.value?.id === id) scan.value = { state: 'done', rep }
+  } catch (e: any) {
+    if (pending.value?.id === id) scan.value = { state: 'error', error: e?.data?.statusMessage || e?.statusMessage || e?.message }
+  }
+}
 const armed = ref(false)
 let armTimer: any
 async function ask(name: string, id: string) {
@@ -23,6 +38,8 @@ async function ask(name: string, id: string) {
   try {
     const r = await $fetch<{ desc: string }>('/api/ai/action/check', { method: 'POST', body: { name, args: { id } } })
     pending.value = { name, id, desc: r.desc }
+    scan.value = null
+    if (name !== 'addon_remove') check(id)
     armed.value = false
     clearTimeout(armTimer)
     armTimer = setTimeout(() => (armed.value = true), 1500)
@@ -30,7 +47,7 @@ async function ask(name: string, id: string) {
 }
 function go() {
   const p = pending.value
-  if (!p || !armed.value) return
+  if (!p || !armed.value || blocked.value) return
   pending.value = null
   run(p.name, { id: p.id })
 }
@@ -57,8 +74,29 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
     <div v-if="error" class="errbox">{{ error }}</div>
     <div v-if="pending" class="card confirm">
       <p class="small">{{ pending.desc }}</p>
+      <div v-if="scan" class="scan small">
+        <div v-if="scan.state === 'loading'" class="faint">Safety check: fetching and reading the code…</div>
+        <div v-else-if="scan.state === 'error'" class="warn">Safety check failed: {{ scan.error }} (it runs again on Run)</div>
+        <template v-else>
+          <div>
+            <span class="pill" :class="scan.rep.ok ? (scan.rep.count.warn ? 'warn' : 'ok') : 'bad'">
+              {{ scan.rep.ok ? (scan.rep.count.warn ? `${scan.rep.count.warn} warning${scan.rep.count.warn === 1 ? '' : 's'}` : 'Safety check passed') : `Blocked: ${scan.rep.count.block} finding${scan.rep.count.block === 1 ? '' : 's'}` }}
+            </span>
+            <span class="faint"> ClamAV {{ scan.rep.clamav }}</span>
+          </div>
+          <ul v-if="shown.length" class="finds">
+            <li v-for="(f, i) in shown" :key="i">
+              <b :class="f.level === 'block' ? 'bad' : 'warn'">{{ f.rule }}</b> <span class="mono">{{ f.file }}{{ f.line ? `:${f.line}` : '' }}</span> {{ f.why }}
+              <div v-if="f.text" class="mono faint snip">{{ f.text }}</div>
+            </li>
+          </ul>
+          <div v-if="notes.length" class="faint">Also: {{ [...new Set(notes.map((f: any) => f.why))].join('; ') }}</div>
+          <div v-if="scan.rep.domains?.length" class="faint">Talks to: {{ scan.rep.domains.join(', ') }}</div>
+          <div v-if="scan.rep.changed?.length" class="faint">{{ scan.rep.changed.length }} file{{ scan.rep.changed.length === 1 ? '' : 's' }} changed: <span class="mono">{{ scan.rep.changed.slice(0, 12).join(', ') }}{{ scan.rep.changed.length > 12 ? ' …' : '' }}</span></div>
+        </template>
+      </div>
       <div class="row">
-        <button type="button" class="btn primary sm" :disabled="!armed" @click="go">Run</button>
+        <button type="button" class="btn primary sm" :disabled="!armed || blocked" @click="go">Run</button>
         <button type="button" class="btn ghost sm" @click="pending = null">Cancel</button>
       </div>
     </div>
@@ -128,5 +166,8 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
 .confirm { border-color: var(--warn); margin-bottom: 14px; }
 .confirm p { margin: 0; }
 .row { display: flex; gap: 8px; }
+.scan { display: flex; flex-direction: column; gap: 6px; }
+.finds { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.snip { overflow-wrap: anywhere; font-size: 11px; }
 @media (pointer: coarse) { .tags .rm, .lnk-pill { padding: 6px 10px; } }
 </style>
