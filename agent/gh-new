@@ -11,7 +11,9 @@ anything, and the token deliberately has no delete_repo scope.
 import json, re, subprocess, sys, urllib.error, urllib.request
 from pathlib import Path
 
-TOKEN_FILE = Path("/root/devbox/keys/github_token")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from config import DEVBOX  # noqa: E402
+TOKEN_FILE = DEVBOX / "keys/github_token"
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,40}$")
 
 

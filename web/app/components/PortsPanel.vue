@@ -1,7 +1,8 @@
 <script setup lang="ts">
+const { hostIp } = useDashConfig()
 const props = defineProps<{ ports: any, cts: any[] }>()
 const name = (id: string | number) => (id === 'pve' ? 'pve' : props.cts.find(c => String(c.vmid) === String(id))?.name ?? id)
-const ip = (id: string | number) => (id === 'pve' ? '192.168.1.50' : props.cts.find(c => String(c.vmid) === String(id))?.ip)
+const ip = (id: string | number) => (id === 'pve' ? hostIp.value : props.cts.find(c => String(c.vmid) === String(id))?.ip)
 
 const hidden = new Set(['tailscaled'])
 /** one row per machine: what it shares on the tailnet and what it listens on, folded until opened */

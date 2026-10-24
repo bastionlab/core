@@ -1,0 +1,10 @@
+# one add-on: this file is what the Add-ons page (and later the marketplace index) shows
+id: learn
+name: Learn
+icon: book
+author: MaxJC0
+desc: Every Monday Claude writes a one-hour tech lesson pitched at your skill map; finished lessons grow the library.
+routes: [/learn]
+needs: [Claude login]
+depends_on: []
+# web/ is a Nuxt layer (pages, components, server routes); agent/*.py are loaded by the agent through dash_sdk

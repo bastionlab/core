@@ -1,0 +1,33 @@
+# Build rules (loaded for every session in this repo)
+
+How code is laid out so the dashboard can become a core + add-ons that friends install (Notes → "Dashboard
+marketplace — plan").
+
+## No hardcoded install values
+- Tailnet, LAN subnet/host IP, CT ids and IPs, paths and owner logins come from `/etc/dash/config.json`
+  (shape and fallback: `config.example.json`; the real file is never committed).
+- Agent: `from config import ct, ip, TAILNET, HOST_IP, DASH_URL, DASHBOARD, DEVBOX` (`agent/config.py`).
+- App server: `cfg()`, `ctIp('ai')`, `ctId('dl')`, `tsUrl('ai')` (`web/server/utils/config.ts`, auto-imported).
+- Pages: `const { ts, ip, ctId, hostIp } = useDashConfig()` (served by `/api/config`, no secrets).
+- `deploy.sh` reads it with `jq` and pushes it into CT 104; Caddy gets `DASH_IP` / `LAN_SUBNET` from it.
+- Comments and AI prompt prose may still say "CT 107"; code may not.
+
+## Add-ons
+- Everything beyond the core (Home, Notes, Chat, Metrics, Add-ons) is an add-on. Moved-out ones live in
+  `addons/<id>/` (Learn is the first):
+  - `addon.yaml` — id, name, icon, author, desc (one or two lines), routes, needs, ct, depends_on. The Add-ons
+    page, nav entry and route guard all come from it (via `runtimeConfig.public.addons`).
+  - `web/` — a Nuxt layer (`app/pages`, `app/components`, `server/api|utils|plugins`) the core extends; it may use
+    the core's utils and composables (`agentCall`, `upstream`, `Panel`, …).
+  - `agent/*.py` — loaded by the agent; register routes with `dash_sdk` (`@get`, `@post`) and use its `pct`,
+    `sh`, `cached`, `ct`/`ip`, Claude-job helpers instead of importing core modules directly.
+- Not yet moved: the entries in `web/shared/utils/addons.ts`. A new feature starts as `addons/<id>/`, not there.
+- Switched-off add-ons drop out of the nav/home and redirect to `/addons` (`useAddons().pageOn`,
+  `middleware/pages.global.ts`). On/off state is `/var/lib/dash/addons.json` in CT 104; dependencies are checked
+  both ways, so e.g. Local AI can't go off while Deals uses it.
+- Local AI goes through `server/utils/ollama.ts`; sibling services through `upstream()` — never raw fetches with
+  an address in them.
+
+## Secrets
+- Tokens and keys stay in gitignored files on pve (`agent/token`, `/etc/dash/*.json`, `/root/devbox/keys/`) or
+  inside the add-on's own CT. They never reach the browser and never appear in an action's visible argv.

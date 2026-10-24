@@ -7,9 +7,11 @@ See README.md for what lives where. This file is how to change it without breaki
   plan to edit; never revert or reformat work you didn't do.
 - Deploy with `./deploy.sh` (restarts the agent, rebuilds the app in CT 104). It ships the whole working tree,
   so don't deploy someone else's half-finished files.
-- Unsure a change compiles? Test-build a scratch copy in CT 104 first (there is no node on pve):
-  copy `/opt/dash/{node_modules,package.json,nuxt.config.ts}` to `/tmp/x` in CT 104, tar `web/{app,server,public}`
-  into it, `npx nuxi build`, then delete `/tmp/x`.
+- Unsure a change compiles? Test-build a scratch copy in CT 104 first (there is no node on pve): copy
+  `/opt/dash/node_modules` to `/tmp/x` in CT 104, ship the sources the way deploy.sh does
+  (`tar -C . --exclude=node_modules --exclude='addons/*/agent' --transform 's,^web/,,;s,^web$,.,' -cf - web addons`),
+  `npx nuxi build`, then delete `/tmp/x`. If you start it, use `NOTES_DIR=<scratch dir> LEARN_WORKER=0` so it
+  can't touch the real databases or start Claude jobs through the agent.
 - Commits: author MaxJC0 (repo-local git config is set). No Co-Authored-By / Claude / Anthropic lines, ever.
 - Secrets (`agent/token`, `pin_hash`, `lan_key`) are gitignored; keep it that way.
 
@@ -19,31 +21,9 @@ See README.md for what lives where. This file is how to change it without breaki
 - UI language is **English** everywhere. Only content stays German: messages sent to sellers/landlords,
   ad titles, bank categories, AI reasons. Dates `en-GB`, money keeps de-DE € formatting.
 
-## Design system (`web/app/assets/main.css`)
-Use these; don't write page-local copies.
-- Tokens: `--bg --panel --panel-2 --line --line-2 --text --muted --faint --accent(-soft) --ok/--warn/--bad(-soft)
-  --track --radius (cards, 12px) --radius-sm (8px) --claude --term-bg`. No hex colours in components
-  (chart palettes and xterm theme objects excepted).
-- Layout/text: `.wrap` (from the layout — never nest another), `.grid .cols-2 .cols-3 .scroll-x`, `.sec` headings,
-  `.muted .faint .small .mono .num`.
-- Controls: `.btn` (`.primary .ghost .danger .sm .icon`), `.seg` segmented control (`<div class="seg"><button class="on">`),
-  `.chip`/`.chip.on` filters, `.lnk` text button, `.pill(.ok/.warn/.bad/.accent)`, `.dot`, `.sure` (tap-twice delete
-  via useArm), `.errbox`, `.empty-state`. Cards = `<Panel>`.
-- Icons: `<Icon name="…">` (lucide paths in `components/Icon.vue`). Don't rely on rare unicode symbols (⏻ ⟲ ⛶)
-  for meaning; Android fonts lack many. Common emoji are fine.
-
-## Phone rules
-- Inputs are forced to 16px on phones (no focus zoom); don't fight it.
-- Touch targets ≥ ~32px: enlarge small buttons in `@media (pointer: coarse)` rather than bloating desktop.
-- Nothing hover-only. Breakpoint for phone layout is `max-width: 640px`; the bottom tab bar height is `var(--tabbar)`.
-- Wide content wraps or scrolls (`.scroll-x`); check 380px.
-- Chat: keyboard mode is `html.kb` (visualViewport) and Enter = new line on touch. Keep both.
-
-## Copy
-- Keep on-screen prose to what's necessary: warnings ("Cannot be undone"), errors, first-run setup steps,
-  one-line empty states. No paragraphs explaining how a feature works.
-- `title=""` tooltips don't show on Android: fine for extra help, never for data the owner needs.
-- Short, plain labels; same words for the same thing on every page ("Loading…", "Save", "Delete", "Nothing yet.").
+## Rules
+`.claude/rules/design.md` (UI kit, phone, copy) and `.claude/rules/build.md` (config, add-ons, agent) are loaded
+automatically; read them before changing a page or adding a feature.
 
 ## Asking the owner
 In the dashboard chat there is no AskUserQuestion tool: end the answer with one fenced `questions` block

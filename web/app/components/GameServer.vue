@@ -2,7 +2,8 @@
 /** one game server in CT 110: power, live console, settings form (from the template's fields), backups, tunnel address */
 const props = defineProps<{ s: any, tpl: any, latest?: string | null, versions?: string[] }>()
 const emit = defineEmits<{ changed: [] }>()
-const LAN = '192.168.1.64'
+const { ip } = useDashConfig()
+const LAN = computed(() => ip('gameservers'))
 
 const tab = ref<'' | 'console' | 'settings' | 'backups' | 'connect'>('')
 const busy = ref('')

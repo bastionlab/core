@@ -26,6 +26,10 @@ https://dash.example-tailnet.ts.net/ — tailnet only, owner's Tailscale login +
 - `web/` — Nuxt 4, built and run in CT 104 `dash` (`/opt/dash`, `dash.service`, 127.0.0.1:3000, published with
   `tailscale serve`). Notes and chats are SQLite in `/var/lib/dash` there. Calls to the agent / CT 107 / CT 108 /
   Ollama all go through `server/utils/upstream.ts`.
+- `addons/<id>/` — add-ons moved out of the core (so far: `learn`): `addon.yaml`, `web/` (a Nuxt layer the app
+  extends) and `agent/*.py` (loaded through `agent/dash_sdk.py`). The rest are still built in and listed in
+  `web/shared/utils/addons.ts`; `/addons` switches any of them off.
+- `/etc/dash/config.json` — this install's tailnet, LAN, CT ids/IPs and paths (shape: `config.example.json`).
 - `/root/devbox/pv` — helper inside dev boxes (`pv ls|start|stop|log|cc|ccstop|cclog|shiplog|fetch|push|new|rm|remote`).
   Per-project overrides in `<project>/.dashboard.yml` (`command:`, `ports:`, `name:`).
 

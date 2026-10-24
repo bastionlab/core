@@ -3,10 +3,9 @@ const { data: o, error, updated, refresh } = useOverview()
 usePoll(refresh, 5000)
 
 const route = useRoute()
-const nav = [
+const NAV = [
   { to: '/', icon: 'home', label: 'Home' },
   { to: '/notes', icon: 'note', label: 'Notes' },
-  { to: '/learn', icon: 'book', label: 'Learn' },
   { to: '/habits', icon: 'check', label: 'Habits' },
   { to: '/media', icon: 'media', label: 'Media' },
   { to: '/dev', icon: 'dev', label: 'Dev' },
@@ -16,9 +15,17 @@ const nav = [
   { to: '/jobs', icon: 'briefcase', label: 'Jobs' },
   { to: '/money', icon: 'euro', label: 'Money' },
   { to: '/metrics', icon: 'metrics', label: 'Metrics' },
+  { to: '/addons', icon: 'grid', label: 'Add-ons' },
   { to: '/chat', icon: 'chat', label: 'Chat' },
 ]
 const problems = computed(() => alerts(o.value).filter(a => a.level === 'bad').length)
+// switched-off add-ons (Add-ons page) drop out of the nav; pins keep them so turning one back on restores its tab
+const { list, load: loadAddons, pageOn } = useAddons()
+// pages of add-ons that moved out (addons/<id>/) come from their addon.yaml and slot in after Notes
+NAV.splice(NAV.findIndex(n => n.to === '/notes') + 1, 0,
+  ...list.filter(a => a.routes[0] && !NAV.some(n => n.to === a.routes[0])).map(a => ({ to: a.routes[0]!, icon: a.icon, label: a.name })))
+onMounted(loadAddons)
+const nav = computed(() => NAV.filter(n => pageOn(n.to)))
 const badge = (to: string) => (to === '/metrics' ? problems.value : 0)
 // chat: a pulsing dot while Claude works, an amber one when an answer waits on the owner's pick, on every page
 const { chats, load: loadChats, save: saveChats, overall } = useChats()
@@ -40,12 +47,12 @@ const PIN_KEY = 'nav:pinned'
 const pinned = ref<string[]>(['/', '/media', '/dev', '/deals'])
 try {
   const v = JSON.parse(localStorage.getItem(PIN_KEY) || 'null')
-  if (Array.isArray(v)) { const ok = v.filter(x => nav.some(n => n.to === x)).slice(0, MAX_PINS); if (ok.length) pinned.value = ok }
+  if (Array.isArray(v)) { const ok = v.filter(x => NAV.some(n => n.to === x)).slice(0, MAX_PINS); if (ok.length) pinned.value = ok }
 } catch {}
-const tabs = computed(() => pinned.value.map(to => nav.find(n => n.to === to)!).filter(Boolean))
-const here = computed(() => nav.find(n => n.to === route.path))
+const tabs = computed(() => pinned.value.map(to => nav.value.find(n => n.to === to)!).filter(Boolean))
+const here = computed(() => nav.value.find(n => n.to === route.path))
 const offTab = computed(() => (here.value && !pinned.value.includes(here.value.to) ? here.value : null))
-const moreBadge = computed(() => nav.filter(n => !pinned.value.includes(n.to)).reduce((s, n) => s + badge(n.to), 0))
+const moreBadge = computed(() => nav.value.filter(n => !pinned.value.includes(n.to)).reduce((s, n) => s + badge(n.to), 0))
 const moreMark = computed(() => (pinned.value.includes('/chat') ? '' : overall.value))
 
 const sheet = ref(false)
@@ -54,7 +61,7 @@ function openSheet() { editing.value = false; sheet.value = !sheet.value }
 function togglePin(to: string) {
   const p = pinned.value
   if (p.includes(to)) { if (p.length > 1) pinned.value = p.filter(x => x !== to) }
-  else if (p.length < MAX_PINS) pinned.value = nav.map(n => n.to).filter(x => x === to || p.includes(x))
+  else if (p.length < MAX_PINS) pinned.value = NAV.map(n => n.to).filter(x => x === to || p.includes(x))
   try { localStorage.setItem(PIN_KEY, JSON.stringify(pinned.value)) } catch {}
 }
 function pick(to: string) { if (editing.value) togglePin(to); else { sheet.value = false; navigateTo(to) } }

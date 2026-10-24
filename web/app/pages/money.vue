@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { ip } = useDashConfig()
 useHead({ title: 'Money · pve' })
 const route = useRoute()
 const router = useRouter()
@@ -211,7 +212,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
         <span class="dot" :class="d.syncing ? 'warn' : run ? (run.ok && !runErrors.length ? 'ok' : 'bad') : ''" />
         <span class="muted">{{ d.syncing ? 'syncing…' : run ? `Synced ${ago(run.finished)}` : 'not synced yet' }}</span>
         <span v-for="[k, v] in runErrors" :key="k" class="bad">{{ k }}: {{ v }}</span>
-        <a class="faint" href="http://192.168.1.58:8080" target="_blank" rel="noopener">Firefly ↗</a>
+        <a class="faint" :href="`http://${ip('money')}:8080`" target="_blank" rel="noopener">Firefly ↗</a>
         <button class="btn ghost ref" :disabled="d.syncing" title="Sync now" @click="act('sync')">{{ d.syncing ? '…' : '↻ Sync' }}</button>
       </div>
       <p v-if="linkMsg" class="small note">{{ linkMsg }}</p>

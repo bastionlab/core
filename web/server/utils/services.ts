@@ -6,23 +6,23 @@ export type Group = 'app' | 'media' | 'ai' | 'infra'
 /** hue: the tile's accent on the home page, so the apps are told apart by colour and not only by emoji */
 export interface Service { name: string, url: string, health: string, healthUrl?: string, ct?: number, icon: string, note?: string, group: Group, hue?: number }
 
-// the web apps on the LAN; pve routes 192.168.1.0/24 into the tailnet so these links work remotely too
+// the web apps on the LAN (addresses from config.json); pve routes the LAN into the tailnet so these links work remotely too
 export const services: Service[] = [
-  { name: 'Immich', url: 'http://192.168.1.51:2283', health: '/api/server/ping', ct: 101, icon: '📷', note: 'Photos', group: 'app', hue: 265 },
-  { name: 'Jellyfin', url: 'http://192.168.1.52:8096', health: '/health', ct: 102, icon: '🎬', note: 'Movies & series', group: 'app', hue: 285 },
-  { name: 'Seerr', url: 'https://dl.example-tailnet.ts.net', health: '', healthUrl: 'http://192.168.1.56:5055/api/v1/status', ct: 106, icon: '🍿', note: 'Request movies & shows', group: 'app', hue: 195 },
-  { name: 'Audiobookshelf', url: 'http://192.168.1.53:13378', health: '/healthcheck', ct: 103, icon: '🎧', note: 'Audiobooks', group: 'app', hue: 25 },
-  { name: 'Open WebUI', url: 'https://ai.example-tailnet.ts.net', health: '', healthUrl: 'http://192.168.1.55:8080/health', ct: 105, icon: '🤖', note: 'Local AI chat', group: 'app', hue: 210 },
-  { name: 'Ollama', url: 'http://192.168.1.55:11434', health: '/api/version', ct: 105, icon: '🦙', note: 'LLM API', group: 'ai' },
-  { name: 'Proxmox', url: 'https://192.168.1.50:8006', health: '/', icon: '🖥️', note: 'Hypervisor', group: 'infra' },
+  { name: 'Immich', url: `http://${ctIp('immich')}:2283`, health: '/api/server/ping', ct: ctId('immich'), icon: '📷', note: 'Photos', group: 'app', hue: 265 },
+  { name: 'Jellyfin', url: `http://${ctIp('jellyfin')}:8096`, health: '/health', ct: ctId('jellyfin'), icon: '🎬', note: 'Movies & series', group: 'app', hue: 285 },
+  { name: 'Seerr', url: tsUrl('dl'), health: '', healthUrl: `http://${ctIp('dl')}:5055/api/v1/status`, ct: ctId('dl'), icon: '🍿', note: 'Request movies & shows', group: 'app', hue: 195 },
+  { name: 'Audiobookshelf', url: `http://${ctIp('books')}:13378`, health: '/healthcheck', ct: ctId('books'), icon: '🎧', note: 'Audiobooks', group: 'app', hue: 25 },
+  { name: 'Open WebUI', url: tsUrl('ai'), health: '', healthUrl: `http://${ctIp('ai')}:8080/health`, ct: ctId('ai'), icon: '🤖', note: 'Local AI chat', group: 'app', hue: 210 },
+  { name: 'Ollama', url: `http://${ctIp('ai')}:11434`, health: '/api/version', ct: ctId('ai'), icon: '🦙', note: 'LLM API', group: 'ai' },
+  { name: 'Proxmox', url: `https://${cfg().lan.host_ip}:8006`, health: '/', icon: '🖥️', note: 'Hypervisor', group: 'infra' },
   // download stack admin UIs (CT 106). qBittorrent and Prowlarr are published
   // by gluetun, so a red dot on those two also means the VPN tunnel is down.
-  { name: 'qBittorrent', url: 'http://192.168.1.56:8080', health: '/', ct: 106, icon: '⬇️', note: 'Torrents (via VPN)', group: 'media' },
-  { name: 'Prowlarr', url: 'http://192.168.1.56:9696', health: '/ping', ct: 106, icon: '🔎', note: 'Indexers (via VPN)', group: 'media' },
-  { name: 'Radarr', url: 'http://192.168.1.56:7878', health: '/ping', ct: 106, icon: '🎞️', note: 'Movie automation', group: 'media' },
-  { name: 'Sonarr', url: 'http://192.168.1.56:8989', health: '/ping', ct: 106, icon: '📺', note: 'Series automation', group: 'media' },
-  { name: 'Bazarr', url: 'http://192.168.1.56:6767', health: '/', ct: 106, icon: '💬', note: 'Subtitles', group: 'media' },
-  { name: 'LazyLibrarian', url: 'http://192.168.1.56:5299', health: '/', ct: 106, icon: '📚', note: 'Audiobook automation', group: 'media' },
+  { name: 'qBittorrent', url: `http://${ctIp('dl')}:8080`, health: '/', ct: ctId('dl'), icon: '⬇️', note: 'Torrents (via VPN)', group: 'media' },
+  { name: 'Prowlarr', url: `http://${ctIp('dl')}:9696`, health: '/ping', ct: ctId('dl'), icon: '🔎', note: 'Indexers (via VPN)', group: 'media' },
+  { name: 'Radarr', url: `http://${ctIp('dl')}:7878`, health: '/ping', ct: ctId('dl'), icon: '🎞️', note: 'Movie automation', group: 'media' },
+  { name: 'Sonarr', url: `http://${ctIp('dl')}:8989`, health: '/ping', ct: ctId('dl'), icon: '📺', note: 'Series automation', group: 'media' },
+  { name: 'Bazarr', url: `http://${ctIp('dl')}:6767`, health: '/', ct: ctId('dl'), icon: '💬', note: 'Subtitles', group: 'media' },
+  { name: 'LazyLibrarian', url: `http://${ctIp('dl')}:5299`, health: '/', ct: ctId('dl'), icon: '📚', note: 'Audiobook automation', group: 'media' },
 ]
 
 export function check(url: string, timeout = 3000): Promise<{ up: boolean, status?: number, ms?: number, error?: string }> {

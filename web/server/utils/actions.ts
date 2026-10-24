@@ -19,7 +19,7 @@ const CATALOG: { scopes: Scope[], line: string }[] = [
   { scopes: ['metrics', 'chat'], line: 'zfs_scrub — args: pool, either "tank" or "backup".' },
   { scopes: ['metrics', 'chat'], line: 'unit_start — args: unit, either "sanoid.service" (snapshot now) or "syncoid.service" (replicate to the backup pool now).' },
   { scopes: ['home', 'metrics', 'chat'], line: 'ollama_pull — args: model. Downloads it into CT 105. ollama_stop — args: model. Unloads it from VRAM.' },
-  { scopes: ['dev', 'metrics', 'chat'], line: 'newdev — args: vmid (200-299), name, ip (192.168.1.60-99). Creates a dev box.' },
+  { scopes: ['dev', 'metrics', 'chat'], line: `newdev — args: vmid (${cfg().devbox.ids.join('-')}), name, ip (${cfg().devbox.ips.join(' to ')}). Creates a dev box.` },
   { scopes: ['dev', 'chat'], line: 'git_push — args: vmid (the dev box), path (the project path), message (optional). With a message it commits everything first; without one it only pushes commits that already exist.' },
   { scopes: ['dev', 'chat'], line: 'git_fetch — args: vmid, path. Fetches from GitHub so ahead/behind is current.' },
   { scopes: ['dev', 'chat'], line: 'project_new — args: vmid, name, repo (optional git@github.com:owner/name), github (optional true), visibility (private or public, default private). With repo it clones that repo into ~/Projects/GitHub/<name>. With github: true it scaffolds the project AND creates the GitHub repo for it, then pushes. With neither it only scaffolds locally.' },

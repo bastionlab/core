@@ -1,11 +1,12 @@
 <script setup lang="ts">
 useHead({ title: 'Habits · pve' })
 // the tracker is its own offline-first app in CT 204 (MaxJC0/habits); the dash only frames it
-const src = 'https://habits.example-tailnet.ts.net/'
+const { ts } = useDashConfig()
+const src = computed(() => ts('habits') && `${ts('habits')}/`)
 </script>
 
 <template>
-  <iframe class="habits" :src="src" title="Habits" />
+  <iframe v-if="src" class="habits" :src="src" title="Habits" />
 </template>
 
 <style scoped>

@@ -1,9 +1,10 @@
 """game servers in CT 110 (gameservers): a thin, validated bridge to `gsm` inside the CT"""
 import json, re
 
+from config import ct
 from core import cached, invalidate, sh
 
-CT = 110
+CT = ct("gameservers")
 GSM = "/usr/local/bin/gsm"
 ID_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,23}")
 BACKUP_RE = re.compile(r"\d{8}-\d{6}\.tar\.zst")

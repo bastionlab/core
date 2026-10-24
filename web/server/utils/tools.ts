@@ -40,7 +40,7 @@ export const TOOLS = [
   },
 ]
 
-const SEARXNG = 'http://192.168.1.55:8888'
+const SEARXNG = () => `http://${ctIp('ai')}:8888`
 const HOME = { name: 'home', lat: 52.52, lon: 13.405 } // fallback when no location is given
 
 /** the model must not be able to reach the LAN, the tailnet or the host itself through fetch_page */
@@ -64,7 +64,7 @@ const text = (html: string) =>
     .trim()
 
 async function webSearch(query: string) {
-  const r: any = await $fetch('/search', { baseURL: SEARXNG, query: { q: query, format: 'json' }, timeout: 20_000 })
+  const r: any = await $fetch('/search', { baseURL: SEARXNG(), query: { q: query, format: 'json' }, timeout: 20_000 })
   const hits = (r.results ?? []).slice(0, 6).map((x: any) => ({ title: x.title, url: x.url, snippet: (x.content ?? '').slice(0, 400), published: x.publishedDate }))
   return hits.length ? { query, results: hits } : { query, results: [], note: 'no results' }
 }

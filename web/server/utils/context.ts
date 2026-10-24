@@ -25,7 +25,7 @@ export async function scopeContext(event: H3Event, scope: Scope, models: any[] |
     return `${devSnapshot(boxes)}\n\n## Dev containers\n`
       + devCts.map((c: any) => `CT ${c.vmid} ${c.name} ${c.status}, ${c.cpus} cores, ram ${Math.round((c.mem ?? 0) / 2 ** 20)} MB used`).join('\n')
       + repos
-      + `\n\nNew dev boxes are created with the newdev action (ids 200-299, ips 192.168.1.60-99).\n${PLACES_DEV}`
+      + `\n\nNew dev boxes are created with the newdev action (ids ${cfg().devbox.ids.join('-')}, ips ${cfg().devbox.ips.join(' to ')}).\n${PLACES_DEV}`
   }
   if (scope === 'notes') return notesSnapshot()
   const o = await overview(event)

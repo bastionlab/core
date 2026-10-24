@@ -2,6 +2,7 @@
 import type { Turn } from '~/composables/useAsk'
 import { COMMANDS, parseCommand } from '~/utils/commands'
 import type { Question } from '~/utils/questions'
+const { ts } = useDashConfig()
 useHead({ title: 'Chat · pve' })
 const { chats, current, currentId, create, remove, load, save, touch, status } = useChats()
 const claude = useClaude(save)
@@ -203,7 +204,7 @@ function answer(text: string, picked: Record<number, string[]>) {
         </button>
       </div>
       <ClaudeUsage />
-      <a href="https://ai.example-tailnet.ts.net" target="_blank" class="small muted webui" title="for files, images, uncensored models">Open WebUI ↗</a>
+      <a :href="ts('ai')" target="_blank" class="small muted webui" title="for files, images, uncensored models">Open WebUI ↗</a>
     </aside>
 
     <section class="main">

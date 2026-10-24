@@ -1,6 +1,7 @@
 """the action allowlist (the only things the dashboard and the Ask model can run) and the jobs that run them"""
 import json, os, re, secrets, shlex, signal, subprocess, threading, time
 
+from config import DEVBOX_IDS, DEVBOX_IPS, ct
 from core import FAN, GH_NEW, GH_TOKEN_FILE, JOBS, JOBS_LOCK, PV, cached, invalidate, sh
 from metrics import backup_busy, cts, pools, scheduled_shutdown, unit
 from media import a_media_remove
@@ -15,28 +16,28 @@ from github import _gh_user
 
 # what service_restart / service_uptime know: name -> (CT, systemd or docker, unit or container)
 SERVICES = {
-    "dash": (104, "systemd", "dash"),
-    "ollama": (105, "systemd", "ollama"),
-    "open-webui": (105, "systemd", "open-webui"),
-    "searxng": (105, "docker", "searxng"),
-    "immich": (101, "docker", "immich_server"),
-    "immich-ml": (101, "docker", "immich_machine_learning"),
-    "jellyfin": (102, "docker", "jellyfin"),
-    "audiobookshelf": (103, "docker", "audiobookshelf"),
+    "dash": (ct("dash"), "systemd", "dash"),
+    "ollama": (ct("ai"), "systemd", "ollama"),
+    "open-webui": (ct("ai"), "systemd", "open-webui"),
+    "searxng": (ct("ai"), "docker", "searxng"),
+    "immich": (ct("immich"), "docker", "immich_server"),
+    "immich-ml": (ct("immich"), "docker", "immich_machine_learning"),
+    "jellyfin": (ct("jellyfin"), "docker", "jellyfin"),
+    "audiobookshelf": (ct("books"), "docker", "audiobookshelf"),
     # download stack (CT 106). Restarting gluetun drops the network namespace
     # that qbittorrent, prowlarr and flaresolverr share; media-vpn-sync.service
     # on CT 106 re-attaches them automatically, so restarting it here is safe.
-    "seerr": (106, "docker", "seerr"),
-    "qbittorrent": (106, "docker", "qbittorrent"),
-    "prowlarr": (106, "docker", "prowlarr"),
-    "radarr": (106, "docker", "radarr"),
-    "sonarr": (106, "docker", "sonarr"),
-    "bazarr": (106, "docker", "bazarr"),
-    "lazylibrarian": (106, "docker", "lazylibrarian"),
-    "gluetun": (106, "docker", "gluetun"),
-    "subgen": (105, "docker", "subgen"),
+    "seerr": (ct("dl"), "docker", "seerr"),
+    "qbittorrent": (ct("dl"), "docker", "qbittorrent"),
+    "prowlarr": (ct("dl"), "docker", "prowlarr"),
+    "radarr": (ct("dl"), "docker", "radarr"),
+    "sonarr": (ct("dl"), "docker", "sonarr"),
+    "bazarr": (ct("dl"), "docker", "bazarr"),
+    "lazylibrarian": (ct("dl"), "docker", "lazylibrarian"),
+    "gluetun": (ct("dl"), "docker", "gluetun"),
+    "subgen": (ct("ai"), "docker", "subgen"),
 }
-AI_CT = 105
+AI_CT = ct("ai")
 
 
 @cached(30)
@@ -322,15 +323,18 @@ def a_newdev(args):
         vmid = int(vmid)
     except (TypeError, ValueError):
         raise ValueError("vmid must be a number")
-    if not 200 <= vmid <= 299:
-        raise ValueError("dev boxes use ids 200-299")
+    lo, hi = DEVBOX_IDS
+    if not lo <= vmid <= hi:
+        raise ValueError(f"dev boxes use ids {lo}-{hi}")
     if any(c["vmid"] == vmid for c in cts()):
         raise ValueError(f"CT {vmid} already exists")
     if not re.fullmatch(r"[a-z][a-z0-9-]{1,20}", name):
         raise ValueError("name must be lowercase letters, digits and dashes")
-    m = re.fullmatch(r"192\.168\.178\.(\d{1,3})", ip)
-    if not m or not 60 <= int(m[1]) <= 99:
-        raise ValueError("ip must be 192.168.1.60-99")
+    net, first = DEVBOX_IPS[0].rsplit(".", 1)
+    last = DEVBOX_IPS[1].rsplit(".", 1)[1]
+    m = re.fullmatch(re.escape(net) + r"\.(\d{1,3})", ip)
+    if not m or not int(first) <= int(m[1]) <= int(last):
+        raise ValueError(f"ip must be {net}.{first}-{last}")
     if any(c["ip"] == ip for c in cts()):
         raise ValueError(f"{ip} is already used")
     return f"create dev box CT {vmid} {name} at {ip} (newdev, several minutes)", ["/usr/local/bin/newdev", str(vmid), name, ip], 3 * 3600

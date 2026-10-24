@@ -7,7 +7,7 @@ restart, and the dashboard just asks again until it is done.
 import json, re, subprocess, time
 from pathlib import Path
 
-from claude import CLAUDE, _alive, _starttime, _cc_pid
+from dash_sdk import CLAUDE, alive, get, post, starttime, unit_pid
 
 DIR = Path("/var/lib/dash-learn")
 KEEP_DAYS = 14
@@ -20,13 +20,18 @@ def _job(job):
     return f"dash-learn-{job}"
 
 
+@post("/learn/start")
+def start(body):
+    return learn_start(str(body.get("job")), body.get("prompt"), body.get("schema"), str(body.get("model") or "sonnet"))
+
+
 def learn_start(job, prompt, schema, model="sonnet"):
     unit = _job(job)
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 100_000:
         raise ValueError("empty or too long prompt")
     if not isinstance(schema, dict) or model not in MODELS:
         raise ValueError("bad schema or model")
-    if _cc_pid(unit):
+    if unit_pid(unit):
         return {"job": job, "running": True}
     DIR.mkdir(mode=0o700, exist_ok=True)
     cutoff = time.time() - KEEP_DAYS * 86400
@@ -47,9 +52,14 @@ def learn_start(job, prompt, schema, model="sonnet"):
                         *cmd], capture_output=True, text=True, timeout=20)
     if r.returncode:
         raise ValueError(f"could not start claude: {r.stderr.strip()[:300]}")
-    pid = _cc_pid(unit)
-    (DIR / f"{job}.json").write_text(json.dumps({"pid": pid, "t0": _starttime(pid), "started": time.time()}))
+    pid = unit_pid(unit)
+    (DIR / f"{job}.json").write_text(json.dumps({"pid": pid, "t0": starttime(pid), "started": time.time()}))
     return {"job": job, "running": True}
+
+
+@get("/learn/job", quiet=True)
+def job_route(q):
+    return learn_job(q["id"])
 
 
 def learn_job(job):
@@ -58,7 +68,7 @@ def learn_job(job):
     if not meta.exists():
         return {"state": "gone"}
     m = json.loads(meta.read_text())
-    if _alive(m):
+    if alive(m):
         return {"state": "running", "secs": int(time.time() - m["started"])}
     out, err = DIR / f"{job}.out", DIR / f"{job}.err"
     try:

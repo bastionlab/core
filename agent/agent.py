@@ -8,6 +8,7 @@ import base64, json, os, re, secrets, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
+from config import HOST_IP, ip
 import hooks
 from core import HERE, POOL, cached
 from metrics import all_updates, backups, cpu_percent, cts, datasets, gpu, host, pools, ports, smart, tailnet
@@ -17,13 +18,15 @@ from github import github_repos
 from games import games, games_do, games_log
 from actions import check_action, job_status, service_uptime, start_action
 from claude import _alive, _cc_turn, claude_send, claude_stop, claude_usage
-from learn import learn_job, learn_start
+import dash_sdk
 
 
-BIND = os.environ.get("AGENT_BIND", "192.168.1.50")
+BIND = os.environ.get("AGENT_BIND", HOST_IP)
 PORT = int(os.environ.get("AGENT_PORT", "7070"))
-ALLOW = set(os.environ.get("AGENT_ALLOW", "192.168.1.50,192.168.1.50").split(","))
+ALLOW = set(os.environ.get("AGENT_ALLOW", f"{ip('dash')},{HOST_IP}").split(","))
 TOKEN = (HERE / "token").read_text().strip()
+# add-on modules (addons/<id>/agent/*.py) register their routes with dash_sdk
+dash_sdk.load_addons(HERE.parent / "addons")
 
 
 # --- http -------------------------------------------------------------------
@@ -93,14 +96,15 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, job_status(q["id"]))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage())
-            if u.path == "/learn/job":
-                return self._send(200, learn_job(q["id"]))
             if u.path == "/claude/stream":
                 return self._claude_stream(q["turn"], int(q.get("from", 0)))
             if u.path == "/discord":
                 return self._send(200, hooks.view())
             if u.path == "/term/stream":
                 return self._term_stream(term_get(q["id"]), int(q.get("from", 0)))
+            fn = dash_sdk.ROUTES.get(("GET", u.path))
+            if fn:
+                return self._send(200, fn(q))
             self._send(404, {"error": "not found"})
         except (ValueError, KeyError, TypeError) as e:
             self._send(400, {"error": str(e)})
@@ -148,9 +152,6 @@ class H(BaseHTTPRequestHandler):
                                                    [i for i in body.get("images") or [] if isinstance(i, dict)]))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage(refresh=True))
-            if u.path == "/learn/start":
-                return self._send(200, learn_start(str(body.get("job")), body.get("prompt"), body.get("schema"),
-                                                   str(body.get("model") or "sonnet")))
             if u.path == "/claude/stop":
                 return self._send(200, claude_stop(str(body.get("chat"))))
             if u.path == "/discord":
@@ -162,6 +163,9 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, {"desc": check_action(str(body.get("name")), body.get("args"))})
             if u.path == "/action/run":
                 return self._send(200, start_action(str(body.get("name")), body.get("args")))
+            fn = dash_sdk.ROUTES.get(("POST", u.path))
+            if fn:
+                return self._send(200, fn(body))
             self._send(404, {"error": "not found"})
         except (ValueError, KeyError, TypeError) as e:
             self._send(400, {"error": str(e)})
@@ -241,7 +245,7 @@ class H(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         if not self.path.startswith(("/overview", "/projects", "/media", "/preview/log", "/cc/log", "/ship/log", "/shells",
-                                     "/action/status", "/term/", "/claude/stream", "/claude/usage", "/learn/job", "/github/repos", "/games", "/media/items", "/media/plan")):
+                                     "/action/status", "/term/", "/claude/stream", "/claude/usage", "/github/repos", "/games", "/media/items", "/media/plan", *dash_sdk.QUIET)):
             super().log_message(fmt, *args)
 
 

@@ -1,4 +1,19 @@
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { parseYAML } from 'confbox'
+
+// add-ons (addons/<id>/: addon.yaml + web/ Nuxt layer). In the repo they sit next to web/; deploy.sh copies them
+// into /opt/dash/addons in CT 104
+const here = import.meta.dirname
+const root = existsSync(join(here, 'addons')) ? join(here, 'addons') : resolve(here, '../addons')
+const addonDirs = existsSync(root) ? readdirSync(root).filter(d => existsSync(join(root, d, 'addon.yaml'))).sort() : []
+const addons = addonDirs.map((d) => {
+  const m: any = parseYAML(readFileSync(join(root, d, 'addon.yaml'), 'utf8'))
+  return { id: m.id, name: m.name, icon: m.icon, routes: m.routes ?? [], author: m.author, desc: m.desc, needs: m.needs ?? [], ct: m.ct, dependsOn: m.depends_on?.length ? m.depends_on : undefined }
+})
+
 export default defineNuxtConfig({
+  extends: addonDirs.map(d => join(root, d, 'web')).filter(existsSync),
   compatibilityDate: '2026-09-01',
   devtools: { enabled: false },
   ssr: false,
@@ -21,15 +36,16 @@ export default defineNuxtConfig({
     '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
   },
   runtimeConfig: {
-    agentUrl: 'http://192.168.1.50:7070', // NUXT_AGENT_URL
+    agentUrl: '', // NUXT_AGENT_URL — deploy.sh fills these from /etc/dash/config.json
     agentToken: '', // NUXT_AGENT_TOKEN
-    ollamaUrl: 'http://192.168.1.55:11434', // NUXT_OLLAMA_URL
-    dealsUrl: 'http://192.168.1.57:8090', // NUXT_DEALS_URL
+    ollamaUrl: '', // NUXT_OLLAMA_URL
+    dealsUrl: '', // NUXT_DEALS_URL
     dealsToken: '', // NUXT_DEALS_TOKEN
-    moneyUrl: 'http://192.168.1.58:8090', // NUXT_MONEY_URL
+    moneyUrl: '', // NUXT_MONEY_URL
     moneyToken: '', // NUXT_MONEY_TOKEN
     pinHash: '', // NUXT_PIN_HASH — scrypt hash written by ../set-pin
-    ownerLogins: 'owner@example.com', // NUXT_OWNER_LOGINS — Tailscale logins let in (comma-separated)
+    ownerLogins: '', // NUXT_OWNER_LOGINS — Tailscale logins let in (comma-separated)
+    public: { addons }, // add-ons from addons/*/addon.yaml, merged with the built-in list (shared/utils/addons.ts)
     lanKey: '', // NUXT_LAN_KEY — shared with Caddy (lan/Caddyfile) so LAN requests can be told apart
   },
 })

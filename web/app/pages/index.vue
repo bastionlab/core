@@ -55,6 +55,7 @@ const health = computed(() => {
 })
 
 /** every page of the dashboard, in the sidebar's order; `sub` is shown until there is live data for chips */
+const { pageOn } = useAddons()
 const topics = computed(() => [
   {
     to: '/notes', icon: 'note', name: 'Notes', sub: 'Quick capture',
@@ -159,7 +160,7 @@ const topics = computed(() => [
 
     <h2 class="sec">Sections</h2>
     <div class="topics">
-      <NuxtLink v-for="t in topics" :key="t.to" :to="t.to" class="topic">
+      <NuxtLink v-for="t in topics.filter(x => pageOn(x.to))" :key="t.to" :to="t.to" class="topic">
         <span class="ti"><Icon :name="t.icon" :size="18" /></span>
         <span class="name">{{ t.name }}</span>
         <span class="chips">

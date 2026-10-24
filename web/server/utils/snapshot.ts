@@ -142,9 +142,9 @@ Current Ollama catalog (checked 2026-09-19; MoE = mixture-of-experts, total/acti
 
 export const PLACES_HOST = `
 ## Where things live on this machine
-Proxmox host "pve" at 192.168.1.50, one NVMe (system + local-lvm) and the ZFS pools "tank" (data, mounted /tank) and "backup" (mounted /backup, holds vzdump images and syncoid replicas of tank).
+Proxmox host "pve" at ${cfg().lan.host_ip}, one NVMe (system + local-lvm) and the ZFS pools "tank" (data, mounted /tank) and "backup" (mounted /backup, holds vzdump images and syncoid replicas of tank).
 Containers: CT 101 immich (photos, /tank/fotos → /mnt/fotos), CT 102 jf (Jellyfin), CT 103 books (Audiobookshelf; renamed from music on 2026-09-20 when music hosting was dropped), CT 104 dash (this dashboard, Nuxt on 127.0.0.1:3000, published by tailscale serve), CT 105 ai (Ollama + Open WebUI + SearXNG, RTX 3060 passed through, models on a 150 GB NVMe volume at /models), CT 106 dl (the VPN-isolated download stack), CT 200-299 dev boxes.
-Everything is reachable on the LAN (192.168.1.0/24) and through Tailscale; nothing is forwarded from the router.
+Everything is reachable on the LAN (${cfg().lan.subnet}) and through Tailscale; nothing is forwarded from the router.
 `
 
 export const PLACES_MEDIA = `

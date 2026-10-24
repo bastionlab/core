@@ -3,12 +3,13 @@ import json, re, time, urllib.error, urllib.request
 from pathlib import Path
 from urllib.parse import urlencode
 
+from config import DASHBOARD, ct, ip
 from core import FAN, POOL, cached, http_json, invalidate, js, sh
 
 
 # --- media stack (CT 106 "dl") ----------------------------------------------
-MEDIA_CT = 106
-MEDIA_IP = "192.168.1.56"
+MEDIA_CT = ct("dl")
+MEDIA_IP = ip("dl")
 MEDIA_ROOT = Path("/tank/medien")
 # app -> (port, api version)
 ARR = {"radarr": (7878, "v3"), "sonarr": (8989, "v3"), "prowlarr": (9696, "v1")}
@@ -376,7 +377,7 @@ def _gb(n):
     return f"{n / 2**30:.1f} GB" if n >= 2**30 else f"{n / 2**20:.0f} MB"
 
 
-MEDIA_RM = "/root/dashboard/agent/media-rm"
+MEDIA_RM = f"{DASHBOARD}/agent/media-rm"
 
 
 def a_media_remove(args):
