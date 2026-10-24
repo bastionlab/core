@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * One place for everything that's configured: every outside connection (the core's and each add-on's) with its
- * status, this install's config.json, Discord, and a section per add-on built from its addon.yaml `settings:`
+ * status, every secret on pve (PIN change, token rotation), this install's config.json, Discord, and a section per add-on built from its addon.yaml `settings:`
  * (+ its own Settings<Id>.global.vue when it has a flow of its own, like Money's bank logins).
  */
 useHead({ title: 'Settings · pve' })
@@ -110,6 +110,8 @@ onBeforeUnmount(() => clearTimeout(armTimer))
       </div>
     </Panel>
 
+    <SecretsPanel :list="s?.secrets" @changed="refresh" />
+
     <Panel id="general" title="General" sub="config.json · changes rebuild the dashboard" fold="phone">
       <div v-if="pending" class="confirm">
         <p class="small">{{ pending.desc }}</p>
@@ -145,7 +147,6 @@ onBeforeUnmount(() => clearTimeout(armTimer))
         </template>
       </div>
       <div v-if="cfgErr" class="errbox small">{{ cfgErr }}</div>
-      <p class="faint small">PIN: <code>./set-pin</code> on the host.</p>
     </Panel>
 
     <div id="discord"><DiscordPanel /></div>

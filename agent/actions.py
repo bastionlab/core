@@ -260,6 +260,17 @@ def a_config_set(args):
             ["python3", "-I", f"{DASHBOARD}/agent/config-set", path, json.dumps(new)], 1800)
 
 
+def a_secrets_rotate(args):
+    """Settings → Secrets: new internal tokens; secrets-rotate runs in dash-rebuild because it restarts the agent"""
+    log = "/var/log/dash-rebuild.log"
+    return ("make new internal tokens (agent, LAN key, Deals, Money; old ones kept as .old), redeploy Deals, Money "
+            "and the dashboard (gone for a few minutes, every browser enters the PIN again; old tokens come back if a "
+            f"step fails). Progress: {log}",
+            ["systemd-run", "--unit", "dash-rebuild", "--collect", "--quiet", "-p", f"StandardOutput=append:{log}",
+             "-p", f"StandardError=append:{log}", "-p", "RuntimeMaxSec=45min",
+             f"{DASHBOARD}/agent/secrets-rotate"], 30)
+
+
 def a_addon_install(args):
     return _addon(args, "install")
 
@@ -280,7 +291,7 @@ ACTIONS = {
 "host_shutdown": a_host_shutdown, "host_shutdown_cancel": a_host_shutdown_cancel,
     # not offered to the Ask model (server/utils/actions.ts): only the Add-ons page's own buttons run these
     "addon_install": a_addon_install, "addon_update": a_addon_update, "addon_remove": a_addon_remove,
-    "config_set": a_config_set,
+    "config_set": a_config_set, "secrets_rotate": a_secrets_rotate,
 }
 
 MAX_LOG = 400

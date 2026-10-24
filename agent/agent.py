@@ -118,6 +118,8 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, start_action(str(body.get("name")), body.get("args")))
             if u.path == "/settings/set":
                 return self._send(200, settings.set_value(str(body.get("addon", "")), str(body.get("key", "")), body.get("value")))
+            if u.path == "/settings/pin":
+                return self._send(200, settings.set_pin(body.get("current"), body.get("new")))
             if u.path == "/settings/core":
                 return self._send(200, settings.set_core(str(body.get("key", "")), body.get("value")))
             fn, m = dash_sdk.route("POST", u.path)

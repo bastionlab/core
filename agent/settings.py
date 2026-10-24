@@ -5,10 +5,10 @@ Values an add-on declares go to /etc/dash/settings/<addon>.json; the ones marked
 /etc/dash/secrets/<addon>.json (root only). Secrets are write-only from the dashboard: it learns whether one is
 set and when, never the value. Add-on agent modules read theirs with dash_sdk.setting() / secret().
 """
-import json, os, re, time, urllib.request
+import hashlib, hmac, json, os, re, subprocess, threading, time, urllib.request
 from pathlib import Path
 
-from config import CFG, DEVBOX
+from config import CFG, DASHBOARD, DEVBOX, ct
 from core import cached
 
 ROOT = Path(__file__).resolve().parent.parent / "addons"
@@ -207,6 +207,87 @@ def set_core(key, value):
     return {"ok": True}
 
 
+# --- the PIN -------------------------------------------------------------------------------------------------
+PIN_HASH = Path(DASHBOARD) / "agent/pin_hash"
+_pin_fails = []
+
+
+def _scrypt(pin, salt):
+    return hashlib.scrypt(pin.encode(), salt=salt, n=16384, r=8, p=1, dklen=32)
+
+
+def set_pin(current, new):
+    """POST /settings/pin — what ./set-pin does, from the page: needs the current PIN; the app restarts with the new
+    hash (every browser logs in again). 5 wrong current PINs in 10 minutes lock it for the rest of them."""
+    now = time.time()
+    _pin_fails[:] = [t for t in _pin_fails if now - t < 600]
+    if len(_pin_fails) >= 5:
+        raise ValueError("too many wrong PINs, try again in 10 minutes")
+    cur, new = str(current or ""), str(new or "")
+    _, salt, want = PIN_HASH.read_text().strip().split(":")
+    if not hmac.compare_digest(_scrypt(cur, bytes.fromhex(salt)).hex(), want):
+        _pin_fails.append(now)
+        raise ValueError("current PIN is wrong")
+    if not re.fullmatch(r"[0-9]{4,12}", new):
+        raise ValueError("new PIN: 4-12 digits")
+    salt = os.urandom(16)
+    line = f"scrypt:{salt.hex()}:{_scrypt(new, salt).hex()}"
+    tmp = PIN_HASH.with_name(".pin_hash.tmp")
+    tmp.write_text(line + "\n")
+    os.chmod(tmp, 0o600)
+    tmp.replace(PIN_HASH)
+    # same env line deploy.sh writes; a restart (not a rebuild) is enough, it is read at runtime
+    subprocess.run(["pct", "exec", str(ct("dash")), "--", "sh", "-c",
+                    "umask 077; sed -i '/^NUXT_PIN_HASH=/d' /etc/dash.env; cat >> /etc/dash.env"],
+                   input=f"NUXT_PIN_HASH={line}\n", text=True, check=True, timeout=30)
+    # after this answer has gone back through the app
+    threading.Timer(1.5, lambda: subprocess.run(["pct", "exec", str(ct("dash")), "--", "systemctl", "restart", "dash"],
+                                                timeout=60)).start()
+    return {"ok": True}
+
+
+# --- what secrets exist where (never their values) -----------------------------------------------------------
+BACK = Path((CFG.get("paths") or {}).get("backends") or "/root")
+OLD_DAYS = 180
+
+
+def _file(name, path: Path, used_by, rotate=None):
+    st = path.stat() if path.exists() else None
+    age = int((time.time() - st.st_mtime) / 86400) if st else None
+    return {"name": name, "where": str(path), "used_by": used_by, "set": bool(st and st.st_size),
+            "updated": int(st.st_mtime) if st else None, "old": age is not None and age > OLD_DAYS, "rotate": rotate}
+
+
+def inventory():
+    a = Path(DASHBOARD) / "agent"
+    out = [_file("Dashboard PIN", a / "pin_hash", "login (hash only)", "pin"),
+           _file("Agent token", a / "token", "app ↔ agent", "tokens"),
+           _file("LAN key", a / "lan_key", "Caddy ↔ app (home network)", "tokens")]
+    for b, used in (("deals", "app ↔ Deals/Flats/Jobs"), ("money", "app ↔ Money")):
+        if (BACK / b / "token").exists():
+            out.append(_file(f"{b.capitalize()} API token", BACK / b / "token", used, "tokens"))
+    used = {"github_token": ("GitHub token", "Dev, marketplace", "github_token"),
+            "tailscale_authkey": ("Tailscale auth key", "new dev boxes", "tailscale_authkey"),
+            "github_ed25519": ("GitHub SSH key", "git on dev boxes", None)}
+    for f in sorted((DEVBOX / "keys").glob("*")):
+        if f.is_file() and not f.name.endswith(".pub"):
+            n, u, r = used.get(f.name, (f.name, "dev boxes", None))
+            out.append(_file(n, f, u, r))
+    out.append(_file("Discord webhooks", Path("/etc/dash/discord.json"), "alerts + add-ons", "discord"))
+    out.append(_file("Claude login", Path("/root/.claude/.credentials.json"), "Chat, Ask bar, Learn"))
+    m = _manifests()
+    for aid in sorted(m):
+        sec = _read(SECRETS, aid)
+        for f in _fields(m[aid]):
+            if f["type"] == "secret":
+                s = sec.get(f["key"]) or {}
+                up = s.get("updated")
+                out.append({"name": f["label"], "where": f"{SECRETS}/{aid}.json", "used_by": m[aid].get("name", aid),
+                            "set": bool(s.get("value")), "updated": up, "rotate": f"addon:{aid}",
+                            "old": bool(up and time.time() - up > OLD_DAYS * 86400)})
+    return out
+
+
 # --- everything the page shows -------------------------------------------------------------------------------
 CONFIG_VIEW = ("name", "tailnet", "owner_logins", "lan", "devbox", "cts", "marketplace")
 
@@ -228,4 +309,4 @@ def view():
     cfg = {k: CFG.get(k) for k in CONFIG_VIEW}
     if isinstance(cfg.get("marketplace"), dict):
         cfg["marketplace"] = {k: v for k, v in cfg["marketplace"].items() if k != "token"}
-    return {"connections": core_connections(), "addons": addons, "config": cfg}
+    return {"connections": core_connections(), "addons": addons, "config": cfg, "secrets": inventory()}
