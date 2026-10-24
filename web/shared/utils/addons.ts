@@ -8,6 +8,8 @@ export interface Addon {
   id: string
   name: string
   icon: string
+  /** addon.yaml only: installed version, compared against the marketplace index */
+  version?: string
   /** addon.yaml only: position among the add-on tabs (lower = earlier) */
   order?: number
   /** pages that belong to it; none = a backend others build on (local AI) */

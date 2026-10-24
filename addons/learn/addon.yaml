@@ -4,6 +4,7 @@ name: Learn
 icon: book
 order: 1
 author: MaxJC0
+version: 1.0.0
 desc: Every Monday Claude writes a one-hour tech lesson pitched at your skill map; finished lessons grow the library.
 routes: [/learn]
 needs: [Claude login]

@@ -18,5 +18,10 @@
     "games":       { "id": 109, "ip": "192.168.1.59" },
     "gameservers": { "id": 110, "ip": "192.168.1.64" },
     "habits":      { "id": 204, "ip": "192.168.1.63" }
+  },
+  "marketplace": {
+    "index": "https://raw.githubusercontent.com/pvedash/addons/main/index.json",
+    "counter": "",
+    "share_installs": false
   }
 }

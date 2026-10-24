@@ -1,0 +1,49 @@
+{
+  "format": 1,
+  "updated": 1792847978,
+  "addons": [
+    {
+      "id": "habits",
+      "name": "Habits",
+      "icon": "check",
+      "version": "1.0.0",
+      "author": "MaxJC0",
+      "desc": "Offline-first habit tracker with streaks, a calendar and a perfect-day celebration.",
+      "routes": [
+        "/habits"
+      ],
+      "needs": [
+        "own CT"
+      ],
+      "ct": "habits",
+      "path": "habits"
+    },
+    {
+      "id": "kanji",
+      "name": "Kanji",
+      "icon": "kanji",
+      "version": "1.0.0",
+      "author": "MaxJC0",
+      "desc": "Anki-style JLPT kanji reviews with stroke-order tracing and write-the-word cards.",
+      "routes": [
+        "/kanji"
+      ],
+      "path": "kanji"
+    },
+    {
+      "id": "learn",
+      "name": "Learn",
+      "icon": "book",
+      "version": "1.0.0",
+      "author": "MaxJC0",
+      "desc": "Every Monday Claude writes a one-hour tech lesson pitched at your skill map; finished lessons grow the library.",
+      "routes": [
+        "/learn"
+      ],
+      "needs": [
+        "Claude login"
+      ],
+      "path": "learn"
+    }
+  ]
+}

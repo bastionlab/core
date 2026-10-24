@@ -9,8 +9,10 @@ const root = existsSync(join(here, 'addons')) ? join(here, 'addons') : resolve(h
 const addonDirs = existsSync(root) ? readdirSync(root).filter(d => existsSync(join(root, d, 'addon.yaml'))).sort() : []
 const addons = addonDirs.map((d) => {
   const m: any = parseYAML(readFileSync(join(root, d, 'addon.yaml'), 'utf8'))
-  return { id: m.id, name: m.name, icon: m.icon, order: m.order ?? 100, routes: m.routes ?? [], author: m.author, desc: m.desc, needs: m.needs ?? [], ct: m.ct, dependsOn: m.depends_on?.length ? m.depends_on : undefined }
+  return { id: m.id, name: m.name, icon: m.icon, version: String(m.version ?? ''), order: m.order ?? 100, routes: m.routes ?? [], author: m.author, desc: m.desc, needs: m.needs ?? [], ct: m.ct, dependsOn: m.depends_on?.length ? m.depends_on : undefined }
 }).sort((a, b) => a.order - b.order) // order: where its tab sits among the add-on tabs
+// the marketplace index this build ships (addons/index.json, rebuilt by addons/build-index.py): used until the real one is reachable
+const marketplaceLocal = existsSync(join(root, 'index.json')) ? JSON.parse(readFileSync(join(root, 'index.json'), 'utf8')) : { addons: [] }
 
 export default defineNuxtConfig({
   extends: addonDirs.map(d => join(root, d, 'web')).filter(existsSync),
@@ -45,6 +47,7 @@ export default defineNuxtConfig({
     moneyToken: '', // NUXT_MONEY_TOKEN
     pinHash: '', // NUXT_PIN_HASH — scrypt hash written by ../set-pin
     ownerLogins: '', // NUXT_OWNER_LOGINS — Tailscale logins let in (comma-separated)
+    marketplaceLocal,
     public: { addons }, // add-ons from addons/*/addon.yaml, merged with the built-in list (shared/utils/addons.ts)
     lanKey: '', // NUXT_LAN_KEY — shared with Caddy (lan/Caddyfile) so LAN requests can be told apart
   },

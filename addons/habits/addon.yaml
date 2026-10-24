@@ -4,6 +4,7 @@ name: Habits
 icon: check
 order: 3
 author: MaxJC0
+version: 1.0.0
 desc: Offline-first habit tracker with streaks, a calendar and a perfect-day celebration.
 routes: [/habits]
 ct: habits

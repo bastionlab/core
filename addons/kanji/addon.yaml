@@ -4,6 +4,7 @@ name: Kanji
 icon: kanji
 order: 2
 author: MaxJC0
+version: 1.0.0
 desc: Anki-style JLPT kanji reviews with stroke-order tracing and write-the-word cards.
 routes: [/kanji]
 needs: []

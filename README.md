@@ -27,7 +27,8 @@ https://dash.example-tailnet.ts.net/ — tailnet only, owner's Tailscale login +
   `tailscale serve`). Notes and chats are SQLite in `/var/lib/dash` there. Calls to the agent / CT 107 / CT 108 /
   Ollama all go through `server/utils/upstream.ts`.
 - `addons/<id>/` — add-ons moved out of the core (so far: `learn`, `kanji`, `habits`): `addon.yaml`, `web/` (a Nuxt layer the app
-  extends) and `agent/*.py` (loaded through `agent/dash_sdk.py`). The rest are still built in and listed in
+  extends) and `agent/*.py` (loaded through `agent/dash_sdk.py`). `addons/index.json` is the marketplace index
+  (`addons/build-index.py`), a stand-in for the future `pvedash/addons` repo. The rest are still built in and listed in
   `web/shared/utils/addons.ts`; `/addons` switches any of them off.
 - `/etc/dash/config.json` — this install's tailnet, LAN, CT ids/IPs and paths (shape: `config.example.json`).
 - `/root/devbox/pv` — helper inside dev boxes (`pv ls|start|stop|log|cc|ccstop|cclog|shiplog|fetch|push|new|rm|remote`).

@@ -21,6 +21,10 @@ marketplace — plan").
     the core's utils and composables (`agentCall`, `upstream`, `Panel`, …).
   - `agent/*.py` — loaded by the agent; register routes with `dash_sdk` (`@get`, `@post`) and use its `pct`,
     `sh`, `cached`, `ct`/`ip`, Claude-job helpers instead of importing core modules directly.
+- `addon.yaml` also carries `version:` (x.y.z). Bump it on every change worth shipping, then run
+  `python3 addons/build-index.py`: `addons/index.json` is the marketplace index (this folder stands in for the
+  `pvedash/addons` repo). The app reads the real one from `config.json` `marketplace.index` and falls back to the
+  copy it was built with; a higher version there shows as an Update badge on `/addons`.
 - Not yet moved: the entries in `web/shared/utils/addons.ts`. A new feature starts as `addons/<id>/`, not there.
 - Switched-off add-ons drop out of the nav/home and redirect to `/addons` (`useAddons().pageOn`,
   `middleware/pages.global.ts`). On/off state is `/var/lib/dash/addons.json` in CT 104; dependencies are checked
