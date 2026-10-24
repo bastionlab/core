@@ -10,11 +10,11 @@ const warm = computed(() => props.item.warm == null ? (props.item.list_price ? e
 // what the warm figure is made of, so an estimate never passes for a quote
 const breakdown = computed(() => {
   const i = props.item
-  const bits = [i.cold && `${eur(i.cold)} kalt`, i.extra != null && `${eur(i.extra)} NK`, i.heating && `${eur(i.heating)} HK`].filter(Boolean)
-  if (i.warm_kind === 'stated') return bits.length ? `warm laut Inserat · ${bits.join(' + ')}` : 'warm laut Inserat'
+  const bits = [i.cold && `${eur(i.cold)} cold`, i.extra != null && `${eur(i.extra)} utilities`, i.heating && `${eur(i.heating)} heating`].filter(Boolean)
+  if (i.warm_kind === 'stated') return bits.length ? `warm per ad · ${bits.join(' + ')}` : 'warm per ad'
   if (i.warm_kind === 'sum') return bits.join(' + ')
-  if (i.warm_kind === 'estimated') return `geschätzt${bits.length ? ' · ' + bits.join(' + ') : ''}`
-  return i.list_price ? 'Preis laut Inserat, warm unklar' : 'Miete unklar'
+  if (i.warm_kind === 'estimated') return `estimated${bits.length ? ' · ' + bits.join(' + ') : ''}`
+  return i.list_price ? 'price per ad, warm unclear' : 'rent unclear'
 })
 const when = computed(() => vor(props.item.posted_at ?? props.item.first_seen_at))
 const fresh = computed(() => (Date.now() / 1000 - (props.item.posted_at ?? 0)) < 6 * 3600)
@@ -59,28 +59,28 @@ async function copy() {
     <div class="main">
       <a :href="item.url" target="_blank" rel="noopener" class="title">{{ item.title }}</a>
       <div class="facts">
-        <b v-if="item.rooms">{{ item.rooms.toLocaleString('de-DE') }} Zi.</b>
+        <b v-if="item.rooms">{{ item.rooms.toLocaleString('de-DE') }} rooms</b>
         <b v-if="item.area">{{ item.area.toLocaleString('de-DE') }} m²</b>
         <span v-if="item.district" class="muted">{{ item.district }}</span>
         <span v-if="item.distance_km != null" class="muted">{{ item.distance_km.toLocaleString('de-DE') }} km</span>
-        <span v-if="item.available_from" class="muted">ab {{ item.available_from }}</span>
+        <span v-if="item.available_from" class="muted">from {{ item.available_from }}</span>
       </div>
       <div class="pills">
         <span class="pill">{{ SOURCES[item.source] ?? item.source }}</span>
         <!-- the same flat seen elsewhere, folded into this card by the hunter -->
         <a v-for="d in item.dupes ?? []" :key="d.source + d.source_id" :href="d.url" target="_blank" rel="noopener"
-           class="pill ghost" title="Gleiche Anzeige, dort auch gefunden">auch {{ SOURCES[d.source] ?? d.source }} ↗</a>
-        <span v-if="item.wbs === 1" class="pill warn">WBS nötig</span>
-        <span v-else-if="item.wbs === 0 && item.source === 'inberlinwohnen'" class="pill">ohne WBS</span>
-        <span v-if="item.tausch === 1" class="pill warn">Tausch</span>
+           class="pill ghost" title="Same ad, also found there">also {{ SOURCES[d.source] ?? d.source }} ↗</a>
+        <span v-if="item.wbs === 1" class="pill warn">WBS required</span>
+        <span v-else-if="item.wbs === 0 && item.source === 'inberlinwohnen'" class="pill">no WBS</span>
+        <span v-if="item.tausch === 1" class="pill warn">Swap</span>
         <!-- when the match is aussortiert, its reason already names the kind -->
         <template v-if="item.passed !== 0">
-          <span v-if="item.kind === 'zwischenmiete'" class="pill warn">Zwischenmiete</span>
-          <span v-if="item.kind === 'wg_zimmer'" class="pill warn">WG-Zimmer</span>
+          <span v-if="item.kind === 'zwischenmiete'" class="pill warn">Sublet</span>
+          <span v-if="item.kind === 'wg_zimmer'" class="pill warn">Shared-flat room</span>
         </template>
-        <span v-if="item.scam === 'mittel'" class="pill warn" title="Die KI hat Auffälligkeiten gesehen">⚠ prüfen</span>
-        <span v-if="item.status === 'reserved'" class="pill warn">Reserviert</span>
-        <span v-if="item.status === 'gone'" class="pill bad">nicht mehr online{{ item.gone_at ? ` · ${vor(item.gone_at)}` : '' }}</span>
+        <span v-if="item.scam === 'mittel'" class="pill warn" title="The AI noticed red flags">⚠ check</span>
+        <span v-if="item.status === 'reserved'" class="pill warn">Reserved</span>
+        <span v-if="item.status === 'gone'" class="pill bad">offline{{ item.gone_at ? ` · ${vor(item.gone_at)}` : '' }}</span>
         <span v-if="item.passed === 0 && item.reason" class="pill bad">{{ item.reason }}</span>
         <span class="pill ghost">{{ item.search_name }}</span>
       </div>
@@ -97,28 +97,28 @@ async function copy() {
       <div class="warm" :class="{ est: item.warm_kind === 'estimated' || item.warm == null }">{{ warm }}</div>
       <div class="small muted bd">{{ breakdown }}</div>
       <div class="small" :class="fresh ? 'accent' : 'muted'">{{ when }}</div>
-      <div v-if="checked && item.status !== 'gone'" class="small faint" title="zuletzt geprüft, ob die Anzeige noch online ist">
-        {{ item.checked_at ? `✓ geprüft ${vor(item.checked_at)}` : 'noch nicht geprüft' }}
+      <div v-if="checked && item.status !== 'gone'" class="small faint" title="last checked whether the ad is still online">
+        {{ item.checked_at ? `✓ checked ${vor(item.checked_at)}` : 'not checked yet' }}
       </div>
       <div class="votes">
-        <button class="btn ghost" :class="{ on: msg.open }" title="Nachricht an den Anbieter" @click="toggleMsg">💬</button>
-        <button class="btn ghost" :class="{ on: item.verdict === 'up' }" :disabled="busy" title="Interessant" @click="vote('up')">👍</button>
-        <button class="btn ghost" :class="{ on: item.verdict === 'down' }" :disabled="busy" title="Nicht für mich" @click="vote('down')">👎</button>
+        <button class="btn ghost" :class="{ on: msg.open }" title="Message to the landlord" @click="toggleMsg">💬</button>
+        <button class="btn ghost" :class="{ on: item.verdict === 'up' }" :disabled="busy" title="Interesting" @click="vote('up')">👍</button>
+        <button class="btn ghost" :class="{ on: item.verdict === 'down' }" :disabled="busy" title="Not for me" @click="vote('down')">👎</button>
       </div>
     </div>
 
     <div v-if="msg.open" class="msg">
-      <div v-if="msg.loading" class="small muted">✦ schreibt eine Nachricht für diese Anzeige…</div>
+      <div v-if="msg.loading" class="small muted">✦ writing a message for this ad…</div>
       <div v-else-if="msg.err" class="small bad">{{ msg.err }}</div>
       <template v-else>
         <textarea ref="ta" v-model="msg.text" rows="14" class="ta" />
-        <div v-if="msg.missing.length" class="small warn">Anzeige fragt nach, steht nicht im Profil: {{ msg.missing.join(', ') }}</div>
+        <div v-if="msg.missing.length" class="small warn">Ad asks for this, not in the profile: {{ msg.missing.join(', ') }}</div>
       </template>
       <div class="msgbar">
-        <button class="btn ghost" :disabled="msg.loading" title="neu schreiben" @click="draft(true)">↻ neu</button>
+        <button class="btn ghost" :disabled="msg.loading" title="Rewrite" @click="draft(true)">↻ Rewrite</button>
         <!-- the <a> opens the ad natively (no popup blocker); the click also puts the text on the clipboard -->
-        <a v-if="msg.text && !msg.loading" :href="item.url" target="_blank" rel="noopener" class="btn" @click="copy">Kopieren &amp; Anzeige öffnen</a>
-        <button class="btn primary" :disabled="!msg.text || msg.loading" @click="copy">{{ msg.copied ? '✓ kopiert' : 'Kopieren' }}</button>
+        <a v-if="msg.text && !msg.loading" :href="item.url" target="_blank" rel="noopener" class="btn" @click="copy">Copy &amp; open ad</a>
+        <button class="btn primary" :disabled="!msg.text || msg.loading" @click="copy">{{ msg.copied ? '✓ Copied' : 'Copy' }}</button>
       </div>
     </div>
   </article>
@@ -129,7 +129,7 @@ async function copy() {
 .flat.out { opacity: .55; }
 .flat.gone { opacity: .45; }
 .flat.gone .title { text-decoration: line-through; }
-.shot { width: 96px; height: 72px; border-radius: 7px; overflow: hidden; background: var(--panel-2); display: grid; place-items: center; font-size: 26px; }
+.shot { width: 96px; height: 72px; border-radius: var(--radius-sm); overflow: hidden; background: var(--panel-2); display: grid; place-items: center; font-size: 26px; }
 .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .shot span { opacity: .4; }
 .main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -151,6 +151,7 @@ async function copy() {
 .votes { margin-top: auto; display: flex; gap: 2px; }
 .votes .btn { padding: 3px 6px; font-size: 13px; }
 .votes .btn.on { background: var(--accent-soft); }
+@media (pointer: coarse) { .votes { gap: 6px; } .votes .btn { min-width: 34px; min-height: 34px; } }
 @media (max-width: 640px) {
   .flat { grid-template-columns: 64px minmax(0, 1fr); }
   .shot { width: 64px; height: 56px; }

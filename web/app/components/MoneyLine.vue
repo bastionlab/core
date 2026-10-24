@@ -39,15 +39,15 @@ function move(e: PointerEvent) {
 }
 const h = computed(() => (hover.value == null ? null : pts.value[hover.value]))
 const short = (n: number) => n >= 10000 ? `${(n / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })}k` : Math.round(n).toLocaleString('de-DE')
-const dm = (d: string) => new Date(d + 'T12:00').toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: '2-digit' })
+const dm = (d: string) => new Date(d + 'T12:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' })
 </script>
 
 <template>
   <div class="lc">
     <div class="legend small">
-      <template v-if="!h"><span><i class="sw v" :class="{ down: !up }" />{{ worth ? 'Vermögen' : 'Wert' }}</span><span><i class="sw inv" />{{ worth ? 'davon Konten' : 'eingezahlt' }}</span></template>
-      <span v-else-if="worth" class="tip">{{ dm(h.day) }} · <b>{{ fmtEur(h.value, 0) }}</b> · Konten {{ fmtEur(h.invested, 0) }} · Depot {{ fmtEur(h.value - h.invested, 0) }}</span>
-      <span v-else class="tip">{{ dm(h.day) }} · <b>{{ fmtEur(h.value, 0) }}</b> · eingezahlt {{ fmtEur(h.invested, 0) }} ·
+      <template v-if="!h"><span><i class="sw v" :class="{ down: !up }" />{{ worth ? 'Net worth' : 'Value' }}</span><span><i class="sw inv" />{{ worth ? 'of which accounts' : 'paid in' }}</span></template>
+      <span v-else-if="worth" class="tip">{{ dm(h.day) }} · <b>{{ fmtEur(h.value, 0) }}</b> · accounts {{ fmtEur(h.invested, 0) }} · Depot {{ fmtEur(h.value - h.invested, 0) }}</span>
+      <span v-else class="tip">{{ dm(h.day) }} · <b>{{ fmtEur(h.value, 0) }}</b> · paid in {{ fmtEur(h.invested, 0) }} ·
         <b :class="h.value - h.invested >= 0 ? 'ok' : 'bad'">{{ fmtSigned(h.value - h.invested) }}</b></span>
     </div>
     <div v-if="pts.length > 1" class="box">
@@ -65,7 +65,7 @@ const dm = (d: string) => new Date(d + 'T12:00').toLocaleDateString('de-DE', { d
       <span v-for="t in ticks" :key="'l' + t" class="yl" :style="{ top: y(t) + 'px' }">{{ short(t) }}</span>
     </div>
     <div v-if="pts.length > 1" class="ax small"><span>{{ dm(pts[0]!.day) }}</span><span>{{ dm(pts[Math.floor(pts.length / 2)]!.day) }}</span><span>{{ dm(pts.at(-1)!.day) }}</span></div>
-    <div v-else class="faint small pad">Noch keine Kursdaten – kommen mit dem nächsten Trade-Republic-Sync.</div>
+    <div v-else class="faint small pad">No price data yet – arrives with the next Trade Republic sync.</div>
   </div>
 </template>
 

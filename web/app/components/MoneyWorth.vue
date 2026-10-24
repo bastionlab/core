@@ -25,23 +25,20 @@ const change = computed(() => (series.value.length > 1 ? series.value.at(-1)![1]
 </script>
 
 <template>
-  <Panel title="Vermögen" :sub="series.length ? fmtEur(series.at(-1)![1], 0) : ''" id="money-worth">
+  <Panel title="Net worth" :sub="series.length ? fmtEur(series.at(-1)![1], 0) : ''" id="money-worth">
     <div class="head">
-      <span v-if="change != null" class="num" :class="change >= 0 ? 'ok' : 'bad'">{{ fmtSigned(change) }} seit {{ dayTitle(series[0]![0]) }}</span>
-      <div class="ranges">
-        <button v-for="r in RANGES" :key="r[0]" class="rg" :class="{ on: span === r[0] }" @click="span = r[0]">{{ r[0] }}</button>
+      <span v-if="change != null" class="num" :class="change >= 0 ? 'ok' : 'bad'">{{ fmtSigned(change) }} since {{ dayTitle(series[0]![0]) }}</span>
+      <div class="seg">
+        <button v-for="r in RANGES" :key="r[0]" :class="{ on: span === r[0] }" @click="span = r[0]">{{ r[0] === '1J' ? '1Y' : r[0] }}</button>
       </div>
     </div>
     <div v-if="err" class="bad small">{{ err }}</div>
-    <div v-else-if="!h" class="faint small pad">Rechne Kontostände zurück…</div>
+    <div v-else-if="!h" class="faint small pad">Reconstructing balances…</div>
     <MoneyLine v-else :series="series" mode="worth" />
   </Panel>
 </template>
 
 <style scoped>
 .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-.ranges { display: flex; gap: 2px; background: var(--panel-2); border-radius: 8px; padding: 2px; }
-.rg { border: 0; background: none; color: var(--muted); font: inherit; font-size: 12.5px; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
-.rg.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .pad { padding: 30px 0; text-align: center; }
 </style>

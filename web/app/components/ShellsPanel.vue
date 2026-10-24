@@ -39,7 +39,7 @@ function kill(b: any, s: any) {
           <Icon name="dev" :size="15" class="ic" />
           <b>{{ b.name }}</b>
           <span class="faint small">CT {{ b.vmid }}</span>
-          <button class="btn small new" :disabled="!!busy" :title="`new login shell on ${b.name} as max`" @click="create(b)">
+          <button class="btn sm new" :disabled="!!busy" :title="`new login shell on ${b.name} as max`" @click="create(b)">
             {{ busy === `new:${b.vmid}` ? '…' : '+ New shell' }}
           </button>
         </div>
@@ -65,11 +65,11 @@ function kill(b: any, s: any) {
 
 <style scoped>
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 10px; }
-.tile { border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); overflow: hidden; min-width: 0; align-self: start; }
+.tile { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2); overflow: hidden; min-width: 0; align-self: start; }
 .th { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; min-width: 0; }
 .th b { font-size: 13.5px; }
 .ic { color: var(--faint); flex: none; }
-.new { margin-left: auto; font-size: 12px; padding: 4px 10px; white-space: nowrap; }
+.new { margin-left: auto; }
 .row { display: flex; align-items: stretch; border-top: 1px solid var(--line); min-width: 0; }
 .row button { border: 0; background: transparent; color: var(--text); font: inherit; cursor: pointer; }
 .open { flex: 1; display: flex; align-items: center; gap: 8px; padding: 7px 12px; min-width: 0; text-align: left; }
@@ -82,6 +82,5 @@ function kill(b: any, s: any) {
 .x:hover { color: var(--bad); background: var(--panel); }
 @media (max-width: 640px) {
   .open { min-height: 42px; }
-  .new { min-height: 32px; }
 }
 </style>

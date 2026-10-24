@@ -104,7 +104,7 @@ function submit() {
 </template>
 
 <style scoped>
-.qs { display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; padding: 12px; background: var(--panel-2); }
+.qs { display: flex; flex-direction: column; gap: 14px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: 12px; background: var(--panel-2); }
 .qs.off { opacity: .55; }
 .q { display: flex; flex-direction: column; gap: 8px; }
 .title { font-weight: 600; line-height: 1.4; }
@@ -124,7 +124,7 @@ function submit() {
 .other { font: inherit; padding: 8px 12px; border-radius: 8px; }
 .send { align-self: flex-start; }
 .tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; margin: -2px 0 -4px; padding-bottom: 2px; }
-.tab { flex-shrink: 0; display: flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 7px; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+.tab { flex-shrink: 0; display: flex; align-items: center; gap: 5px; font: inherit; font-size: 12px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm); padding: 4px 10px; cursor: pointer; white-space: nowrap; }
 .tab:hover { color: var(--text); }
 .tab.on { color: var(--text); background: var(--panel); border-color: var(--line-2); }
 .tab .mark { color: var(--faint); }

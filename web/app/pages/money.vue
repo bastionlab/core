@@ -10,7 +10,7 @@ const setQ = (patch: Record<string, string | undefined>, push = false) => {
   for (const k in query) if (!query[k]) delete query[k]
   ;(push ? router.push : router.replace)({ query })
 }
-const TABS = [['monat', 'Monat'], ['buchungen', 'Buchungen'], ['abos', 'Abos'], ['depot', 'Depot'], ['konten', 'Konten']] as const
+const TABS = [['monat', 'Month'], ['buchungen', 'Bookings'], ['abos', 'Subs'], ['depot', 'Depot'], ['konten', 'Accounts']] as const
 const tab = computed(() => q('t') || 'monat')
 const goTab = (t: string, extra: Record<string, string | undefined> = {}) => { setQ({ t: t === 'monat' ? undefined : t, ...extra }, true); window.scrollTo({ top: 0 }) }
 
@@ -51,12 +51,12 @@ onMounted(async () => {
   const { code, state, error: e, error_description: ed } = route.query as any
   if (!code && !e) return
   router.replace('/money')
-  if (e) { linkMsg.value = `Bank-Login abgebrochen: ${ed || e}`; return }
-  linkMsg.value = 'Verbinde…'
+  if (e) { linkMsg.value = `Bank login cancelled: ${ed || e}`; return }
+  linkMsg.value = 'Connecting…'
   try {
     const r: any = await $fetch('/api/money/action', { method: 'POST', body: { action: 'ebFinish', code, state } })
-    linkMsg.value = `✓ ${r.aspsp} verbunden: ${r.accounts.join(', ') || 'keine Konten freigegeben'} – erster Import läuft.`
-  } catch (x: any) { linkMsg.value = `Verbinden fehlgeschlagen: ${x?.data?.statusMessage || x?.message}` }
+    linkMsg.value = `✓ ${r.aspsp} connected: ${r.accounts.join(', ') || 'no accounts shared'} – first import running.`
+  } catch (x: any) { linkMsg.value = `Connecting failed: ${x?.data?.statusMessage || x?.message}` }
   load()
 })
 
@@ -69,7 +69,7 @@ async function act(action: string, body: Record<string, any> = {}, reload = true
 }
 
 const L = computed(() => d.value?.ledger)
-const monthShort = (m: string) => new Date(m + '-01T12:00').toLocaleDateString('de-DE', { month: 'short' })
+const monthShort = (m: string) => new Date(m + '-01T12:00').toLocaleDateString('en-GB', { month: 'short' })
 const catMax = computed(() => Math.max(1, ...(L.value?.categories ?? []).flatMap((c: any) => [c.amount, c.avg ?? 0])))
 const trendMax = computed(() => Math.max(1, ...(L.value?.trend ?? []).flatMap((t: any) => [t.income, t.spending])))
 // what the month's in/out leaves out: money moved between your own accounts, and into the depot (net)
@@ -178,7 +178,7 @@ async function oddOk(a: any) { odd.value = odd.value.filter(x => x !== a); await
 const exporting = ref(false)
 function csv(rows: any[], name: string) {
   const esc = (v: any) => { const x = String(v ?? ''); return /[;"\n]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x }
-  const lines = [['Datum', 'Empfänger', 'Name', 'Betrag', 'Kategorie', 'Konto', 'Verwendungszweck'].join(';'),
+  const lines = [['Date', 'Payee', 'Name', 'Amount', 'Category', 'Account', 'Description'].join(';'),
     ...rows.map((t: any) => [t.date, t.payee, t.alias || '', t.amount.toFixed(2).replace('.', ','), t.category || '', t.account, t.description].map(esc).join(';'))]
   const a = document.createElement('a')
   a.href = URL.createObjectURL(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }))
@@ -186,11 +186,11 @@ function csv(rows: any[], name: string) {
   a.click()
   setTimeout(() => URL.revokeObjectURL(a.href), 2000)
 }
-function exportView() { csv([...txShown.value].reverse(), `buchungen-${found.value ? 'suche' : month.value}${cat.value ? '-' + cat.value : ''}.csv`) }
+function exportView() { csv([...txShown.value].reverse(), `bookings-${found.value ? 'search' : month.value}${cat.value ? '-' + cat.value : ''}.csv`) }
 async function exportYear() {
   exporting.value = true
   const y = month.value.slice(0, 4)
-  try { csv((await $fetch<any>('/api/money/export', { query: { start: `${y}-01-01`, end: `${y}-12-31` } })).transactions, `buchungen-${y}.csv`) }
+  try { csv((await $fetch<any>('/api/money/export', { query: { start: `${y}-01-01`, end: `${y}-12-31` } })).transactions, `bookings-${y}.csv`) }
   catch (e: any) { toast.value = errText(e) } finally { exporting.value = false }
 }
 
@@ -203,31 +203,31 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 
 <template>
   <div class="money">
-    <div v-if="!d && pending" class="muted pad">Lade…</div>
-    <div v-else-if="error && !d" class="bad pad">Die Money-API in CT 108 ist nicht erreichbar: {{ errText(error) }}</div>
+    <div v-if="!d && pending" class="muted pad">Loading…</div>
+    <div v-else-if="error && !d" class="bad pad">Money API in CT 108 unreachable: {{ errText(error) }}</div>
 
     <template v-if="d">
       <div class="strip small">
         <span class="dot" :class="d.syncing ? 'warn' : run ? (run.ok && !runErrors.length ? 'ok' : 'bad') : ''" />
-        <span class="muted">{{ d.syncing ? 'synchronisiert…' : run ? `Sync ${vor(run.finished)}` : 'noch kein Sync' }}</span>
+        <span class="muted">{{ d.syncing ? 'syncing…' : run ? `Synced ${ago(run.finished)}` : 'not synced yet' }}</span>
         <span v-for="[k, v] in runErrors" :key="k" class="bad">{{ k }}: {{ v }}</span>
         <a class="faint" href="http://192.168.1.58:8080" target="_blank" rel="noopener">Firefly ↗</a>
-        <button class="btn ghost ref" :disabled="d.syncing" title="jetzt synchronisieren" @click="act('sync')">{{ d.syncing ? '…' : '↻ Sync' }}</button>
+        <button class="btn ghost ref" :disabled="d.syncing" title="Sync now" @click="act('sync')">{{ d.syncing ? '…' : '↻ Sync' }}</button>
       </div>
       <p v-if="linkMsg" class="small note">{{ linkMsg }}</p>
 
       <MoneySetup :d="d" @changed="load" />
 
       <div class="tiles">
-        <button class="tile" @click="goTab('konten')"><span class="lbl">Vermögen</span><span class="big num">{{ fmtEur(d.net_worth, 0) }}</span>
-          <span class="small faint">Konten {{ fmtEur(d.cash, 0) }}</span></button>
+        <button class="tile" @click="goTab('konten')"><span class="lbl">Net worth</span><span class="big num">{{ fmtEur(d.net_worth, 0) }}</span>
+          <span class="small faint">Accounts {{ fmtEur(d.cash, 0) }}</span></button>
         <button class="tile" @click="goTab('monat')"><span class="lbl">{{ monthTitle(thisMonth).split(' ')[0] }}</span>
           <span class="big num">{{ L && month === thisMonth ? fmtEur(-L.spending, 0) : '–' }}</span>
-          <span v-if="L && month === thisMonth" class="small num" :class="L.income - L.spending >= 0 ? 'ok' : 'bad'">Saldo {{ fmtSigned(L.income - L.spending) }}</span></button>
+          <span v-if="L && month === thisMonth" class="small num" :class="L.income - L.spending >= 0 ? 'ok' : 'bad'">Net {{ fmtSigned(L.income - L.spending) }}</span></button>
         <button class="tile" @click="goTab('depot')"><span class="lbl">Depot</span><span class="big num">{{ fmtEur(d.invested_value, 0) }}</span>
           <span v-if="gain != null" class="small num" :class="gain >= 0 ? 'ok' : 'bad'">{{ fmtSigned(gain) }} · {{ depotIn ? fmtPct(100 * gain / depotIn) : '' }}</span></button>
-        <button class="tile" @click="goTab('abos')"><span class="lbl">Abos / Monat</span><span class="big num">{{ fmtEur(d.subs_monthly, 0) }}</span>
-          <span class="small faint">{{ activeSubs.length }} aktiv{{ nextDue ? ` · ${nextDue} diese Woche` : '' }}</span></button>
+        <button class="tile" @click="goTab('abos')"><span class="lbl">Subs / month</span><span class="big num">{{ fmtEur(d.subs_monthly, 0) }}</span>
+          <span class="small faint">{{ activeSubs.length }} active{{ nextDue ? ` · ${nextDue} this week` : '' }}</span></button>
       </div>
 
       <nav class="tabs">
@@ -235,13 +235,13 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
       </nav>
 
       <div v-if="tab === 'monat' || (tab === 'buchungen' && !found)" class="mbar">
-        <button class="btn ghost mn" title="Vormonat" @click="shift(-1)">‹</button>
+        <button class="btn ghost mn" title="Previous month" @click="shift(-1)">‹</button>
         <label class="mt">
           {{ monthTitle(month) }}
           <input type="month" :value="month" :max="thisMonth" @change="setMonth(($event.target as HTMLInputElement).value || thisMonth)">
         </label>
-        <button class="btn ghost mn" :disabled="isNow" title="nächster Monat" @click="shift(1)">›</button>
-        <button class="btn today" :class="{ on: isNow && (tab !== 'monat' || day === isoDay()) }" @click="today">Heute</button>
+        <button class="btn ghost mn" :disabled="isNow" title="Next month" @click="shift(1)">›</button>
+        <button class="btn today" :class="{ on: isNow && (tab !== 'monat' || day === isoDay()) }" @click="today">Today</button>
       </div>
       <p v-if="toast" class="bad small">{{ toast }}</p>
       <div v-if="d.ledger_error && (tab === 'monat' || tab === 'buchungen')" class="bad small">Firefly: {{ d.ledger_error }}</div>
@@ -249,46 +249,46 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
       <!-- ── Monat ── -->
       <template v-if="tab === 'monat' && L">
         <div class="sums">
-          <span><span class="lbl">Einnahmen</span><b class="num ok">{{ fmtEur(L.income, 0) }}</b></span>
-          <span><span class="lbl">Ausgaben</span><b class="num">{{ fmtEur(L.spending, 0) }}</b></span>
-          <span><span class="lbl">Saldo</span><b class="num" :class="L.income - L.spending >= 0 ? 'ok' : 'bad'">{{ fmtSigned(L.income - L.spending) }}</b></span>
-          <span v-if="vsAvg != null"><span class="lbl">vs. Ø 3 Monate</span><b class="num" :class="vsAvg <= 0 ? 'ok' : 'warn'">{{ fmtSigned(vsAvg) }}</b></span>
+          <span><span class="lbl">Income</span><b class="num ok">{{ fmtEur(L.income, 0) }}</b></span>
+          <span><span class="lbl">Spending</span><b class="num">{{ fmtEur(L.spending, 0) }}</b></span>
+          <span><span class="lbl">Net</span><b class="num" :class="L.income - L.spending >= 0 ? 'ok' : 'bad'">{{ fmtSigned(L.income - L.spending) }}</b></span>
+          <span v-if="vsAvg != null"><span class="lbl">vs. 3-month avg</span><b class="num" :class="vsAvg <= 0 ? 'ok' : 'warn'">{{ fmtSigned(vsAvg) }}</b></span>
         </div>
         <p v-if="moved.tr || moved.inv" class="small faint excl">
-          ohne <button class="lnk" @click="goTab('buchungen', { k: 'tr' })">Umbuchungen {{ fmtEur(moved.tr, 0) }}</button><template v-if="moved.inv"> und Investments {{ fmtEur(moved.inv, 0) }}</template>
+          excl. <button class="lnk" @click="goTab('buchungen', { k: 'tr' })">transfers {{ fmtEur(moved.tr, 0) }}</button><template v-if="moved.inv"> and investments {{ fmtEur(moved.inv, 0) }}</template>
         </p>
         <div v-if="L.forecast" class="fc">
-          <span class="lbl">Prognose Monatsende</span>
-          <span>Ausgaben ~<b class="num">{{ fmtEur(L.forecast.spending, 0) }}</b> · Saldo ~<b class="num" :class="L.forecast.saldo >= 0 ? 'ok' : 'bad'">{{ fmtSigned(L.forecast.saldo) }}</b>
-            · Konten ~<b class="num">{{ fmtEur(d.cash + L.forecast.rest_in - L.forecast.rest_out, 0) }}</b></span>
-          <span class="faint small">noch {{ L.forecast.days_left }} Tage: Abos {{ fmtEur(L.forecast.subs_due, 0) }} + ~{{ fmtEur(L.forecast.pace_day, 0) }}/Tag<template v-if="L.forecast.rest_in > 1"> · Eingänge erwartet ~{{ fmtEur(L.forecast.rest_in, 0) }}</template></span>
+          <span class="lbl">Month-end forecast</span>
+          <span>Spending ~<b class="num">{{ fmtEur(L.forecast.spending, 0) }}</b> · Net ~<b class="num" :class="L.forecast.saldo >= 0 ? 'ok' : 'bad'">{{ fmtSigned(L.forecast.saldo) }}</b>
+            · Accounts ~<b class="num">{{ fmtEur(d.cash + L.forecast.rest_in - L.forecast.rest_out, 0) }}</b></span>
+          <span class="faint small">{{ L.forecast.days_left }} days left: subs {{ fmtEur(L.forecast.subs_due, 0) }} + ~{{ fmtEur(L.forecast.pace_day, 0) }}/day<template v-if="L.forecast.rest_in > 1"> · expected income ~{{ fmtEur(L.forecast.rest_in, 0) }}</template></span>
         </div>
-        <Panel v-if="odd.length" title="Auffällig" :sub="`${odd.length} Abbuchung${odd.length > 1 ? 'en' : ''}`" id="money-odd" class="oddp">
+        <Panel v-if="odd.length" title="Unusual" :sub="`${odd.length} charge${odd.length > 1 ? 's' : ''}`" id="money-odd" class="oddp">
           <div v-for="a in odd" :key="a.journal_id" class="odd">
             <button class="ob" @click="open = txOf(a)">
               <span class="tp"><span class="py">{{ a.alias || a.payee }}</span><span class="faint small">{{ dayTitle(a.date) }} · {{ a.reason }}</span></span>
               <span class="num">{{ fmtEur(a.amount) }}</span>
             </button>
-            <button class="btn ghost small" title="ist in Ordnung" @click="oddOk(a)">ok</button>
+            <button class="btn ghost sm" title="This is fine" @click="oddOk(a)">ok</button>
           </div>
         </Panel>
         <div class="grid cols-2">
-          <Panel title="Kalender" :sub="day ? dayTitle(day) : 'Tag antippen'" id="money-cal">
+          <Panel title="Calendar" :sub="day ? dayTitle(day) : undefined" id="money-cal">
             <MoneyCalendar :month="month" :txs="L.transactions" :subs="activeSubs" :selected="day" @pick="x => setQ({ d: x || undefined })" />
-            <div class="calkey small faint"><span><i class="k in" />Eingang</span><span><i class="k due" />Abo fällig</span><span>Zahl = Ausgaben €</span></div>
+            <div class="calkey small faint"><span><i class="k in" />Income</span><span><i class="k due" />Sub due</span><span>Number = spending €</span></div>
             <div v-if="day" class="daylist">
-              <div v-if="!dayTx.length" class="faint small">Keine Buchungen an diesem Tag.</div>
+              <div v-if="!dayTx.length" class="faint small">No bookings on this day.</div>
               <button v-for="t in dayTx" :key="t.journal_id" class="dtx" @click="open = t">
-                <span class="tp"><span class="py">{{ t.alias || t.payee }}</span><span class="faint small">{{ t.share_of ? `Anteil ${t.share_of}` : t.category || '—' }}</span></span>
+                <span class="tp"><span class="py">{{ t.alias || t.payee }}</span><span class="faint small">{{ t.share_of ? `Share of ${t.share_of}` : t.category || '—' }}</span></span>
                 <span class="num" :class="t.amount > 0 ? 'ok' : ''">{{ fmtEur(t.amount) }}</span>
               </button>
-              <button v-if="dayTx.length" class="btn ghost small" @click="goTab('buchungen', { d: day })">in Buchungen öffnen →</button>
+              <button v-if="dayTx.length" class="btn ghost sm" @click="goTab('buchungen', { d: day })">Open in bookings →</button>
             </div>
           </Panel>
-          <Panel title="Ausgaben nach Kategorie" sub="Strich = Ø der 3 Vormonate" id="money-cats">
-            <div v-if="!L.categories.length" class="faint small">Noch keine Ausgaben in diesem Monat.</div>
+          <Panel title="Spending by category" id="money-cats">
+            <div v-if="!L.categories.length" class="faint small">No spending this month yet.</div>
             <button v-for="c in L.categories" :key="c.name" class="cat"
-                    :title="`${c.name}: ${fmtEur(c.amount)} (Ø ${fmtEur(c.avg)})`" @click="goTab('buchungen', { c: c.name, d: undefined })">
+                    :title="`${c.name}: ${fmtEur(c.amount)} (line = avg of previous 3 months: ${fmtEur(c.avg)})`" @click="goTab('buchungen', { c: c.name, d: undefined })">
               <span class="cn">{{ c.name }}</span>
               <span class="bar"><i :style="{ width: (100 * c.amount / catMax) + '%' }" :class="{ over: c.avg && c.amount > c.avg * 1.2 }" />
                 <b v-if="c.avg" class="avg" :style="{ left: (100 * c.avg / catMax) + '%' }" /></span>
@@ -296,8 +296,8 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
             </button>
           </Panel>
         </div>
-        <Panel title="Letzte 12 Monate" id="money-trend" class="gap">
-          <div class="legend small"><span><i class="sw in" />Einnahmen</span><span><i class="sw out" />Ausgaben</span></div>
+        <Panel title="Last 12 months" id="money-trend" class="gap">
+          <div class="legend small"><span><i class="sw in" />Income</span><span><i class="sw out" />Spending</span></div>
           <div class="trend">
             <button v-for="t in L.trend" :key="t.month" class="tm" :class="{ on: t.month === month }"
                     :title="`${monthTitle(t.month)}: +${fmtEur(t.income, 0)} / −${fmtEur(t.spending, 0)}`" @click="setMonth(t.month)">
@@ -314,32 +314,32 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
       <!-- ── Buchungen ── -->
       <template v-if="tab === 'buchungen'">
         <div class="find">
-          <input v-model="search" type="search" placeholder="Alle Buchungen durchsuchen: Empfänger, Betrag…" enterkeyhint="search">
-          <button class="btn" :class="{ on: selecting }" @click="selecting ? stopSelect() : (selecting = true)">{{ selecting ? 'Fertig' : 'Auswählen' }}</button>
+          <input v-model="search" type="search" placeholder="Search…" title="Search all bookings: payee, amount…" enterkeyhint="search">
+          <button class="btn" :class="{ on: selecting }" @click="selecting ? stopSelect() : (selecting = true)">{{ selecting ? 'Done' : 'Select' }}</button>
         </div>
         <div class="filters">
-          <button class="chip" :class="{ on: !kind }" @click="setQ({ k: undefined })">Alle</button>
-          <button class="chip" :class="{ on: kind === 'out' }" @click="setQ({ k: 'out' })">Ausgaben</button>
-          <button class="chip" :class="{ on: kind === 'in' }" @click="setQ({ k: 'in' })">Eingänge</button>
-          <button class="chip" :class="{ on: kind === 'tr' }" @click="setQ({ k: 'tr' })">Umbuchungen</button>
+          <button class="chip" :class="{ on: !kind }" @click="setQ({ k: undefined })">All</button>
+          <button class="chip" :class="{ on: kind === 'out' }" @click="setQ({ k: 'out' })">Spending</button>
+          <button class="chip" :class="{ on: kind === 'in' }" @click="setQ({ k: 'in' })">Income</button>
+          <button class="chip" :class="{ on: kind === 'tr' }" @click="setQ({ k: 'tr' })">Transfers</button>
           <select class="chip sel" :value="cat" @change="setQ({ c: ($event.target as HTMLSelectElement).value || undefined })">
-            <option value="">Alle Kategorien</option>
+            <option value="">All categories</option>
             <option v-for="c in d.categories" :key="c" :value="c">{{ c }}</option>
           </select>
           <select v-if="accounts.length > 1" class="chip sel" :value="acct" @change="setQ({ a: ($event.target as HTMLSelectElement).value || undefined })">
-            <option value="">Alle Konten</option>
+            <option value="">All accounts</option>
             <option v-for="a in accounts" :key="a" :value="a">{{ a }}</option>
           </select>
           <button v-if="day && !found" class="chip on" @click="setQ({ d: undefined })">{{ dayTitle(day) }} ✕</button>
         </div>
         <p class="small faint count">
-          <template v-if="searching">suche…</template>
-          <template v-else>{{ txShown.length }} Buchungen{{ found ? ` mit „${search.trim()}“ (alle Monate)` : '' }} · Summe <b class="num" :class="shownSum >= 0 ? 'ok' : ''">{{ fmtEur(shownSum) }}</b></template>
-          <template v-if="selecting"> · <span class="accent">Buchungen antippen zum Auswählen</span></template>
-          <span class="exp"><button class="lnk" @click="exportView">CSV</button> · <button class="lnk" :disabled="exporting" @click="exportYear">{{ exporting ? '…' : `Jahr ${month.slice(0, 4)}` }}</button></span>
+          <template v-if="searching">searching…</template>
+          <template v-else>{{ txShown.length }} booking{{ txShown.length === 1 ? '' : 's' }}{{ found ? ` matching “${search.trim()}” (all months)` : '' }} · total <b class="num" :class="shownSum >= 0 ? 'ok' : ''">{{ fmtEur(shownSum) }}</b></template>
+          <template v-if="selecting"> · <span class="accent">Tap bookings to select</span></template>
+          <span class="exp"><button class="lnk" @click="exportView">CSV</button> · <button class="lnk" :disabled="exporting" @click="exportYear">{{ exporting ? '…' : `Year ${month.slice(0, 4)}` }}</button></span>
         </p>
         <div class="txs">
-          <div v-if="!groups.length && !searching" class="faint small pad2">Keine Buchungen.</div>
+          <div v-if="!groups.length && !searching" class="faint small pad2">No bookings.</div>
           <section v-for="g in groups" :key="g.day" class="dg">
             <header class="dh small"><span>{{ dayTitle(g.day) }}</span><span class="num faint">{{ g.sum ? fmtEur(g.sum) : '' }}</span></header>
             <button v-for="tx in g.txs" :key="tx.journal_id" class="tx" :class="{ picked: sel.has(tx.journal_id) }" @click="tapTx(tx)">
@@ -350,22 +350,22 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
               </span>
               <span class="tr">
                 <span class="num amt" :class="tx.amount > 0 ? 'ok' : ''">{{ fmtEur(tx.amount) }}</span>
-                <span class="pill catp">{{ tx.share_of ? `Anteil ${tx.share_of}` : tx.category || '—' }}</span>
+                <span class="pill catp">{{ tx.share_of ? `Share of ${tx.share_of}` : tx.category || '—' }}</span>
               </span>
             </button>
           </section>
-          <button v-if="txShown.length > LIMIT" class="btn ghost more" @click="LIMIT += 300">mehr ({{ txShown.length - LIMIT }})</button>
+          <button v-if="txShown.length > LIMIT" class="btn ghost more" @click="LIMIT += 300">more ({{ txShown.length - LIMIT }})</button>
         </div>
         <div v-if="selecting && sel.size" class="selbar">
           <span class="small"><b>{{ sel.size }}</b> · {{ fmtEur(selTx.reduce((a: number, t: any) => a + t.amount, 0)) }}</span>
-          <select v-model="subPeriod" class="small"><option value="">Rhythmus auto</option><option v-for="(v, k) in PERIODS" :key="k" :value="k">{{ v.label }}</option></select>
-          <button class="btn primary" @click="selAsSub">{{ selIn ? 'Als Einnahme' : 'Als Abo' }}</button>
+          <select v-model="subPeriod" class="small"><option value="">Period: auto</option><option v-for="(v, k) in PERIODS" :key="k" :value="k">{{ v.label }}</option></select>
+          <button class="btn primary" @click="selAsSub">{{ selIn ? 'As income' : 'As sub' }}</button>
           <select v-if="selIn && outSubs.length" class="small" value="" @change="selShare(($event.target as HTMLSelectElement).value)">
-            <option value="" disabled>Anteil an Abo…</option>
+            <option value="" disabled>Share of sub…</option>
             <option v-for="s in outSubs" :key="s.key" :value="s.key">{{ subName(s) }}</option>
           </select>
           <select class="small" value="" @change="selCategory(($event.target as HTMLSelectElement).value)">
-            <option value="" disabled>Kategorie…</option>
+            <option value="" disabled>Category…</option>
             <option v-for="c in d.categories" :key="c" :value="c">{{ c }}</option>
           </select>
         </div>
@@ -376,21 +376,21 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
       <MoneyDepot v-if="tab === 'depot'" :positions="pf?.positions ?? []" :cash="trCash" />
 
       <template v-if="tab === 'konten'">
-        <Panel title="Konten" :sub="`${fmtEur(d.cash, 0)} gesamt`" id="money-accounts">
+        <Panel title="Accounts" :sub="`${fmtEur(d.cash, 0)} total`" id="money-accounts">
           <template #actions>
-            <button class="btn small" :disabled="d.syncing" @click="act('sync')">{{ d.syncing ? 'synchronisiert…' : '↻ Jetzt synchronisieren' }}</button>
+            <button class="btn sm" :disabled="d.syncing" @click="act('sync')">{{ d.syncing ? 'syncing…' : '↻ Sync now' }}</button>
           </template>
-          <div v-if="!d.accounts.length" class="faint small">Noch keine Konten verbunden.</div>
+          <div v-if="!d.accounts.length" class="faint small">No accounts connected yet.</div>
           <div v-for="a in d.accounts" :key="a.key" class="acc">
             <span class="dot" :class="a.error ? 'bad' : a.last_sync ? 'ok' : ''" />
             <span class="an">
               <span>{{ a.name }}<span v-if="a.iban" class="faint small"> · {{ a.iban.slice(-4) }}</span></span>
               <span class="faint small">
-                {{ a.last_sync ? `Sync ${vor(a.last_sync)}` : 'noch nicht synchronisiert' }}
-                <template v-if="linkFor(a)?.valid_until"> · Zugriff noch {{ daysLeft(linkFor(a).valid_until) }} Tage</template>
+                {{ a.last_sync ? `Synced ${ago(a.last_sync)}` : 'not synced yet' }}
+                <template v-if="linkFor(a)?.valid_until"> · access for {{ daysLeft(linkFor(a).valid_until) }} more days</template>
               </span>
               <span v-if="a.error" class="bad small">{{ a.error }}</span>
-              <button class="lnk small" @click="goTab('buchungen', { a: a.name })">Buchungen →</button>
+              <button class="lnk small" @click="goTab('buchungen', { a: a.name })">Bookings →</button>
             </span>
             <span class="num ab">{{ fmtEur(a.balance) }}</span>
           </div>
@@ -419,7 +419,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 @media (max-width: 760px) { .tiles { grid-template-columns: 1fr 1fr; gap: 8px; } .big { font-size: 19px; } }
 
 .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; background: var(--bg); padding: 6px 0; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
-.tab { flex: 1 0 auto; padding: 7px 14px; border: 0; border-radius: 8px; background: none; color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; }
+.tab { flex: 1 0 auto; padding: 7px 14px; border: 0; border-radius: var(--radius-sm); background: none; color: var(--muted); font: inherit; font-size: 13.5px; cursor: pointer; }
 .tab:hover { color: var(--text); }
 .tab.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
@@ -435,7 +435,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 .sums { display: flex; gap: 8px 22px; flex-wrap: wrap; margin-bottom: 14px; }
 .sums > span { display: flex; flex-direction: column; }
 .excl { margin: -8px 0 14px; }
-.fc { display: flex; flex-direction: column; gap: 2px; margin: 0 0 14px; padding: 10px 12px; border: 1px dashed var(--line-2); border-radius: 10px; font-size: 13px; }
+.fc { display: flex; flex-direction: column; gap: 2px; margin: 0 0 14px; padding: 10px 12px; border: 1px dashed var(--line-2); border-radius: var(--radius-sm); font-size: 13px; }
 .oddp { margin-bottom: 14px; border-color: var(--warn-soft); }
 .odd { display: flex; align-items: center; gap: 6px; border-top: 1px solid var(--line); }
 .odd:first-of-type { border-top: 0; }
@@ -443,7 +443,6 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 .ob .tp { flex: 1; }
 .count { display: flex; flex-wrap: wrap; gap: 0 4px; }
 .exp { margin-left: auto; }
-.lnk { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
 .sums b { font-size: 17px; font-weight: 600; text-align: left; }
 .calkey { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
 .k { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; vertical-align: 1px; }
@@ -473,9 +472,8 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 .find input { flex: 1; min-width: 0; padding: 8px 12px; }
 .find .btn.on { color: var(--accent); border-color: var(--accent); }
 .filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-bottom: 6px; }
-.chip { flex: none; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
-.chip.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
-.chip.sel { padding: 4px 8px; font-size: 12.5px; }
+.chip { flex: none; }
+.chip.sel { padding: 4px 8px; }
 .count { margin: 4px 2px 8px; }
 .count b { color: var(--text); }
 .accent { color: var(--accent); }
@@ -494,9 +492,8 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
 .catp { font-size: 11px; }
 .amt { font-weight: 500; }
 .more { width: 100%; margin-top: 6px; }
-.selbar { position: sticky; bottom: calc(var(--tabbar) + 10px); z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--accent); border-radius: 12px; box-shadow: 0 6px 24px rgba(0, 0, 0, .5); }
+.selbar { position: sticky; bottom: calc(var(--tabbar) + 10px); z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--accent); border-radius: var(--radius); box-shadow: 0 6px 24px rgba(0, 0, 0, .5); }
 .selbar select { padding: 5px 8px; }
-.btn.small { font-size: 12px; padding: 4px 10px; }
 .acc { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
 .acc:first-of-type { border-top: 0; }
 .an { flex: 1; display: flex; flex-direction: column; min-width: 0; }
@@ -513,7 +510,7 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
   .big { font-size: 17px; }
   .tile .small { font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tabs { gap: 0; }
-  .tab { flex: 1 1 0; min-width: 0; padding: 7px 2px; font-size: 12.5px; }
+  .tab { padding: 7px 8px; font-size: 13px; white-space: nowrap; }
   .mt { min-width: 0; font-size: 15px; }
   .sums { gap: 6px 16px; }
   .sums b { font-size: 15px; }
@@ -522,6 +519,5 @@ const daysLeft = (iso: string) => Math.round((new Date(iso).getTime() - Date.now
   .cat { grid-template-columns: minmax(80px, 42%) 1fr auto; gap: 8px; }
   .filters { flex-wrap: wrap; overflow: visible; }
   .chip.sel { flex: 1 1 140px; min-width: 0; }
-  .find input::placeholder { font-size: 14px; }
 }
 </style>

@@ -72,6 +72,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', key))
 .pad button:hover:not(:disabled) { background: var(--panel-2); }
 .pad button:active:not(:disabled) { background: var(--line-2); }
 .pad .fn { background: transparent; border-color: transparent; color: var(--muted); }
-.pad .go:not(:disabled) { background: var(--accent); color: #0a0c10; }
+.pad .go:not(:disabled) { background: var(--accent); color: var(--bg); }
 .pad button:disabled { opacity: .35; cursor: default; }
 </style>

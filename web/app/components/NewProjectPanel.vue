@@ -37,8 +37,8 @@ function create() {
 <template>
   <Panel id="new" title="New project" fold="closed">
     <div class="row">
-      <input v-model="name" class="in grow" placeholder="project name" @keydown.enter.prevent="create">
-      <select v-if="running.length > 1" v-model="vmid" class="in">
+      <input v-model="name" class="grow" placeholder="project name" @keydown.enter.prevent="create">
+      <select v-if="running.length > 1" v-model="vmid">
         <option v-for="b in running" :key="b.vmid" :value="b.vmid">→ {{ b.name }}</option>
       </select>
     </div>
@@ -47,14 +47,14 @@ function create() {
       <label class="toggle small" :class="{ off: !canGithub }" :title="canGithub ? 'create the repo on GitHub and push the first commit' : 'needs a GitHub token on the host'">
         <input v-model="onGithub" type="checkbox" :disabled="!canGithub"> create on GitHub
       </label>
-      <select v-if="onGithub" v-model="visibility" class="in">
+      <select v-if="onGithub" v-model="visibility">
         <option value="private">🔒 private</option>
         <option value="public">public</option>
       </select>
     </div>
 
     <div class="row">
-      <input v-if="!onGithub" v-model="repo" class="in grow" placeholder="clone URL (optional)">
+      <input v-if="!onGithub" v-model="repo" class="grow" placeholder="clone URL (optional)">
       <div v-else class="small muted grow mono">→ {{ gh?.user }}/{{ name || '<name>' }}</div>
       <button class="btn primary" :disabled="!valid" @click="create">Create</button>
     </div>
@@ -70,8 +70,8 @@ function create() {
 <style scoped>
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .row + .row { margin-top: 8px; }
-.in { font-size: 13px; padding: 6px 9px; }
-.in.grow, .grow { flex: 1; min-width: 140px; }
+.row input:not([type='checkbox']), .row select { padding: 6px 9px; }
+.grow { flex: 1; min-width: 140px; }
 .toggle { display: flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
 .toggle.off { opacity: .55; cursor: default; }
 .hint { margin-top: 10px; }

@@ -14,8 +14,10 @@ from metrics import all_updates, backups, cpu_percent, cts, datasets, gpu, host,
 from media import media, media_items, media_plan
 from dev import _dims, _winsize, claude_code, preview, projects, shell_kill, shell_new, shells, ship_log, term_close, term_get, term_open, term_reaper
 from github import github_repos
+from games import games, games_do, games_log
 from actions import check_action, job_status, service_uptime, start_action
 from claude import _alive, _cc_turn, claude_send, claude_stop, claude_usage
+from learn import learn_job, learn_start
 
 
 BIND = os.environ.get("AGENT_BIND", "192.168.1.50")
@@ -70,6 +72,10 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, media())
             if u.path == "/github/repos":
                 return self._send(200, github_repos())
+            if u.path == "/games":
+                return self._send(200, games())
+            if u.path == "/games/log":
+                return self._send(200, games_log(q["id"], q.get("n", 300)))
             if u.path == "/media/items":
                 return self._send(200, media_items())
             if u.path == "/media/plan":
@@ -87,6 +93,8 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, job_status(q["id"]))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage())
+            if u.path == "/learn/job":
+                return self._send(200, learn_job(q["id"]))
             if u.path == "/claude/stream":
                 return self._claude_stream(q["turn"], int(q.get("from", 0)))
             if u.path == "/discord":
@@ -112,6 +120,9 @@ class H(BaseHTTPRequestHandler):
             if m:
                 return self._send(200, claude_code(m[1], int(body["vmid"]), str(body["path"]),
                                                    str(body.get("profile", "noven"))))
+            m = re.fullmatch(r"/games/([a-z-]+)", u.path)
+            if m:
+                return self._send(200, games_do(m[1], body))
             if u.path == "/term/open":
                 return self._send(200, term_open(int(body["vmid"]), str(body.get("path", "")), str(body["target"]),
                                                  body.get("cols", 80), body.get("rows", 24), body.get("session")))
@@ -137,6 +148,9 @@ class H(BaseHTTPRequestHandler):
                                                    [i for i in body.get("images") or [] if isinstance(i, dict)]))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage(refresh=True))
+            if u.path == "/learn/start":
+                return self._send(200, learn_start(str(body.get("job")), body.get("prompt"), body.get("schema"),
+                                                   str(body.get("model") or "sonnet")))
             if u.path == "/claude/stop":
                 return self._send(200, claude_stop(str(body.get("chat"))))
             if u.path == "/discord":
@@ -227,7 +241,7 @@ class H(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         if not self.path.startswith(("/overview", "/projects", "/media", "/preview/log", "/cc/log", "/ship/log", "/shells",
-                                     "/action/status", "/term/", "/claude/stream", "/claude/usage", "/github/repos", "/media/items", "/media/plan")):
+                                     "/action/status", "/term/", "/claude/stream", "/claude/usage", "/learn/job", "/github/repos", "/games", "/media/items", "/media/plan")):
             super().log_message(fmt, *args)
 
 

@@ -168,18 +168,18 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
 
     <div v-if="showTerm" class="term">
       <div class="th">
-        <button class="tab" :class="{ on: tab === 'preview' }" @click="pick('preview')">
+        <button class="chip" :class="{ on: tab === 'preview' }" @click="pick('preview')">
           <span class="dot" :class="p.running ? 'ok' : p.exited != null ? 'bad' : ''" /> Preview
         </button>
-        <button class="tab" :class="{ on: tab === 'claude' }" @click="pick('claude')">
+        <button class="chip" :class="{ on: tab === 'claude' }" @click="pick('claude')">
           <span class="dot" :class="p.cc?.running ? 'ok' : ''" /> Claude
         </button>
-        <button v-if="ship" class="tab" :class="{ on: tab === 'ship' }" :title="shipTitle" @click="pick('ship')">
+        <button v-if="ship" class="chip" :class="{ on: tab === 'ship' }" :title="shipTitle" @click="pick('ship')">
           <span class="dot" :class="shipLive ? (ship.conductor ? 'ok' : 'warn') : ''" /> Ship
           <span v-if="ship.lanes?.length" class="lanes">{{ ship.lanes.length }}</span>
         </button>
         <code class="faint small mono attach" :title="`copy: ${attach}`" @click="copy(attach)">⧉ {{ session }}</code>
-        <button v-if="live" class="tab fs" title="open full screen and type into it" @click="full = true">⛶</button>
+        <button v-if="live" class="btn ghost sm fs" title="open full screen and type into it" @click="full = true">⛶</button>
       </div>
       <div v-if="tab === 'ship' && shipLive && ship.lanes.length" class="lanerow small">
         <span v-for="l in ship.lanes" :key="l" class="pill">{{ l }}</span>
@@ -212,7 +212,7 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
 .git { display: flex; flex-wrap: wrap; gap: 5px; }
 .last { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .urls { display: flex; flex-wrap: wrap; gap: 6px; }
-.url { padding: 3px 10px; border-radius: 6px; background: var(--ok-soft); color: var(--ok); font-size: 13px; }
+.url { padding: 3px 10px; border-radius: var(--radius-sm); background: var(--ok-soft); color: var(--ok); font-size: 13px; }
 .url.pending { background: var(--panel-2); color: var(--muted); }
 .acts { display: flex; gap: 5px; margin-top: auto; padding-top: 4px; flex-wrap: wrap; align-items: center; }
 .acts .btn { padding: 5px 10px; font-size: 12.5px; }
@@ -223,18 +223,16 @@ const copy = (s: string) => navigator.clipboard?.writeText(s)
 .combo { display: flex; }
 .combo .btn { border-radius: 8px 0 0 8px; border-right: 0; }
 .combo select { color: var(--muted); border-radius: 0 8px 8px 0; font-size: 11px; padding: 0 2px; width: 60px; }
+@media (pointer: coarse) { .combo select { width: auto; min-width: 64px; min-height: 34px; padding: 0 6px; font-size: 13px; } }
 .pushbox { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.pushbox input { flex: 1; min-width: 160px; font-size: 13px; padding: 6px 9px; }
+.pushbox input { flex: 1; min-width: 160px; padding: 6px 9px; }
 
-.term { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #07080b; min-width: 0; }
+.term { border: 1px solid var(--line); border-radius: var(--radius-sm); overflow: hidden; background: var(--term-bg); min-width: 0; }
 .th { display: flex; align-items: center; gap: 4px; padding: 4px 6px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
-.tab { display: flex; align-items: center; gap: 6px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12px; padding: 4px 9px; border-radius: 6px; cursor: pointer; }
-.tab:hover { color: var(--text); background: var(--panel); }
-.tab.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.tab .dot { width: 6px; height: 6px; box-shadow: none; }
-.tab .lanes { font-size: 10.5px; padding: 0 5px; border-radius: 8px; background: var(--panel); color: var(--muted); }
+.chip .dot { width: 6px; height: 6px; box-shadow: none; }
+.chip .lanes { font-size: 10.5px; padding: 0 5px; border-radius: 8px; background: var(--panel); color: var(--muted); }
 .lanerow { display: flex; flex-wrap: wrap; gap: 4px; padding: 5px 8px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
-.fs { font-size: 14px; padding: 2px 8px; }
+.fs { font-size: 14px; }
 .attach { margin-left: auto; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .pane { height: 300px; }
 pre { margin: 0; padding: 10px 12px; height: 260px; overflow: auto; font: 12px/1.5 var(--mono); color: #d5d9e0; white-space: pre-wrap; word-break: break-all; }

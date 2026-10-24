@@ -4,19 +4,19 @@ const props = defineProps<{ searches: any[], sources: { id: string, label: strin
 const emit = defineEmits<{ (e: 'changed'): void }>()
 
 const MODES = [
-  { v: 'onsite', label: 'Vor Ort' },
+  { v: 'onsite', label: 'On-site' },
   { v: 'hybrid', label: 'Hybrid' },
   { v: 'remote', label: 'Remote' },
 ]
 const EMPLOYMENT = [
-  { v: 'vollzeit', label: 'Vollzeit' }, { v: 'teilzeit', label: 'Teilzeit' }, { v: 'werkstudent', label: 'Werkstudent' },
-  { v: 'praktikum', label: 'Praktikum' }, { v: 'ausbildung', label: 'Ausbildung' }, { v: 'freelance', label: 'Freelance' },
+  { v: 'vollzeit', label: 'Full-time' }, { v: 'teilzeit', label: 'Part-time' }, { v: 'werkstudent', label: 'Working student' },
+  { v: 'praktikum', label: 'Internship' }, { v: 'ausbildung', label: 'Apprenticeship' }, { v: 'freelance', label: 'Freelance' },
   { v: 'minijob', label: 'Minijob' },
 ]
 const LEVELS = [
   { v: 'junior', label: 'Junior' }, { v: 'mid', label: 'Mid' }, { v: 'senior', label: 'Senior' }, { v: 'lead', label: 'Lead' },
 ]
-const LANGS = [{ v: 'de', label: 'Deutsch' }, { v: 'en', label: 'Englisch' }, { v: 'fr', label: 'Französisch' }]
+const LANGS = [{ v: 'de', label: 'German' }, { v: 'en', label: 'English' }, { v: 'fr', label: 'French' }]
 
 const blank = () => ({
   name: '', wish: '', keywords: '', modes: ['onsite', 'hybrid', 'remote'] as string[], place: 'Berlin', radius: '25',
@@ -84,15 +84,15 @@ async function suggest() {
 }
 
 async function submit() {
-  if (!form.modes.length) { err.value = 'Mindestens ein Arbeitsmodell wählen'; return }
+  if (!form.modes.length) { err.value = 'Pick at least one work mode'; return }
   const isNew = editing.value === 'new'
   const r = await act(isNew ? 'add' : 'edit', isNew ? { ...form } : { id: editing.value, ...form })
   if (!r) return
   note.value = isNew
-    ? `Gespeichert · Suchbegriffe: ${(r.spec?.keywords ?? []).join(', ')}. Die Portale werden in den nächsten Minuten durchsucht.`
-    : ['Gespeichert · sofort neu sortiert',
-       r.rejudge ? `${r.rejudge} Treffer warten auf die KI` : '',
-       r.repoll ? 'Portale werden neu durchsucht' : ''].filter(Boolean).join(' · ')
+    ? `Saved · keywords: ${(r.spec?.keywords ?? []).join(', ')}. The portals will be searched in the next few minutes.`
+    : ['Saved · re-sorted right away',
+       r.rejudge ? `${r.rejudge} postings waiting for the AI` : '',
+       r.repoll ? 're-searching the portals' : ''].filter(Boolean).join(' · ')
   editing.value = null
   setTimeout(() => (note.value = ''), 12000)
 }
@@ -114,81 +114,81 @@ function summary(sp: any) {
 </script>
 
 <template>
-  <Panel title="Suchen">
+  <Panel title="Searches">
     <template #actions>
-      <button class="btn" @click.stop="openNew">{{ editing === 'new' ? 'Abbrechen' : '+ Neu' }}</button>
+      <button class="btn" @click.stop="openNew">{{ editing === 'new' ? 'Cancel' : '+ New' }}</button>
     </template>
 
     <form v-if="editing !== null" class="new" @submit.prevent="submit">
       <label>Name<input v-model="form.name" placeholder="Backend Berlin" required maxlength="48"></label>
-      <label>Was suchst du?
+      <label>What are you looking for?
         <textarea
           v-model="form.wish" rows="3"
-          placeholder="z.B. Backend mit Python oder Go, gerne Fintech oder Klima, kein Consulting, kleines Team, max. 2 Tage Büro"
+          placeholder="e.g. backend, Python/Go, no consulting"
         />
       </label>
-      <label>Suchbegriffe für die Portale
+      <label>Keywords for the portals
         <span class="inl">
-          <input v-model="form.keywords" placeholder="leer = aus Wunsch und Lebenslauf ableiten">
-          <button class="btn ghost" type="button" :disabled="!!busy || (!form.wish.trim() && !hasCv)" title="aus Wunsch und Lebenslauf vorschlagen" @click="suggest">
-            {{ busy === 'suggest' ? '…' : '✦ Vorschlagen' }}
+          <input v-model="form.keywords" placeholder="empty = automatic" title="empty = derived from wish and CV">
+          <button class="btn ghost" type="button" :disabled="!!busy || (!form.wish.trim() && !hasCv)" title="suggest from wish and CV" @click="suggest">
+            {{ busy === 'suggest' ? '…' : '✦ Suggest' }}
           </button>
         </span>
       </label>
       <div v-if="hint" class="small muted">✦ {{ hint }}</div>
 
       <div class="grp">
-        <span class="lbl">Arbeitsmodell</span>
+        <span class="lbl">Work mode</span>
         <button v-for="o in MODES" :key="o.v" type="button" class="chip" :class="{ on: form.modes.includes(o.v) }" @click="toggle(form.modes, o.v)">{{ o.label }}</button>
       </div>
       <div v-if="local" class="row">
-        <label>Ort (für Vor Ort / Hybrid)<input v-model="form.place" placeholder="Berlin, Potsdam, Leipzig…"></label>
-        <label>Umkreis km<input v-model="form.radius" type="number" min="0" max="200" step="5"></label>
+        <label>Location (for on-site / hybrid)<input v-model="form.place" placeholder="Berlin, Potsdam, Leipzig…"></label>
+        <label>Radius km<input v-model="form.radius" type="number" min="0" max="200" step="5"></label>
       </div>
 
       <div class="grp">
-        <span class="lbl">Anstellung</span>
+        <span class="lbl">Employment</span>
         <button v-for="o in EMPLOYMENT" :key="o.v" type="button" class="chip" :class="{ on: form.employment.includes(o.v) }" @click="toggle(form.employment, o.v)">{{ o.label }}</button>
-        <span class="faint small">{{ form.employment.length ? '' : 'alle' }}</span>
+        <span class="faint small">{{ form.employment.length ? '' : 'all' }}</span>
       </div>
       <div class="grp">
         <span class="lbl">Level</span>
         <button v-for="o in LEVELS" :key="o.v" type="button" class="chip" :class="{ on: form.levels.includes(o.v) }" @click="toggle(form.levels, o.v)">{{ o.label }}</button>
-        <span class="faint small">{{ form.levels.length ? '' : 'alle' }}</span>
+        <span class="faint small">{{ form.levels.length ? '' : 'all' }}</span>
       </div>
       <div class="grp">
-        <span class="lbl">Sprache der Anzeige</span>
+        <span class="lbl">Posting language</span>
         <button v-for="o in LANGS" :key="o.v" type="button" class="chip" :class="{ on: form.langs.includes(o.v) }" @click="toggle(form.langs, o.v)">{{ o.label }}</button>
-        <span class="faint small">{{ form.langs.length ? '' : 'alle' }}</span>
+        <span class="faint small">{{ form.langs.length ? '' : 'all' }}</span>
       </div>
 
       <div class="row three">
-        <label title="Stellen ohne Gehaltsangabe bleiben drin">Gehalt ab €/Jahr<input v-model="form.minSalary" type="number" min="0" step="1000" placeholder="60000"></label>
-        <label>Nicht älter als (Tage)<input v-model="form.maxAge" type="number" min="1" max="60"></label>
-        <label title="0–100: wie gut die Stelle laut KI zu Lebenslauf und Wunsch passt; darunter = aussortiert">Mindest-Match: {{ form.minFit }}
+        <label title="Postings without a salary stay in">Salary from €/year<input v-model="form.minSalary" type="number" min="0" step="1000" placeholder="60000"></label>
+        <label>Max age (days)<input v-model="form.maxAge" type="number" min="1" max="60"></label>
+        <label title="0–100: how well the posting fits CV and wish according to the AI; below = rejected">Min match: {{ form.minFit }}
           <input v-model="form.minFit" class="slider" type="range" min="0" max="95" step="5">
         </label>
       </div>
-      <label class="chk"><input v-model="form.noAgency" type="checkbox"> Personalvermittlung &amp; Zeitarbeit aussortieren</label>
-      <label class="chk"><input v-model="form.permanentOnly" type="checkbox"> nur unbefristet</label>
+      <label class="chk"><input v-model="form.noAgency" type="checkbox"> Reject recruiters &amp; temp agencies</label>
+      <label class="chk"><input v-model="form.permanentOnly" type="checkbox"> permanent only</label>
 
-      <button type="button" class="btn ghost more" @click="more = !more">{{ more ? '▾' : '▸' }} Ausschlüsse &amp; Portale</button>
+      <button type="button" class="btn ghost more" @click="more = !more">{{ more ? '▾' : '▸' }} Exclusions &amp; portals</button>
       <template v-if="more">
         <div class="row">
-          <label>Nicht im Titel (Komma)<input v-model="form.exclude" placeholder="Werkstudent, SAP, Vertrieb"></label>
-          <label>Firmen ausschließen (Komma)<input v-model="form.excludeCompanies" placeholder="Firma A, Firma B"></label>
+          <label>Not in title (comma-separated)<input v-model="form.exclude" placeholder="Werkstudent, SAP, Vertrieb"></label>
+          <label>Exclude companies (comma-separated)<input v-model="form.excludeCompanies" placeholder="Company A, Company B"></label>
         </div>
         <div class="grp">
-          <span class="lbl">Portale</span>
+          <span class="lbl">Portals</span>
           <button v-for="o in sources" :key="o.id" type="button" class="chip" :class="{ on: form.sources.includes(o.id) }" @click="toggle(form.sources, o.id)">{{ o.label }}</button>
-          <span class="faint small">{{ form.sources.length ? '' : 'alle' }}</span>
+          <span class="faint small">{{ form.sources.length ? '' : 'all' }}</span>
         </div>
       </template>
 
       <div class="end">
-        <button class="btn ghost" type="button" @click="editing = null">Abbrechen</button>
+        <button class="btn ghost" type="button" @click="editing = null">Cancel</button>
         <button class="btn primary" :disabled="!!busy">
-          {{ busy === 'add' || busy.startsWith('edit') ? 'Speichert…' : editing === 'new' ? 'Suche anlegen' : 'Speichern' }}
+          {{ busy === 'add' || busy.startsWith('edit') ? 'Saving…' : editing === 'new' ? 'Add search' : 'Save' }}
         </button>
       </div>
     </form>
@@ -196,40 +196,38 @@ function summary(sp: any) {
     <div v-if="err" class="small bad pad">{{ err }}</div>
     <div v-if="note" class="small muted pad">{{ note }}</div>
 
-    <div v-if="!props.searches.length && editing === null" class="small muted pad">Noch keine Suche.</div>
+    <div v-if="!props.searches.length && editing === null" class="small muted pad">No searches yet.</div>
     <div v-for="s in props.searches" :key="s.id" class="row-item" :class="{ editing: editing === s.id, off: !s.enabled }">
       <span class="dot" :class="s.last_error ? 'warn' : s.enabled ? 'ok' : ''" />
       <div class="min" :title="(s.spec?.wish ? s.spec.wish + '\n\n' : '') + summary(s.spec ?? {})">
         <div class="ell"><b>{{ s.name }}</b><span class="small muted kw">{{ summary(s.spec ?? {}) }}</span></div>
         <div v-if="s.last_error" class="small warn ell" :title="s.last_error">{{ s.last_error }}</div>
       </div>
-      <span class="small faint when">{{ s.last_polled_at ? vor(s.last_polled_at) : 'gleich' }}</span>
+      <span class="small faint when">{{ s.last_polled_at ? vor(s.last_polled_at) : 'soon' }}</span>
       <div class="acts">
-        <button class="btn ghost ic" :disabled="!!busy || !s.enabled" title="Jetzt suchen" @click="act('run', { id: s.id })">⟳</button>
-        <button class="btn ghost ic" title="Bearbeiten" @click="openEdit(s)">✎</button>
-        <button class="btn ghost ic" :disabled="!!busy" :title="s.enabled ? 'Pausieren' : 'Weiter'" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? '❙❙' : '▶' }}</button>
-        <button class="btn ghost ic danger" :disabled="!!busy" :class="{ sure: armed === String(s.id) }" :title="armed === String(s.id) ? 'Suche und Treffer löschen' : 'Löschen'" @click="remove(s)">{{ armed === String(s.id) ? 'Sicher?' : '✕' }}</button>
+        <button class="btn ghost ic" :disabled="!!busy || !s.enabled" title="Search now" @click="act('run', { id: s.id })">⟳</button>
+        <button class="btn ghost ic" title="Edit" @click="openEdit(s)">✎</button>
+        <button class="btn ghost ic" :disabled="!!busy" :title="s.enabled ? 'Pause' : 'Resume'" @click="act(s.enabled ? 'disable' : 'enable', { id: s.id })">{{ s.enabled ? '❙❙' : '▶' }}</button>
+        <button class="btn ghost ic danger" :disabled="!!busy" :class="{ sure: armed === String(s.id) }" :title="armed === String(s.id) ? 'Delete search and hits' : 'Delete'" @click="remove(s)">{{ armed === String(s.id) ? 'Sure?' : '✕' }}</button>
       </div>
     </div>
   </Panel>
 </template>
 
 <style scoped>
-.new { display: flex; flex-direction: column; gap: 9px; padding: 10px; margin-bottom: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; }
+.new { display: flex; flex-direction: column; gap: 9px; padding: 10px; margin-bottom: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: end; }
 .row.three { grid-template-columns: 1fr 1fr 1.2fr; }
 .end { display: flex; justify-content: flex-end; gap: 10px; }
 label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--muted); min-width: 0; }
 label.chk { flex-direction: row; align-items: center; gap: 6px; font-size: 12.5px; cursor: pointer; }
-.new input, .new select, .new textarea { background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px; padding: 5px 8px; color: var(--text); font: inherit; font-size: 13px; min-width: 0; }
+.new input, .new select, .new textarea { padding: 5px 8px; min-width: 0; }
 .new textarea { resize: vertical; line-height: 1.4; }
 .slider { padding: 0 !important; accent-color: var(--accent); }
 .inl { display: flex; gap: 6px; }
 .inl input { flex: 1; }
 .grp { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .lbl { font-size: 11.5px; color: var(--muted); width: 130px; flex: none; }
-.chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
-.chip.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
 .more { align-self: flex-start; padding: 2px 6px; font-size: 12px; }
 .row-item { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
 .row-item.off { opacity: .6; }
@@ -237,14 +235,14 @@ label.chk { flex-direction: row; align-items: center; gap: 6px; font-size: 12.5p
 .acts { display: flex; flex: none; }
 .ic { width: 30px; height: 30px; padding: 0; font-size: 13px; }
 .row-item + .row-item { border-top: 1px solid var(--line); }
-.row-item.editing { background: var(--accent-soft); border-radius: 7px; padding-inline: 8px; }
+.row-item.editing { background: var(--accent-soft); border-radius: var(--radius-sm); padding-inline: 8px; }
 .min { flex: 1; min-width: 0; }
 .ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pad { padding: 6px 0; }
+@media (pointer: coarse) { .ic { width: 34px; height: 34px; } }
 @media (max-width: 700px) {
   .row, .row.three { grid-template-columns: 1fr; }
   .lbl { width: 100%; }
   .when { display: none; }
-  .new input, .new select, .new textarea { font-size: 16px; }
 }
 </style>

@@ -83,7 +83,7 @@ onBeforeUnmount(() => { mounted = false; ro?.disconnect(); term?.dispose() })
 </template>
 
 <style scoped>
-.mirror { height: 100%; overflow-x: auto; overflow-y: hidden; padding: 6px 8px; background: #07080b; }
+.mirror { height: 100%; overflow-x: auto; overflow-y: hidden; padding: 6px 8px; background: var(--term-bg); }
 .xt { width: max-content; }
-.xt :deep(.xterm-viewport) { background: #07080b !important; }
+.xt :deep(.xterm-viewport) { background: var(--term-bg) !important; }
 </style>

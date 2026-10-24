@@ -81,7 +81,7 @@ watch(() => [props.mode, props.lat, props.lon, props.radius, props.bbox, props.s
 </template>
 
 <style scoped>
-.map { height: 260px; border-radius: 8px; border: 1px solid var(--line); overflow: hidden; background: var(--panel-2); z-index: 0; }
+.map { height: 260px; border-radius: var(--radius-sm); border: 1px solid var(--line); overflow: hidden; background: var(--panel-2); z-index: 0; }
 .map.picking { cursor: crosshair; }
 .map :deep(.leaflet-container) { font: inherit; }
 .map :deep(.leaflet-control-attribution) { font-size: 10px; background: rgba(10, 12, 16, .7); color: var(--muted); }

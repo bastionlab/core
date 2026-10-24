@@ -57,7 +57,7 @@ function activity(t: Turn) {
 <template>
   <div class="turns" @click="onClick">
     <template v-for="(t, i) in turns" :key="i">
-    <div v-if="t.clear" class="cleared small faint">context cleared · the model forgets everything above</div>
+    <div v-if="t.clear" class="cleared small faint">context cleared</div>
     <div v-else class="turn">
       <div v-if="t.imgs?.length" class="qimgs">
         <a v-for="n in t.imgs" :key="n" :href="`/api/chat/img/${n}`" target="_blank">
@@ -91,10 +91,10 @@ function activity(t: Turn) {
         <div class="head">
           <span class="what"><b>{{ p.desc }}</b></span>
           <span v-if="p.state === 'idle'" class="btns">
-            <button class="btn primary small" :class="{ danger: p.desc?.startsWith('FORCE:') }" @click="emit('run', p)">
+            <button class="btn primary sm" :class="{ danger: p.desc?.startsWith('FORCE:') }" @click="emit('run', p)">
               {{ p.desc?.startsWith('FORCE:') ? 'Run anyway' : 'Run' }}
             </button>
-            <button class="btn ghost small" @click="p.state = 'dismissed'">Dismiss</button>
+            <button class="btn ghost sm" @click="p.state = 'dismissed'">Dismiss</button>
           </span>
           <span v-else class="pill" :class="{ ok: p.state === 'done', bad: p.state === 'failed' }">
             {{ p.state === 'running' ? 'running…' : p.state === 'done' ? 'done' : p.state === 'failed' ? `failed (exit ${p.job?.rc})` : 'dismissed' }}
@@ -131,7 +131,7 @@ function activity(t: Turn) {
 .a :deep(p) { margin: 0 0 8px; }
 .a :deep(ul), .a :deep(ol) { margin: 0 0 8px; padding-left: 20px; }
 .a :deep(a) { text-decoration: underline; text-underline-offset: 2px; }
-.a :deep(pre) { background: var(--bg); border: 1px solid var(--line); padding: 8px 10px; border-radius: 7px; overflow-x: auto; }
+.a :deep(pre) { background: var(--bg); border: 1px solid var(--line); padding: 8px 10px; border-radius: var(--radius-sm); overflow-x: auto; }
 .a :deep(code) { font-family: var(--mono); font-size: 12.5px; }
 .a :deep(:not(pre) > code) { background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
 .a :deep(table) { margin-bottom: 8px; font-size: 13px; }
@@ -139,19 +139,18 @@ function activity(t: Turn) {
 .tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .tools .pill { gap: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tools .more { cursor: pointer; font: inherit; }
-.denied { border: 1px solid var(--warn-soft); background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 6px 10px; overflow-wrap: anywhere; }
+.denied { border: 1px solid var(--warn-soft); background: var(--warn-soft); color: var(--warn); border-radius: var(--radius-sm); padding: 6px 10px; overflow-wrap: anywhere; }
 .autotag { color: var(--warn); }
-.proposal { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); }
+.proposal { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); }
 .proposal.done { border-left-color: var(--ok); }
 .proposal.failed { border-left-color: var(--bad); }
 .proposal.dismissed { opacity: .55; }
 /* a proposal that would destroy work the owner cannot get back is not an ordinary one */
 .proposal.danger { border-color: var(--bad); border-left-color: var(--bad); }
 .proposal.danger .what { color: var(--bad); }
-.btn.danger { background: var(--bad); border-color: var(--bad); color: #0a0c10; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: var(--bg); }
 .proposal .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .proposal .btns { margin-left: auto; display: flex; gap: 6px; }
-.proposal .btn.small { padding: 3px 10px; font-size: 12px; }
 .log { white-space: pre-wrap; max-height: 160px; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 0; font-family: var(--mono); }
 .reason summary { cursor: pointer; }
 .live { display: flex; align-items: center; gap: 7px; min-width: 0; }
@@ -163,11 +162,12 @@ function activity(t: Turn) {
 .acts { display: inline-flex; gap: 2px; margin-right: 6px; }
 .act { background: none; border: 1px solid transparent; border-radius: 6px; color: var(--muted); font: inherit; padding: 1px 6px; cursor: pointer; }
 .act:hover { color: var(--text); border-color: var(--line); background: var(--panel-2); }
+@media (pointer: coarse) { .act { padding: 6px 10px; } .a :deep(.cp) { padding: 4px 10px; font-size: 12px; opacity: 1; } }
 .a :deep(.code) { position: relative; margin-bottom: 8px; }
 .a :deep(.code pre) { margin: 0; }
 .a :deep(.cp) { position: absolute; top: 5px; right: 5px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font: inherit; font-size: 11px; padding: 1px 7px; cursor: pointer; opacity: .75; }
 .a :deep(.cp:hover) { opacity: 1; color: var(--text); }
-.picked { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--panel-2); overflow-wrap: anywhere; align-self: flex-start; }
+.picked { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 10px; background: var(--panel-2); overflow-wrap: anywhere; align-self: flex-start; }
 .picked.warn { color: var(--warn); border-color: var(--warn-soft); background: var(--warn-soft); }
 .pre { white-space: pre-wrap; max-height: 200px; overflow-y: auto; padding: 6px 0; }
 </style>

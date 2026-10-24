@@ -109,7 +109,7 @@ onBeforeUnmount(() => clearTimeout(armTimer))
 </script>
 
 <template>
-  <Panel id="remove" title="Remove" fold="closed" sub="files + torrents + Jellyfin">
+  <Panel id="remove" title="Remove" fold="closed">
     <template #actions>
       <button class="btn ghost small" :disabled="loading" title="reload the list from Sonarr and Radarr" @click="reload()">↻</button>
     </template>
@@ -117,13 +117,13 @@ onBeforeUnmount(() => clearTimeout(armTimer))
     <JobList :jobs="jobs" @dismiss="dismiss" />
 
     <div class="row">
-      <select v-model="kind" class="in kind">
+      <select v-model="kind" class="kind">
         <option value="all">All ({{ counts.all }})</option>
         <option value="series">Series ({{ counts.series }})</option>
         <option value="anime">Anime ({{ counts.anime }})</option>
         <option value="movie">Films ({{ counts.movie }})</option>
       </select>
-      <input v-model="query" class="in grow" type="search" placeholder="Search…">
+      <input v-model="query" class="grow" type="search" placeholder="Search…">
     </div>
 
     <div v-if="loadError" class="small bad hint">Could not read the library: {{ loadError.statusMessage || loadError.message }}</div>
@@ -142,12 +142,12 @@ onBeforeUnmount(() => clearTimeout(armTimer))
 
     <div v-if="picked" class="plan" :class="{ hot: step > 0 }">
       <div v-if="picked.kind === 'series' && seasonsOnDisk.length" class="scope">
-        <div class="seg small">
+        <div class="seg">
           <button :class="{ on: mode === 'whole' }" @click="setMode('whole')">Whole series</button>
           <button :class="{ on: mode === 'seasons' }" @click="setMode('seasons')">Only some seasons</button>
         </div>
         <div v-if="mode === 'seasons'" class="seasons">
-          <label v-for="s in seasonsOnDisk" :key="s.n" class="chip small" :class="{ on: chosen.includes(s.n) }">
+          <label v-for="s in seasonsOnDisk" :key="s.n" class="chip" :class="{ on: chosen.includes(s.n) }">
             <input type="checkbox" :checked="chosen.includes(s.n)" @change="toggle(s.n)">
             {{ sname(s.n) }} <span class="muted">{{ s.files }} ep · {{ bytes(s.size) }}</span>
           </label>
@@ -179,9 +179,9 @@ onBeforeUnmount(() => clearTimeout(armTimer))
             </ul>
           </li>
           <li v-else class="muted">no torrents of it left in qBittorrent</li>
-          <li v-if="plan.shared?.length" class="muted">{{ plan.shared.length }} torrent(s) also cover a season you keep — they stay seeding</li>
-          <li v-if="plan.seasons" class="muted">{{ seasonList(plan.seasons) }} unmonitored; the series keeps getting new episodes</li>
-          <li v-else class="muted">{{ plan.app === 'sonarr' ? 'Sonarr' : 'Radarr' }} drops it + list exclusion, so it is not fetched again</li>
+          <li v-if="plan.shared?.length" class="muted">{{ plan.shared.length }} shared torrent(s) keep seeding</li>
+          <li v-if="plan.seasons" class="muted">{{ seasonList(plan.seasons) }} unmonitored, new episodes still come</li>
+          <li v-else class="muted">{{ plan.app === 'sonarr' ? 'Sonarr' : 'Radarr' }} drops it + list exclusion</li>
         </ul>
 
         <div class="row end">
@@ -205,31 +205,29 @@ onBeforeUnmount(() => clearTimeout(armTimer))
 <style scoped>
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .row.end { justify-content: flex-end; margin-top: 12px; }
-.in { font-size: 13px; padding: 7px 10px; }
+.row input, .row select { padding: 7px 10px; }
 .kind { flex: none; }
 .grow { flex: 1; min-width: 120px; }
 .hint { margin-top: 10px; }
-.list { margin-top: 10px; max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+.list { margin-top: 10px; max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .item { display: grid; grid-template-columns: minmax(0, 1fr) auto 60px; gap: 10px; align-items: center; width: 100%; padding: 8px 12px; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .item:last-child { border-bottom: 0; }
 .item:hover { background: var(--panel-2); }
 .item.on { background: var(--accent-soft); }
 .item .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty { padding: 12px; text-align: center; }
-.plan { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.plan { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2); }
 .plan.hot { border-color: var(--bad); background: var(--bad-soft); }
 .head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .facts { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .torrents { margin: 4px 0 0; padding-left: 16px; max-height: 160px; overflow-y: auto; word-break: break-word; }
 .scope { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
-.seg { display: inline-flex; align-self: flex-start; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
-.seg button { background: none; border: 0; color: var(--muted); font: inherit; padding: 5px 10px; cursor: pointer; }
-.seg button.on { background: var(--accent-soft); color: var(--text); }
+.seg { align-self: flex-start; }
 .seasons { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.chip { display: inline-flex; gap: 6px; align-items: center; padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; user-select: none; }
-.chip.on { border-color: var(--bad); background: var(--bad-soft); }
+.chip { user-select: none; }
+/* picked seasons get deleted → red, not accent */
+.chip.on { color: var(--bad); background: var(--bad-soft); }
 .chip input { margin: 0; }
 .mono { font-family: var(--mono); word-break: break-all; }
 .btn.solid-bad { background: var(--bad); border-color: var(--bad); color: #fff; }
-.btn.solid-bad:disabled { opacity: .45; }
 </style>

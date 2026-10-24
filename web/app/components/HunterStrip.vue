@@ -10,10 +10,10 @@ const ok = computed(() => (!props.st.searches || !props.st.last_poll ? null : Da
   <div class="strip small">
     <span class="dot" :class="ok === null ? '' : ok ? 'ok' : 'bad'" />
     <span :class="ok === false ? 'bad' : 'muted'" :title="st.last_poll ? new Date(st.last_poll * 1000).toLocaleString('de-DE') : ''">
-      {{ !st.searches ? 'keine Suche' : !st.last_poll ? 'erster Lauf…' : `${ok ? 'sucht' : 'steht'} · ${vor(st.last_poll)}` }}
+      {{ !st.searches ? 'no search' : !st.last_poll ? 'first run…' : `${ok ? 'running' : 'stalled'} · ${vor(st.last_poll)}` }}
     </span>
     <slot />
-    <button class="btn ghost ref" :disabled="pending" title="neu laden" @click="$emit('reload')">↻</button>
+    <button class="btn ghost ref" :disabled="pending" title="Reload" @click="$emit('reload')">↻</button>
   </div>
   <div v-for="e in st.errors ?? []" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>
 </template>

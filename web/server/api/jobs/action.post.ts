@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
 
   if (action === 'add' || action === 'edit') {
     const name = cleanStr(body.name, 48)
-    if (!name) throw createError({ statusCode: 400, statusMessage: 'Name fehlt' })
+    if (!name) throw createError({ statusCode: 400, statusMessage: 'Name missing' })
     const spec = {
       name,
       wish: cleanStr(body.wish, 1500),
@@ -61,7 +61,7 @@ export default defineEventHandler(async (event) => {
   if (action === 'cv') {
     const data = String(body.data ?? '')
     if (!data || data.length > 12_000_000 || !/^[A-Za-z0-9+/=]+$/.test(data))
-      throw createError({ statusCode: 400, statusMessage: 'PDF fehlt oder ist zu groß (max. 8 MB)' })
+      throw createError({ statusCode: 400, statusMessage: 'PDF missing or too large (max 8 MB)' })
     return deals(event, '/jobs/cv', { method: 'POST', body: { filename: cleanStr(body.filename, 200), data, search_id: cleanInt(body.searchId) || null }, timeout: 180_000 })
   }
   if (action === 'profile') {

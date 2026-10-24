@@ -22,7 +22,7 @@ const href = (section: string) =>
 
 <style scoped>
 .alerts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
-.alert { display: inline-flex; align-items: center; gap: 9px; padding: 7px 12px; border-radius: 9px; font-size: 13px; color: var(--text); min-width: 0; }
+.alert { display: inline-flex; align-items: center; gap: 9px; padding: 7px 12px; border-radius: var(--radius-sm); font-size: 13px; color: var(--text); min-width: 0; }
 .alert:hover { text-decoration: none; filter: brightness(1.15); }
 .alert.bad { background: var(--bad-soft); }
 .alert.warn { background: var(--warn-soft); }

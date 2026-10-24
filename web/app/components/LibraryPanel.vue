@@ -52,7 +52,7 @@ const explain = computed(() => `${bytes(libraries.value)} library + ${bytes(uniq
 
 <style scoped>
 .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.card { display: flex; align-items: center; gap: 12px; background: var(--panel-2); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+.card { display: flex; align-items: center; gap: 12px; background: var(--panel-2); border-radius: var(--radius-sm); padding: 10px 12px; min-width: 0; }
 .icon { font-size: 20px; flex: none; }
 .body { min-width: 0; }
 .body > div:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

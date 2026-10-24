@@ -27,7 +27,7 @@ async function save(value = text.value) {
   busy.value = true; err.value = ''
   try {
     await $fetch('/api/flats/action', { method: 'POST', body: { action: 'profile', text: value, searchId: props.search ?? null } })
-    note.value = props.search && !value.trim() ? 'nutzt wieder den gemeinsamen Text' : 'gespeichert · neue Nachrichten nutzen es'
+    note.value = props.search && !value.trim() ? 'back to the shared text' : 'saved · new messages use it'
     setTimeout(() => { note.value = '' }, 3000)
     await load()
   } catch (e: any) { err.value = errText(e) } finally { busy.value = false }
@@ -36,20 +36,20 @@ async function save(value = text.value) {
 
 <template>
   <Panel
-    v-if="loaded" :title="name ? `Über uns · ${name}` : 'Über uns'"
-    :sub="name ? (own ? 'eigener Text für diese Suche' : 'gemeinsamer Text · ändern = eigener Text für diese Suche') : 'für Nachrichten an Vermieter · gilt für alle Suchen ohne eigenen Text'"
+    v-if="loaded" :title="name ? `About us · ${name}` : 'About us'"
+    :sub="name ? (own ? 'own text' : 'shared text') : 'for messages to landlords'"
     id="flat-profile" :fold="saved.trim() ? 'closed' : 'open'"
   >
     <textarea
       v-model="text" rows="7" class="ta"
-      placeholder="Namen, wer ihr seid, was ihr macht (Job/Studium, unbefristet?), wie viele Personen, Haustiere, Raucher, Einzug ab, Unterlagen (SCHUFA, Einkommen, Mietschuldenfreiheit / garant, dossier), Telefon, E-Mail …"
+      placeholder="Who you are, job, people, move-in date, documents, contact…"
+      title="The AI uses only what is written here and writes in the language of the ad"
     />
     <div class="bar">
-      <span class="small muted">Die KI nutzt nur, was hier steht, und schreibt in der Sprache der Anzeige.</span>
       <span v-if="err" class="small bad">{{ err }}</span>
       <span v-else-if="note" class="small ok">{{ note }}</span>
-      <button v-if="name && own" class="btn ghost" :disabled="busy" @click="save('')">Gemeinsamen nutzen</button>
-      <button class="btn primary" :disabled="busy || text === saved" @click="save()">{{ busy ? '…' : 'Speichern' }}</button>
+      <button v-if="name && own" class="btn ghost" :disabled="busy" @click="save('')">Use shared</button>
+      <button class="btn primary" :disabled="busy || text === saved" @click="save()">{{ busy ? '…' : 'Save' }}</button>
     </div>
   </Panel>
 </template>

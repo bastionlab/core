@@ -46,6 +46,9 @@ function onDrop(e: DragEvent) { if (props.images) addImages(e.dataTransfer?.file
 function onPick() { const fs = [...(file.value?.files ?? [])]; file.value!.value = ''; addImages(fs) } // copy before clearing empties the list
 // grows with what is typed (up to ~8 lines); Enter sends, Shift+Enter starts a new line
 const box = ref<HTMLTextAreaElement>()
+// on a touchscreen Enter is a new line (no Shift there); the send button sends
+const touch = ref(false)
+onMounted(() => { touch.value = matchMedia('(pointer: coarse)').matches })
 const fit = () => { const el = box.value; if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px' }
 watch(q, () => nextTick(fit))
 
@@ -86,7 +89,7 @@ function key(e: KeyboardEvent) {
     if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.isComposing)) { e.preventDefault(); return pick(items.value[sel.value]!, e.key === 'Enter') }
     if (e.key === 'Escape') { e.preventDefault(); shut.value = true; return }
   }
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send() }
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !touch.value) { e.preventDefault(); send() }
 }
 function send() {
   const text = q.value.trim()
@@ -128,7 +131,7 @@ function send() {
     <div class="line">
       <Icon name="spark" :size="17" class="spark" />
       <textarea
-        ref="box" v-model="q" class="q" rows="1" :placeholder="placeholder || 'Ask about your server…'" enterkeyhint="send" autocomplete="off"
+        ref="box" v-model="q" class="q" rows="1" :placeholder="placeholder || 'Ask about your server…'" :enterkeyhint="touch ? 'enter' : 'send'" autocomplete="off"
         @keydown="key" @paste="onPaste" @focus="emit('focus', true)" @blur="emit('focus', false)"
       />
       <template v-if="images">
@@ -159,7 +162,7 @@ function send() {
 
 <style scoped>
 .askbar { position: relative; }
-.cmds { position: absolute; left: 0; right: 0; bottom: calc(100% + 10px); z-index: 20; display: flex; flex-direction: column; max-height: min(320px, 45dvh); overflow-y: auto; padding: 4px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 8px 28px rgba(0, 0, 0, .45); }
+.cmds { position: absolute; left: 0; right: 0; bottom: calc(100% + 10px); z-index: 20; display: flex; flex-direction: column; max-height: min(320px, 45dvh); overflow-y: auto; padding: 4px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: var(--radius-sm); box-shadow: 0 8px 28px rgba(0, 0, 0, .45); }
 .cmd { display: flex; align-items: baseline; gap: 10px; text-align: left; font: inherit; color: var(--text); background: transparent; border: 0; border-radius: 7px; padding: 7px 10px; cursor: pointer; min-width: 0; }
 .cmd.on { background: var(--accent-soft); }
 .cmd .nm { flex-shrink: 0; font-size: 13px; }
@@ -176,13 +179,14 @@ function send() {
 .th img { display: block; height: 52px; max-width: 110px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
 .fchip { display: flex; align-items: center; gap: 5px; height: 30px; max-width: 180px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .th button { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--muted); font-size: 10px; line-height: 1; padding: 0; cursor: pointer; }
-@media (max-width: 640px) { .att { padding-left: 0; } }
+@media (pointer: coarse) { .th button { width: 26px; height: 26px; top: -10px; right: -10px; font-size: 12px; } .th button::after { content: ''; position: absolute; inset: -4px; } }
+@media (max-width: 640px) { .att { padding-left: 0; } .askbar textarea.q { font-size: 16px; } } /* under 16px iOS zooms in on focus */
 .line { display: flex; align-items: flex-end; gap: 6px; }
 .line > .spark { align-self: center; }
 .spark { color: var(--accent); margin: 0 4px 0 2px; }
 .askbar textarea.q { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; line-height: 20px; padding: 7px 0; outline: none; resize: none; max-height: 200px; overflow-y: auto; }
 .askbar textarea.q::placeholder { color: var(--faint); }
-.ico { padding: 0; width: 34px; height: 34px; border-radius: 9px; }
+.ico { padding: 0; width: 34px; height: 34px; border-radius: var(--radius-sm); }
 .pick { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
 .vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 .ghost.on { color: var(--accent); background: var(--accent-soft); }

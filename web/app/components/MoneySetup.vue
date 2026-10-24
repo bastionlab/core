@@ -66,28 +66,27 @@ async function trCode() { if (await act('trCode', { code: tr.code })) { tr.code 
 </script>
 
 <template>
-  <Panel title="Verbindungen" id="money-setup" :fold="setup.eb && setup.tr && d.links.length ? 'closed' : 'open'">
+  <Panel title="Connections" id="money-setup" :fold="setup.eb && setup.tr && d.links.length ? 'closed' : 'open'">
     <p v-if="err" class="bad small">{{ err }}</p>
 
     <!-- Enable Banking -->
     <div class="blk">
       <div class="row">
-        <b>Banken</b>
-        <span class="faint small">über Enable Banking (PSD2, kostenlos für eigene Konten)</span>
-        <button v-if="setup.eb" class="btn ghost sm" @click="eb.show = !eb.show">Schlüssel ändern</button>
+        <b title="via Enable Banking (PSD2, free for your own accounts)">Banks</b>
+        <button v-if="setup.eb" class="btn ghost sm" @click="eb.show = !eb.show">Change key</button>
       </div>
       <template v-if="!setup.eb || eb.show">
         <ol class="small muted steps">
-          <li>Auf <a href="https://enablebanking.com/cp/applications" target="_blank" rel="noopener">enablebanking.com</a> anmelden → <i>Applications</i> → <i>Add application</i>, Umgebung <b>Production</b>, „Generate in browser“ – die <code>.pem</code> wird heruntergeladen.</li>
-          <li>Redirect-URL eintragen: <code class="sel">{{ redirect }}</code></li>
-          <li>In der App-Seite <i>Link accounts</i> für DKB und PayPal (das ist der kostenlose „restricted“ Modus).</li>
-          <li>App-ID und <code>.pem</code> hier eintragen:</li>
+          <li>Sign in at <a href="https://enablebanking.com/cp/applications" target="_blank" rel="noopener">enablebanking.com</a> → <i>Applications</i> → <i>Add application</i>, environment <b>Production</b>, “Generate in browser” – the <code>.pem</code> gets downloaded.</li>
+          <li>Enter the redirect URL: <code class="sel">{{ redirect }}</code></li>
+          <li>On the app page, <i>Link accounts</i> for DKB and PayPal (that is the free “restricted” mode).</li>
+          <li>Enter the app ID and <code>.pem</code> here:</li>
         </ol>
         <div class="form">
           <input v-model="eb.appId" placeholder="Application ID (UUID)" autocomplete="off">
-          <label class="btn ghost file">.pem wählen<input type="file" accept=".pem,.key,.txt" @change="pickPem"></label>
-          <textarea v-model="eb.keyPem" rows="3" placeholder="-----BEGIN PRIVATE KEY----- … (oder Datei wählen)" spellcheck="false" />
-          <button class="btn primary" :disabled="!eb.appId || !eb.keyPem || !!busy" @click="saveEb">{{ busy === 'ebConfig' ? 'prüfe…' : 'Speichern' }}</button>
+          <label class="btn ghost file">Choose .pem<input type="file" accept=".pem,.key,.txt" @change="pickPem"></label>
+          <textarea v-model="eb.keyPem" rows="3" placeholder="-----BEGIN PRIVATE KEY----- … (or choose a file)" spellcheck="false" />
+          <button class="btn primary" :disabled="!eb.appId || !eb.keyPem || !!busy" @click="saveEb">{{ busy === 'ebConfig' ? 'checking…' : 'Save' }}</button>
         </div>
       </template>
 
@@ -96,21 +95,21 @@ async function trCode() { if (await act('trCode', { code: tr.code })) { tr.code 
           <span class="dot" :class="(daysLeft(l.valid_until) ?? 99) < 0 ? 'bad' : (daysLeft(l.valid_until) ?? 99) < 8 ? 'warn' : 'ok'" />
           <b>{{ l.aspsp }}</b>
           <span class="small" :class="(daysLeft(l.valid_until) ?? 99) < 8 ? 'warn' : 'faint'">
-            {{ (daysLeft(l.valid_until) ?? 0) < 0 ? 'abgelaufen' : `Zugriff noch ${daysLeft(l.valid_until)} Tage` }}
+            {{ (daysLeft(l.valid_until) ?? 0) < 0 ? 'expired' : `access for ${daysLeft(l.valid_until)} more days` }}
           </span>
           <span class="acts">
-            <button class="btn ghost sm" :disabled="!!busy" @click="link(l.aspsp)">erneuern</button>
-            <button class="btn ghost sm" :class="{ danger: unlinkArm === l.session_id }" @click="unlink(l.session_id)">{{ unlinkArm === l.session_id ? 'wirklich trennen?' : 'trennen' }}</button>
+            <button class="btn ghost sm" :disabled="!!busy" @click="link(l.aspsp)">Renew</button>
+            <button class="btn ghost sm" :class="{ danger: unlinkArm === l.session_id }" @click="unlink(l.session_id)">{{ unlinkArm === l.session_id ? 'Really disconnect?' : 'Disconnect' }}</button>
           </span>
         </div>
-        <button class="btn sm add" @click="openPicker">+ Bank / PayPal verbinden</button>
+        <button class="btn sm add" @click="openPicker">+ Connect bank / PayPal</button>
         <div v-if="picking" class="picker">
-          <input v-model="q" placeholder="Bank suchen…">
-          <div v-if="busy === 'ebAspsps'" class="faint small">lade Banken…</div>
+          <input v-model="q" placeholder="Search banks…">
+          <div v-if="busy === 'ebAspsps'" class="faint small">Loading banks…</div>
           <button v-for="a in shown" :key="a.name" class="bank" :disabled="!!busy" @click="link(a.name)">
             <img v-if="a.logo" :src="a.logo" alt="">{{ a.name }}
           </button>
-          <div v-if="aspsps.length && !shown.length" class="faint small">nichts gefunden</div>
+          <div v-if="aspsps.length && !shown.length" class="faint small">Nothing found</div>
         </div>
       </template>
     </div>
@@ -118,30 +117,28 @@ async function trCode() { if (await act('trCode', { code: tr.code })) { tr.code 
     <!-- Trade Republic -->
     <div class="blk">
       <div class="row">
-        <b>Trade Republic</b>
-        <span class="faint small">inoffiziell über pytr · Login = ein Tipp in der TR-App</span>
-        <button v-if="setup.tr" class="btn ghost sm" @click="tr.edit = !tr.edit">Zugang ändern</button>
+        <b title="unofficial via pytr · login = one tap in the TR app">Trade Republic</b>
+        <button v-if="setup.tr" class="btn ghost sm" @click="tr.edit = !tr.edit">Change login</button>
       </div>
       <div v-if="!setup.tr || tr.edit" class="form">
-        <input v-model="tr.phone" placeholder="Handynummer +49…" inputmode="tel" autocomplete="off">
-        <input v-model="tr.pin" placeholder="TR-PIN (4 Ziffern)" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
-        <button class="btn primary" :disabled="!tr.phone || !tr.pin || !!busy" @click="saveTr">Speichern & einloggen</button>
+        <input v-model="tr.phone" placeholder="Phone number +49…" inputmode="tel" autocomplete="off">
+        <input v-model="tr.pin" placeholder="TR PIN (4 digits)" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+        <button class="btn primary" :disabled="!tr.phone || !tr.pin || !!busy" @click="saveTr">Save & log in</button>
       </div>
       <div v-else class="item">
         <span class="dot" :class="trState === 'waiting_app' || trState === 'need_code' ? 'warn' : trAcc?.error ? 'bad' : trAcc?.last_sync ? 'ok' : ''" />
-        <span v-if="trState === 'waiting_app'" class="warn small">Bitte jetzt in der Trade-Republic-App bestätigen…</span>
+        <span v-if="trState === 'waiting_app'" class="warn small">Confirm in the Trade Republic app now…</span>
         <span v-else-if="trState === 'need_code'" class="small inl">
-          Code aus deiner Authenticator-App:
+          Code from your authenticator app:
           <input v-model="tr.code" inputmode="numeric" maxlength="8" class="code">
           <button class="btn primary sm" :disabled="!tr.code" @click="trCode">OK</button>
         </span>
         <span v-else-if="trState === 'error'" class="bad small">{{ setup.tr_login.error }}</span>
         <span v-else-if="trAcc?.error" class="bad small">{{ trAcc.error }}</span>
-        <span v-else class="faint small">{{ trAcc?.last_sync ? `verbunden · ${vor(trAcc.last_sync)}` : 'eingerichtet – wartet auf ersten Sync' }}</span>
-        <span class="acts"><button class="btn ghost sm" :disabled="trState === 'waiting_app' || !!busy" @click="trLogin">neu einloggen</button></span>
+        <span v-else class="faint small">{{ trAcc?.last_sync ? `connected · ${ago(trAcc.last_sync)}` : 'set up – waiting for first sync' }}</span>
+        <span class="acts"><button class="btn ghost sm" :disabled="trState === 'waiting_app' || !!busy" @click="trLogin">Log in again</button></span>
       </div>
     </div>
-    <p class="faint small">Zugangsdaten liegen nur in CT 108 (/etc/money, root-only) und werden nie zurückgegeben. Läuft ein Zugriff bald ab, kommt eine Nachricht in Discord #alerts.</p>
   </Panel>
 </template>
 
@@ -154,18 +151,18 @@ async function trCode() { if (await act('trCode', { code: tr.code })) { tr.code 
 .sel { user-select: all; }
 .form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .form input { flex: 1 1 180px; }
-.form textarea { flex: 1 1 100%; font-family: var(--mono); font-size: 11px; }
+.form textarea { flex: 1 1 100%; font-family: var(--mono); font-size: 12px; }
 .file { position: relative; overflow: hidden; }
 .file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; }
 .acts { margin-left: auto; display: flex; gap: 6px; }
-.sm { padding: 3px 9px; font-size: 12px; }
 .add { margin-top: 6px; }
 .picker { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; max-height: 320px; overflow: auto; }
-.bank { display: flex; align-items: center; gap: 8px; text-align: left; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
+.bank { display: flex; align-items: center; gap: 8px; text-align: left; padding: 7px 10px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; }
 .bank:hover { border-color: var(--accent); }
 .bank img { width: 20px; height: 20px; object-fit: contain; border-radius: 4px; background: #fff; }
 .inl { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .code { width: 90px; }
 .warn { color: var(--warn); }
+@media (max-width: 640px) { .form input { flex-basis: 100%; } }
 </style>

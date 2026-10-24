@@ -20,6 +20,9 @@ for id in $(pvesh get /cluster/resources --type vm --output-format json | jq -r 
   pct push "$id" /root/devbox/pv /usr/local/bin/pv --perms 755 && echo "   CT $id"
 done
 
+echo "→ gsm in CT 110 (gameservers)"
+[ "$(pct status 110 2>/dev/null | awk '{print $2}')" = running ] && pct push 110 "$DIR/agent/gsm" /usr/local/bin/gsm --perms 755 && echo "   CT 110"
+
 echo "→ sources → CT $CT"
 # app/, server/ and public/ are replaced, not overlaid: a file deleted here must not keep being built there
 tar -C "$DIR/web" --exclude=node_modules --exclude=.nuxt --exclude=.output -cf - . | pct exec $CT -- sh -c 'mkdir -p /opt/dash && cd /opt/dash && rm -rf app server public && tar -xf -'

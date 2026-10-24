@@ -21,6 +21,7 @@ const nights = computed(() => [...(props.b.history ?? [])].reverse())
     <div v-if="nights.length" class="nights small faint" title="last vzdump runs, oldest → newest">
       runs <span v-for="t in nights" :key="t.time" class="night" :class="t.status === 'OK' ? 'ok' : t.status ? 'bad' : 'warn'" :title="`${clock(t.time)} · ${t.id ? 'CT ' + t.id : 'all'} · ${t.status ?? 'running'}`" />
     </div>
+    <div class="scroll-x">
     <table>
       <thead><tr><th>Container</th><th>Last</th><th class="num">Size</th><th class="num kept">Kept</th><th /></tr></thead>
       <tbody>
@@ -34,6 +35,7 @@ const nights = computed(() => [...(props.b.history ?? [])].reverse())
         </tr>
       </tbody>
     </table>
+    </div>
 
     <div class="zfs">
       <div class="job">

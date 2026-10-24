@@ -7,23 +7,23 @@ export const fmtPct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n).toLoc
 /** local YYYY-MM-DD (toISOString would be UTC and flip the day around midnight) */
 export const isoDay = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 export const isoMonth = (d = new Date()) => isoDay(d).slice(0, 7)
-export const monthTitle = (m: string) => new Date(m + '-01T12:00').toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+export const monthTitle = (m: string) => new Date(m + '-01T12:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
-/** 'Heute' / 'Gestern' / 'Mo., 14. Okt.' (+ year when not this year) */
+/** 'Today' / 'Yesterday' / 'Mo., 14. Okt.' (+ year when not this year) */
 export function dayTitle(day: string) {
   const today = isoDay()
   const y = new Date(); y.setDate(y.getDate() - 1)
-  if (day === today) return 'Heute'
-  if (day === isoDay(y)) return 'Gestern'
+  if (day === today) return 'Today'
+  if (day === isoDay(y)) return 'Yesterday'
   const d = new Date(day + 'T12:00')
-  return d.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short', ...(day.slice(0, 4) !== today.slice(0, 4) ? { year: 'numeric' } : {}) })
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', ...(day.slice(0, 4) !== today.slice(0, 4) ? { year: 'numeric' } : {}) })
 }
 
 export const PERIODS: Record<string, { label: string, per: string, days: number, perMonth: number }> = {
-  weekly: { label: 'wöchentlich', per: 'Woche', days: 7, perMonth: 4.33 },
-  monthly: { label: 'monatlich', per: 'Monat', days: 30.4, perMonth: 1 },
-  quarterly: { label: 'vierteljährlich', per: 'Quartal', days: 91, perMonth: 1 / 3 },
-  yearly: { label: 'jährlich', per: 'Jahr', days: 365, perMonth: 1 / 12 },
+  weekly: { label: 'weekly', per: 'week', days: 7, perMonth: 4.33 },
+  monthly: { label: 'monthly', per: 'month', days: 30.4, perMonth: 1 },
+  quarterly: { label: 'quarterly', per: 'quarter', days: 91, perMonth: 1 / 3 },
+  yearly: { label: 'yearly', per: 'year', days: 365, perMonth: 1 / 12 },
 }
 
 /** charge dates of an active subscription from its next_date onward, up to `until` (YYYY-MM-DD) */

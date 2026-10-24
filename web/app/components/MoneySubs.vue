@@ -19,8 +19,8 @@ const upcoming = computed(() => {
   return [...active.value, ...income.value].flatMap(s => subCharges(s, isoDay(end)).filter(d => d >= today).map(d => ({ d, s }))).sort((a, b) => a.d.localeCompare(b.d))
 })
 const sections = computed(() => [
-  { id: 'money-subs', title: 'Abos & wiederkehrend', sub: `${active.value.length} aktiv`, list: [...active.value, ...(showEnded.value ? ended.value : [])] },
-  ...(income.value.length ? [{ id: 'money-income', title: 'Regelmäßige Einnahmen', sub: `≈ ${fmtEur(inMonth.value, 0)} / Monat`, list: income.value }] : []),
+  { id: 'money-subs', title: 'Subscriptions & recurring', sub: `${active.value.length} active`, list: [...active.value, ...(showEnded.value ? ended.value : [])] },
+  ...(income.value.length ? [{ id: 'money-income', title: 'Regular income', sub: `≈ ${fmtEur(inMonth.value, 0)} / month`, list: income.value }] : []),
 ])
 const priceUp = (s: any) => s.prev_amount != null && Math.abs(s.amount - s.prev_amount) >= 0.01 && s.changed && Date.now() / 1000 - s.changed < 60 * 86400
 
@@ -36,15 +36,15 @@ const showHidden = ref(false)
 <template>
   <div>
     <div class="sum">
-      <div><span class="lbl">Abos / Monat</span><b class="num">{{ fmtEur(perMonth) }}</b></div>
-      <div><span class="lbl">pro Jahr</span><b class="num">{{ fmtEur(perMonth * 12, 0) }}</b></div>
-      <div v-if="income.length"><span class="lbl">Einnahmen / Monat</span><b class="num ok">{{ fmtEur(inMonth, 0) }}</b></div>
-      <div v-else><span class="lbl">aktiv</span><b>{{ active.length }}</b></div>
-      <button class="btn add" @click="emit('add')">＋ Abo aus Buchungen</button>
+      <div><span class="lbl">Subs / month</span><b class="num">{{ fmtEur(perMonth) }}</b></div>
+      <div><span class="lbl">per year</span><b class="num">{{ fmtEur(perMonth * 12, 0) }}</b></div>
+      <div v-if="income.length"><span class="lbl">Income / month</span><b class="num ok">{{ fmtEur(inMonth, 0) }}</b></div>
+      <div v-else><span class="lbl">active</span><b>{{ active.length }}</b></div>
+      <button class="btn add" @click="emit('add')">＋ Sub from bookings</button>
     </div>
 
-    <Panel title="Demnächst fällig" sub="nächste 31 Tage" id="money-due">
-      <div v-if="!upcoming.length" class="faint small">Nichts fällig.</div>
+    <Panel title="Due soon" sub="next 31 days" id="money-due">
+      <div v-if="!upcoming.length" class="faint small">Nothing due.</div>
       <div v-for="u in upcoming" :key="u.s.key + u.d" class="due small">
         <span class="faint dd">{{ dayTitle(u.d) }}</span>
         <span class="dn">{{ subName(u.s) }}</span>
@@ -53,51 +53,50 @@ const showHidden = ref(false)
     </Panel>
 
     <Panel v-for="sec in sections" :key="sec.id" :title="sec.title" :sub="sec.sub" :id="sec.id" class="gap">
-      <div v-if="!sec.list.length" class="faint small">Wird aus den Buchungen erkannt (gleicher Empfänger, fester Rhythmus) – oder selbst hinzufügen.</div>
+      <div v-if="!sec.list.length" class="faint small">None detected yet – or add one yourself.</div>
       <div v-for="s in sec.list" :key="s.key" class="sub" :class="{ ended: s.state !== 'active', open: open === s.key }">
         <button class="row" @click="expand(s)">
           <span class="sp">
             <span class="nm">{{ subName(s) }}</span>
             <span class="faint small">
-              <template v-if="s.state === 'active'">nächste {{ dayTitle(s.next_date) }}</template><template v-else>zuletzt {{ s.last_date ? dayTitle(s.last_date) : '–' }} · beendet?</template>
-              <span v-if="s.manual" class="pill">selbst</span>
+              <template v-if="s.state === 'active'">next {{ dayTitle(s.next_date) }}</template><template v-else>last {{ s.last_date ? dayTitle(s.last_date) : '–' }} · ended?</template>
+              <span v-if="s.manual" class="pill">manual</span>
               <span v-if="priceUp(s)" class="pill warn">{{ fmtEur(s.prev_amount) }} → {{ fmtEur(s.amount) }}</span>
             </span>
           </span>
           <span class="am">
             <span class="num" :class="{ ok: isIn(s) }">{{ isIn(s) ? '+' : '' }}{{ fmtEur(s.amount) }}<span class="faint"> / {{ PERIODS[s.period]?.per }}</span></span>
-            <span v-if="s.share_monthly > 0" class="faint small num">− {{ fmtEur(s.share_monthly) }} Anteile = <b class="netv">{{ fmtEur(net(s)) }}</b></span>
-            <span v-else-if="s.period !== 'monthly'" class="faint small num">≈ {{ fmtEur(monthly(s)) }} / Monat</span>
+            <span v-if="s.share_monthly > 0" class="faint small num">− {{ fmtEur(s.share_monthly) }} shares = <b class="netv">{{ fmtEur(net(s)) }}</b></span>
+            <span v-else-if="s.period !== 'monthly'" class="faint small num">≈ {{ fmtEur(monthly(s)) }} / month</span>
           </span>
         </button>
         <div v-if="open === s.key && s.shares?.length" class="shares small">
           <div v-for="sh in s.shares" :key="sh.pkey" class="sh" :class="{ off: !sh.active }">
             <span>{{ sh.payee }}</span>
-            <span class="faint">{{ sh.last_date ? `zuletzt ${dayTitle(sh.last_date)}` : 'noch nichts' }}{{ sh.active ? '' : ' · zahlt nicht mehr?' }}</span>
+            <span class="faint">{{ sh.last_date ? `last ${dayTitle(sh.last_date)}` : 'nothing yet' }}{{ sh.active ? '' : ' · stopped paying?' }}</span>
             <span class="num ok">{{ fmtEur(sh.amount) }}</span>
-            <button class="lnk" title="nicht mehr verrechnen" @click="emit('act', 'subShare', { key: s.key, remove: sh.pkey })">✕</button>
+            <button class="lnk" title="Stop netting" @click="emit('act', 'subShare', { key: s.key, remove: sh.pkey })">✕</button>
           </div>
         </div>
-        <div v-if="open === s.key && !isIn(s)" class="faint small hint">Anteile von Freunden: unter Buchungen ihre Eingänge auswählen → „Anteil an Abo…“</div>
         <div v-if="open === s.key" class="edit">
           <input v-model="nameDraft" :placeholder="s.payee" maxlength="80" class="small" @blur="rename(s)" @keydown.enter="rename(s)">
           <select :value="s.period" class="small" @change="emit('act', 'subEdit', { key: s.key, period: ($event.target as HTMLSelectElement).value })">
             <option v-for="(v, k) in PERIODS" :key="k" :value="k">{{ v.label }}</option>
           </select>
-          <button class="btn small" @click="emit('open', asTx(s))">Buchungen</button>
-          <button class="btn danger small" :class="{ sure: armed === s.key }" @click="arm(s.key) && emit('act', 'subRemove', { key: s.key })">
-            {{ armed === s.key ? 'Sicher?' : s.manual ? 'Löschen' : 'Kein Abo' }}
+          <button class="btn sm" @click="emit('open', asTx(s))">Bookings</button>
+          <button class="btn danger sm" :class="{ sure: armed === s.key }" @click="arm(s.key) && emit('act', 'subRemove', { key: s.key })">
+            {{ armed === s.key ? 'Sure?' : s.manual ? 'Delete' : 'Not a sub' }}
           </button>
         </div>
       </div>
       <div v-if="sec.id === 'money-subs'" class="more small">
-        <button v-if="ended.length" class="btn ghost" @click="showEnded = !showEnded">{{ showEnded ? 'beendete ausblenden' : `${ended.length} beendet` }}</button>
-        <button v-if="hidden.length" class="btn ghost" @click="showHidden = !showHidden">{{ hidden.length }} ausgeblendet</button>
+        <button v-if="ended.length" class="btn ghost" @click="showEnded = !showEnded">{{ showEnded ? 'Hide ended' : `${ended.length} ended` }}</button>
+        <button v-if="hidden.length" class="btn ghost" @click="showHidden = !showHidden">{{ hidden.length }} hidden</button>
       </div>
       <div v-if="showHidden && sec.id === 'money-subs'">
         <div v-for="h in hidden" :key="h.key" class="hid small">
           <span class="faint">{{ subName(h) }} · {{ fmtEur(h.amount) }} / {{ PERIODS[h.period]?.per }}</span>
-          <button class="btn ghost" @click="emit('act', 'subRestore', { key: h.key })">zurückholen</button>
+          <button class="btn ghost" @click="emit('act', 'subRestore', { key: h.key })">Restore</button>
         </div>
       </div>
     </Panel>
@@ -126,13 +125,12 @@ const showHidden = ref(false)
 .edit { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 4px 10px; }
 .edit input { flex: 1; min-width: 140px; padding: 5px 8px; }
 .edit select { padding: 5px 8px; }
-.btn.small { font-size: 12px; padding: 4px 10px; }
 .more { display: flex; gap: 6px; margin-top: 8px; }
 .shares { padding: 2px 4px 6px; }
 .sh { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 10px; align-items: center; padding: 3px 0; }
 .sh.off { opacity: .55; }
-.sh .lnk { background: none; border: 0; color: var(--muted); cursor: pointer; padding: 0 4px; }
-.hint { padding: 0 4px 4px; }
+.sh .lnk { color: var(--muted); padding: 0 4px; }
+@media (pointer: coarse) { .sh .lnk { min-width: 32px; min-height: 32px; } }
 .netv { font-weight: 600; color: var(--text); }
 .hid { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; }
 @media (max-width: 560px) { .sum { gap: 8px 16px; } .sum b { font-size: 16px; } .add { margin-left: 0; width: 100%; } .row { padding: 8px 2px; } }

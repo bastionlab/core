@@ -46,7 +46,7 @@ const where = computed(() => [v.value.city, v.value.country].filter(Boolean).joi
 </template>
 
 <style scoped>
-.hero { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; background: var(--ok-soft); }
+.hero { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius-sm); background: var(--ok-soft); }
 .hero.warn { background: var(--warn-soft); } .hero.bad { background: var(--bad-soft); }
 .hero b { font-size: 16px; }
 .hero.ok b { color: var(--ok); } .hero.warn b { color: var(--warn); } .hero.bad b { color: var(--bad); }

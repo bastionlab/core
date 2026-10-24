@@ -39,7 +39,7 @@ function applyCat(scope: 'one' | 'payee') {
   emit('category', props.tx, c, scope)
   if (scope === 'payee' && p.value) {
     for (const t of p.value.transactions) if ((t.amount > 0) === (props.tx.amount > 0) && !['Umbuchung', 'Investments'].includes(t.category)) t.category = c
-    msg.value = `✓ ${samePayee.value} Buchungen mit ${shown.value} → ${c}, künftige auch`
+    msg.value = `✓ ${samePayee.value} bookings with ${shown.value} → ${c}, future ones too`
   }
 }
 
@@ -73,7 +73,7 @@ async function saveShare(key: string) {
   busy.value = true; msg.value = ''
   try {
     await $fetch('/api/money/action', { method: 'POST', body: { action: 'subShare', key, journalIds: [...picked.value] } })
-    msg.value = `✓ Als Anteil an ${subName(abos.value.find(s => s.key === key) ?? {})} verrechnet`
+    msg.value = `✓ Netted as share of ${subName(abos.value.find(s => s.key === key) ?? {})}`
     emit('changed')
     await load()
   } catch (e: any) { msg.value = e?.data?.statusMessage || e?.message } finally { busy.value = false }
@@ -83,7 +83,7 @@ async function saveSub() {
   busy.value = true; msg.value = ''
   try {
     const r: any = await $fetch('/api/money/action', { method: 'POST', body: { action: 'subAdd', journalIds: [...picked.value], period: period.value || null, name: name.value || null } })
-    msg.value = `✓ Als ${r.kind === 'in' ? 'Einnahme' : 'Abo'} gespeichert (${PERIODS[r.period]?.label ?? r.period})`
+    msg.value = `✓ Saved as ${r.kind === 'in' ? 'income' : 'sub'} (${PERIODS[r.period]?.label ?? r.period})`
     emit('changed')
     await load()
   } catch (e: any) { msg.value = e?.data?.statusMessage || e?.message } finally { busy.value = false }
@@ -101,38 +101,38 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
     <div class="sheet">
       <header>
         <div class="tt">
-          <span v-if="!renaming" class="py">{{ shown }} <button class="lnk small" title="Anzeigenamen ändern" @click="startRename">✎</button></span>
+          <span v-if="!renaming" class="py">{{ shown }} <button class="lnk small" title="Change display name" @click="startRename">✎</button></span>
           <span v-else class="ren">
             <input ref="renBox" v-model="alias" :placeholder="tx.payee" maxlength="60" @keydown.enter="saveRename" @keydown.esc="renaming = false">
-            <button class="btn primary small" @click="saveRename">OK</button>
+            <button class="btn primary sm" @click="saveRename">OK</button>
           </span>
           <span v-if="tx.alias || renaming" class="faint small">Bank: {{ tx.payee }}</span>
           <span class="faint small">{{ tx.date ? dayTitle(tx.date) : '' }}{{ tx.account ? ` · ${tx.account}` : '' }}</span>
         </div>
         <span class="num big" :class="tx.amount > 0 ? 'ok' : ''">{{ fmtEur(tx.amount) }}</span>
-        <button class="btn ghost x" title="schließen" @click="emit('close')">✕</button>
+        <button class="btn ghost x" title="Close" @click="emit('close')">✕</button>
       </header>
       <p v-if="tx.description && tx.description !== tx.payee" class="small muted desc">{{ tx.description }}</p>
-      <label v-if="!String(tx.journal_id).startsWith('sub:')" class="row small"><span class="muted">Kategorie</span>
+      <label v-if="!String(tx.journal_id).startsWith('sub:')" class="row small"><span class="muted">Category</span>
         <select :value="pendingCat || tx.category" @change="pickCat(($event.target as HTMLSelectElement).value)">
           <option v-for="c in categories" :key="c" :value="c">{{ c }}</option>
         </select>
       </label>
       <div v-if="pendingCat" class="scope">
-        <span class="small">{{ pendingCat }} für…</span>
-        <button class="btn primary" @click="applyCat('payee')">Alle {{ samePayee }} mit {{ shown }}<span class="faint2"> + künftige</span></button>
-        <button class="btn" @click="applyCat('one')">Nur diese</button>
-        <button class="btn ghost" @click="pendingCat = ''">Abbrechen</button>
+        <span class="small">{{ pendingCat }} for…</span>
+        <button class="btn primary" @click="applyCat('payee')">All {{ samePayee }} with {{ shown }}<span class="faint2"> + future</span></button>
+        <button class="btn" @click="applyCat('one')">Just this one</button>
+        <button class="btn ghost" @click="pendingCat = ''">Cancel</button>
       </div>
 
       <div v-if="err" class="bad small">{{ err }}</div>
-      <div v-else-if="!p" class="faint small">Lade Verlauf…</div>
+      <div v-else-if="!p" class="faint small">Loading history…</div>
       <template v-else>
         <div class="stats small">
-          <span>{{ p.count }} Buchungen</span>
-          <span>12 Monate: <b class="num">{{ fmtEur(p.total_12m, 0) }}</b></span>
-          <span v-for="s in subs" :key="s.key" class="pill accent">{{ s.kind === 'in' ? 'Einnahme' : 'Abo' }} · {{ fmtEur(s.amount) }} / {{ PERIODS[s.period]?.per }}</span>
-          <span v-if="tx.share_of" class="pill accent">Anteil an {{ tx.share_of }}</span>
+          <span>{{ p.count }} booking{{ p.count === 1 ? '' : 's' }}</span>
+          <span>12 months: <b class="num">{{ fmtEur(p.total_12m, 0) }}</b></span>
+          <span v-for="s in subs" :key="s.key" class="pill accent">{{ s.kind === 'in' ? 'Income' : 'Sub' }} · {{ fmtEur(s.amount) }} / {{ PERIODS[s.period]?.per }}</span>
+          <span v-if="tx.share_of" class="pill accent">Share of {{ tx.share_of }}</span>
         </div>
         <div v-if="months.length > 1" class="mbars">
           <span v-for="m in months" :key="m.month" class="mb" :title="`${monthTitle(m.month)}: ${fmtEur(m.amount)}`">
@@ -140,26 +140,26 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
           </span>
         </div>
 
-        <h3 class="small muted">Alle Buchungen mit {{ shown }} <span class="faint">– haken = gehört zum Abo / zur Einnahme</span></h3>
+        <h3 class="small muted">All bookings with {{ shown }} <span class="faint">– tick = sub</span></h3>
         <div class="list">
           <label v-for="t in p.transactions" :key="t.journal_id" class="li" :class="{ cur: t.journal_id === tx.journal_id }">
             <input type="checkbox" :checked="picked.has(t.journal_id)" @change="toggle(t)">
-            <span class="faint small dt">{{ new Date(t.date + 'T12:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' }) }}</span>
+            <span class="faint small dt">{{ new Date(t.date + 'T12:00').toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) }}</span>
             <span class="small ds">{{ t.description }}</span>
             <span class="num small" :class="t.amount > 0 ? 'ok' : ''">{{ fmtEur(t.amount) }}</span>
           </label>
         </div>
 
         <div class="abo">
-          <span class="small">{{ picked.size }} ausgewählt<span v-if="picked.size" class="faint"> · Ø {{ fmtEur(Math.abs(pickedSum) / picked.size) }}</span></span>
+          <span class="small">{{ picked.size }} selected<span v-if="picked.size" class="faint"> · avg {{ fmtEur(Math.abs(pickedSum) / picked.size) }}</span></span>
           <select v-model="period" class="small">
-            <option value="">Rhythmus: automatisch</option>
+            <option value="">Period: auto</option>
             <option v-for="(v, k) in PERIODS" :key="k" :value="k">{{ v.label }}</option>
           </select>
           <input v-model="name" class="small nm" placeholder="Name (optional)" maxlength="80">
-          <button class="btn primary" :disabled="!picked.size || busy" @click="saveSub">{{ pickedIn ? 'Als Einnahme speichern' : 'Als Abo speichern' }}</button>
+          <button class="btn primary" :disabled="!picked.size || busy" @click="saveSub">{{ pickedIn ? 'Save as income' : 'Save as sub' }}</button>
           <select v-if="pickedIn && abos.length" class="small" value="" :disabled="busy" @change="saveShare(($event.target as HTMLSelectElement).value)">
-            <option value="" disabled>…oder Anteil an Abo</option>
+            <option value="" disabled>…or share of sub</option>
             <option v-for="s in abos" :key="s.key" :value="s.key">{{ subName(s) }}</option>
           </select>
         </div>
@@ -171,7 +171,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKey))
 
 <style scoped>
 .scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .55); display: flex; justify-content: center; align-items: flex-start; padding: 6vh 16px; overflow-y: auto; }
-.sheet { width: 100%; max-width: 640px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.sheet { width: 100%; max-width: 640px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 16px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 header { display: flex; align-items: flex-start; gap: 10px; }
 .tt { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .py { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
@@ -182,9 +182,9 @@ header { display: flex; align-items: flex-start; gap: 10px; }
 .row select { padding: 4px 8px; }
 .ren { display: flex; gap: 6px; }
 .ren input { flex: 1; min-width: 0; padding: 4px 8px; }
-.lnk { border: 0; background: none; padding: 0 2px; color: var(--accent); cursor: pointer; font: inherit; }
-.btn.small { font-size: 12px; padding: 4px 10px; }
-.scope { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--accent-soft); }
+.py .lnk { padding: 0 2px; }
+@media (pointer: coarse) { .py .lnk { min-width: 32px; min-height: 32px; } .x { min-width: 34px; min-height: 34px; } }
+.scope { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px; border: 1px solid var(--accent); border-radius: var(--radius-sm); background: var(--accent-soft); }
 .scope .btn.primary { white-space: normal; text-align: left; }
 .faint2 { font-weight: 400; opacity: .75; }
 .stats { display: flex; gap: 6px 14px; flex-wrap: wrap; align-items: center; color: var(--muted); }
@@ -194,7 +194,7 @@ header { display: flex; align-items: flex-start; gap: 10px; }
 .mb i { display: block; width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 2px; }
 .mb i.in { background: var(--ok); }
 h3 { margin: 4px 0 0; font-weight: 500; }
-.list { max-height: 40vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.list { max-height: 40vh; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .li { display: grid; grid-template-columns: 22px 64px 1fr auto; gap: 8px; align-items: center; padding: 6px 10px; border-top: 1px solid var(--line); cursor: pointer; }
 .li:first-child { border-top: 0; }
 .li.cur { background: var(--accent-soft); }

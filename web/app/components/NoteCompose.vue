@@ -97,15 +97,16 @@ defineExpose({ focus: () => box.value?.focus() })
 </template>
 
 <style scoped>
-.compose { border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel-2); transition: border-color .15s; }
+.compose { border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--panel-2); transition: border-color .15s; }
 .compose:focus-within, .compose.drag { border-color: var(--accent); }
 .compose.drag { background: var(--accent-soft); }
 textarea { display: block; width: 100%; border: 0; background: transparent; resize: none; padding: 12px 14px 4px; font-size: 15px; line-height: 1.5; min-height: 52px; }
 textarea:focus-visible { border: 0; }
 .thumbs { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 14px; }
-.thumb { position: relative; width: 72px; height: 72px; border-radius: 8px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); }
+.thumb { position: relative; width: 72px; height: 72px; border-radius: var(--radius-sm); overflow: hidden; background: var(--panel); border: 1px solid var(--line); }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb button { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .65); color: #fff; font-size: 11px; cursor: pointer; }
+@media (pointer: coarse) { .thumb button { top: 2px; right: 2px; width: 32px; height: 32px; font-size: 13px; } }
 .thumb.loading { animation: pulse 1s infinite alternate; }
 @keyframes pulse { to { background: var(--line-2); } }
 .bar { display: flex; align-items: center; gap: 8px; padding: 4px 8px 8px; }

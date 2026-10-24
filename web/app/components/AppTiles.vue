@@ -35,7 +35,7 @@ defineProps<{ services: any[] }>()
 .app.down { opacity: .7; }
 .icon {
   font-size: 21px; width: 42px; height: 42px; display: grid; place-items: center; flex: none;
-  border-radius: 11px; background: hsl(var(--h) 70% 60% / .14);
+  border-radius: var(--radius-sm); background: hsl(var(--h) 70% 60% / .14);
 }
 .body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -46,7 +46,7 @@ defineProps<{ services: any[] }>()
 @media (max-width: 640px) {
   .apps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .app { gap: 10px; padding: 10px; }
-  .icon { width: 34px; height: 34px; font-size: 17px; border-radius: 9px; }
+  .icon { width: 34px; height: 34px; font-size: 17px; }
   .app .dot { position: absolute; top: 8px; right: 8px; }
 }
 </style>

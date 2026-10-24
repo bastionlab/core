@@ -45,7 +45,7 @@ function onClick(e: MouseEvent) {
 <style scoped>
 .card { break-inside: avoid; margin-bottom: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; cursor: pointer; transition: border-color .15s; }
 .card:hover, .card:focus-visible { border-color: var(--line-2); outline: none; }
-.card.pinned { border-color: rgba(142, 166, 255, .35); }
+.card.pinned { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
 .card.done { opacity: .6; }
 .card.done h3 { text-decoration: line-through; text-decoration-color: var(--faint); }
 .cover { display: block; width: 100%; max-height: 200px; object-fit: cover; border-bottom: 1px solid var(--line); }

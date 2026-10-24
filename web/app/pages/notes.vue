@@ -103,12 +103,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   <div class="notes">
     <NoteCompose
       ref="compose" class="capture" draft-key="notes:draft" ai-toggle :save="add"
-      placeholder="Throw in a thought — messy is fine, paste screenshots too. The AI tidies it up."
+      placeholder="Throw in a thought…"
     />
 
     <div class="bar">
-      <div class="views">
-        <button v-for="v in (['active', 'done', 'archived'] as const)" :key="v" type="button" class="vw" :class="{ on: view === v }" @click="view = v">
+      <div class="seg views">
+        <button v-for="v in (['active', 'done', 'archived'] as const)" :key="v" type="button" :class="{ on: view === v }" @click="view = v">
           {{ { active: 'Notes', done: 'Done', archived: 'Archive' }[v] }} <span class="n">{{ counts[v] }}</span>
         </button>
       </div>
@@ -172,24 +172,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 .notes { max-width: 1180px; margin: 0 auto; }
 .capture { max-width: 680px; margin: 0 auto 18px; }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
-.views { display: flex; gap: 2px; }
-.vw { padding: 4px 10px; border-radius: 6px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
-.vw.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .n { font-size: 11px; opacity: .7; }
 .find { display: flex; gap: 8px; flex: 1; justify-content: flex-end; }
 .search { flex: 1; min-width: 140px; max-width: 360px; padding: 6px 10px; font-size: 13px; }
-.bar select { padding: 6px 8px; font-size: 13px; }
+.bar select { padding: 6px 8px; }
 .bar .btn.on { color: var(--accent); background: var(--accent-soft); }
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 14px; }
-.chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
-.chip:hover { color: var(--text); }
-.chip.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
-.chip.tag { color: var(--accent); background: transparent; }
-.chip.tag.on { background: var(--accent-soft); }
+.chip.tag { color: var(--accent); }
 .chip.clear { border-style: dashed; }
 .div { width: 1px; height: 16px; background: var(--line-2); margin: 0 4px; }
 .masonry { columns: 290px; column-gap: 12px; }
-.sec { margin-top: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); }
 .pad { padding: 48px 0; text-align: center; }
 @media (max-width: 640px) {
   .find { order: 3; flex-basis: 100%; min-width: 0; }

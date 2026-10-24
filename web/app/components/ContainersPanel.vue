@@ -105,7 +105,7 @@ table { min-width: 760px; }
   .cards { display: flex; flex-direction: column; }
   .card { padding: 10px 0; }
   .card + .card { border-top: 1px solid var(--line); }
-  .ch { display: flex; align-items: center; gap: 8px; }
+  .ch { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .upd { margin-left: auto; }
   .upd.warn { color: var(--warn); }
   .bars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 6px; padding-left: 16px; }
@@ -117,5 +117,4 @@ table { min-width: 760px; }
 .mini i { display: block; height: 100%; background: var(--accent); }
 .mini i.warn { background: var(--warn); } .mini i.bad { background: var(--bad); }
 .btn .pill { padding: 0 6px; font-size: 10.5px; }
-.btn.primary .pill { background: rgba(0, 0, 0, .2); color: inherit; }
 </style>

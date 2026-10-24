@@ -148,7 +148,7 @@ const press = (seq: string) => { type(seq); term?.focus() }
       <div class="bar">
         <b class="mono">{{ title }}</b>
         <span v-if="status" class="small muted">{{ status }}</span>
-        <button class="btn small closebtn" title="detach — the session keeps running" @click="close">✕ Close</button>
+        <button class="btn sm closebtn" title="detach — the session keeps running" @click="close">✕ Close</button>
       </div>
       <div ref="host" class="xt" @click="term?.focus()" />
       <div class="keys">
@@ -159,12 +159,13 @@ const press = (seq: string) => { type(seq); term?.focus() }
 </template>
 
 <style scoped>
-.full { position: fixed; top: 0; left: 0; width: 100vw; z-index: 1000; background: #0a0c0f; display: flex; flex-direction: column; }
+.full { position: fixed; top: 0; left: 0; width: 100vw; z-index: 1000; background: var(--term-bg); display: flex; flex-direction: column; }
 .bar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .bar b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .closebtn { margin-left: auto; }
 .xt { flex: 1; min-height: 0; padding: 4px 6px; }
-.keys { display: flex; gap: 4px; padding: 5px 6px; border-top: 1px solid #1c2129; background: #0d1014; }
-.key { flex: 1; background: #161a20; color: #aab2bf; border: 1px solid #262c35; border-radius: 5px; font-size: 12.5px; padding: 6px 0; cursor: pointer; }
-.key:hover { color: #fff; border-color: var(--accent); }
+.keys { display: flex; gap: 4px; padding: 5px 6px; border-top: 1px solid var(--line); background: var(--term-bg); overflow-x: auto; }
+.key { flex: 1; background: var(--panel-2); color: var(--muted); border: 1px solid var(--line-2); border-radius: 6px; font-size: 12.5px; padding: 6px 0; min-width: 38px; cursor: pointer; }
+@media (pointer: coarse) { .key { min-height: 36px; } }
+.key:hover { color: var(--text); border-color: var(--accent); }
 </style>

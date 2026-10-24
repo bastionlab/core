@@ -2,9 +2,10 @@
 const props = defineProps<{ item: any, busy?: boolean }>()
 const emit = defineEmits<{ (e: 'verdict', v: 'up' | 'down' | null): void, (e: 'applied', v: boolean): void }>()
 
-const MODE: Record<string, string> = { onsite: 'Vor Ort', hybrid: 'Hybrid', remote: 'Remote' }
+const MODE: Record<string, string> = { onsite: 'On-site', hybrid: 'Hybrid', remote: 'Remote' }
 const LEVEL: Record<string, string> = { junior: 'Junior', mid: 'Mid', senior: 'Senior', lead: 'Lead' }
-const GERMAN: Record<string, string> = { keins: 'kein Deutsch nötig', grundkenntnisse: 'etwas Deutsch', gut: 'gutes Deutsch', fliessend: 'fließend Deutsch' }
+const GERMAN: Record<string, string> = { keins: 'no German needed', grundkenntnisse: 'some German', gut: 'good German', fliessend: 'fluent German' }
+const EMP: Record<string, string> = { teilzeit: 'part-time', werkstudent: 'working student', praktikum: 'internship', ausbildung: 'apprenticeship', freelance: 'freelance', minijob: 'minijob', befristet: 'fixed-term', unbefristet: 'permanent' }
 
 const k = (v: number) => `${Math.round(v / 1000)}k`
 const salary = computed(() => {
@@ -25,7 +26,7 @@ const apply = computed(() => {
   const a = props.item.apply ?? {}
   const url = a.url || props.item.url
   const ch = a.channel || 'portal'
-  const label = ch === 'email' ? 'per E-Mail' : ch === 'portal' ? `auf ${a.label || props.item.source_label}` : `über ${a.label || ch}`
+  const label = ch === 'email' ? 'by email' : ch === 'portal' ? `on ${a.label || props.item.source_label}` : `via ${a.label || ch}`
   return { url, ch, label, email: a.email, via: a.via }
 })
 const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? null : v)
@@ -33,7 +34,7 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
 
 <template>
   <article class="job" :class="{ out: item.passed === 0 || item.verdict === 'down', done: item.applied_at }">
-    <div class="fit" :class="fitTone" :title="item.fit == null ? 'noch nicht bewertet' : 'Match mit Lebenslauf und Wunsch'">
+    <div class="fit" :class="fitTone" :title="item.fit == null ? 'not scored yet' : 'Match with CV and wish'">
       <b>{{ item.fit ?? '…' }}</b>
     </div>
 
@@ -48,9 +49,9 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
       <div class="pills">
         <span v-if="item.mode" class="pill" :class="{ acc: item.mode === 'remote' }">{{ MODE[item.mode] }}<template v-if="item.mode === 'remote' && item.remote_region"> · {{ item.remote_region }}</template></span>
         <span v-if="item.level" class="pill">{{ LEVEL[item.level] }}</span>
-        <span v-for="e in (item.employment ?? []).filter((x: string) => x !== 'vollzeit')" :key="e" class="pill">{{ e }}</span>
+        <span v-for="e in (item.employment ?? []).filter((x: string) => x !== 'vollzeit')" :key="e" class="pill">{{ EMP[e] ?? e }}</span>
         <span v-if="item.german" class="pill ghost">{{ GERMAN[item.german] ?? item.german }}</span>
-        <span v-if="item.agency" class="pill warn">Vermittler</span>
+        <span v-if="item.agency" class="pill warn">Agency</span>
         <span v-if="item.passed === 0 && item.reason" class="pill bad">{{ item.reason }}</span>
         <span class="pill ghost">{{ item.search_name }}</span>
       </div>
@@ -68,17 +69,17 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
 
     <div class="side">
       <div class="small" :class="fresh ? 'accent' : 'muted'">{{ when }}</div>
-      <a class="btn primary go" :href="apply.url" target="_blank" rel="noopener" :title="apply.via === 'search' ? 'auf der Seite des Arbeitgebers gefunden' : apply.url">
-        Bewerben ↗
+      <a class="btn primary go" :href="apply.url" target="_blank" rel="noopener" :title="apply.via === 'search' ? 'found on the employer\'s site' : apply.url">
+        Apply ↗
       </a>
       <span class="small muted chan">{{ apply.label }}</span>
       <a v-if="apply.email && apply.ch !== 'email'" :href="`mailto:${apply.email}`" class="small chan">✉ {{ apply.email }}</a>
       <div class="votes">
-        <button class="btn ghost" :class="{ on: item.applied_at }" :disabled="busy" :title="item.applied_at ? `beworben ${vor(item.applied_at)} – zurücknehmen` : 'als beworben markieren'" @click="emit('applied', !item.applied_at)">
-          {{ item.applied_at ? '✓ beworben' : '✓' }}
+        <button class="btn ghost" :class="{ on: item.applied_at }" :disabled="busy" :title="item.applied_at ? `applied ${vor(item.applied_at)} – undo` : 'mark as applied'" @click="emit('applied', !item.applied_at)">
+          {{ item.applied_at ? '✓ applied' : '✓' }}
         </button>
-        <button class="btn ghost" :class="{ on: item.verdict === 'up' }" :disabled="busy" title="Merken" @click="vote('up')">👍</button>
-        <button class="btn ghost" :class="{ on: item.verdict === 'down' }" :disabled="busy" title="Nicht für mich" @click="vote('down')">👎</button>
+        <button class="btn ghost" :class="{ on: item.verdict === 'up' }" :disabled="busy" title="Save" @click="vote('up')">👍</button>
+        <button class="btn ghost" :class="{ on: item.verdict === 'down' }" :disabled="busy" title="Not for me" @click="vote('down')">👎</button>
       </div>
     </div>
   </article>
@@ -88,7 +89,7 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
 .job { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; gap: 12px; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
 .job.out { opacity: .55; }
 .job.done { border-color: var(--accent-soft); }
-.fit { width: 46px; height: 46px; border-radius: 10px; display: grid; place-items: center; background: var(--panel-2); color: var(--muted); font-variant-numeric: tabular-nums; }
+.fit { width: 46px; height: 46px; border-radius: var(--radius-sm); display: grid; place-items: center; background: var(--panel-2); color: var(--muted); font-variant-numeric: tabular-nums; }
 .fit b { font-size: 17px; }
 .fit.ok { background: var(--ok-soft); color: var(--ok); }
 .fit.accent { background: var(--accent-soft); color: var(--accent); }
@@ -114,6 +115,7 @@ const vote = (v: 'up' | 'down') => emit('verdict', props.item.verdict === v ? nu
 .votes { margin-top: auto; display: flex; gap: 2px; }
 .votes .btn { padding: 3px 6px; font-size: 13px; }
 .votes .btn.on { background: var(--accent-soft); color: var(--accent); }
+@media (pointer: coarse) { .votes { gap: 6px; } .votes .btn { min-width: 34px; min-height: 34px; } }
 @media (max-width: 640px) {
   .job { grid-template-columns: 40px minmax(0, 1fr); }
   .fit { width: 40px; height: 40px; }

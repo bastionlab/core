@@ -36,13 +36,13 @@ const today = isoDay()
 const short = (n: number) => n >= 1000 ? `${(n / 1000).toLocaleString('de-DE', { maximumFractionDigits: 1 })}k` : Math.round(n).toString()
 const tip = (d: string) => {
   const p = per.value[d], s = due.value[d]
-  return [dayTitle(d), p?.out ? `−${fmtEur(p.out)}` : '', p?.in ? `+${fmtEur(p.in)}` : '', ...(s ?? []).map(x => `fällig: ${subName(x)} ${fmtEur(x.amount)}`)].filter(Boolean).join('\n')
+  return [dayTitle(d), p?.out ? `−${fmtEur(p.out)}` : '', p?.in ? `+${fmtEur(p.in)}` : '', ...(s ?? []).map(x => `due: ${subName(x)} ${fmtEur(x.amount)}`)].filter(Boolean).join('\n')
 }
 </script>
 
 <template>
   <div class="cal">
-    <span v-for="w in ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']" :key="w" class="wd">{{ w }}</span>
+    <span v-for="w in ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']" :key="w" class="wd">{{ w }}</span>
     <template v-for="(d, i) in days" :key="i">
       <span v-if="!d" class="cell empty" />
       <button v-else class="cell" :title="tip(d)"
@@ -81,7 +81,7 @@ const tip = (d: string) => {
 /* phone: square cells, day number and amount stacked in the middle, marks as a row underneath */
 @media (max-width: 560px) {
   .cal { gap: 3px; }
-  .cell { aspect-ratio: 1; padding: 3px 2px; border-radius: 7px; align-items: center; justify-content: flex-start; gap: 2px; }
+  .cell { aspect-ratio: 1; padding: 3px 2px; border-radius: var(--radius-sm); align-items: center; justify-content: flex-start; gap: 2px; }
   .dn { font-size: 11px; text-align: center; }
   .amt { font-size: 10.5px; text-align: center; letter-spacing: -.2px; }
   .marks { position: static; margin-top: auto; justify-content: center; min-height: 4px; }

@@ -45,6 +45,7 @@ const tone = (u: number) => (u >= 0.9 ? 'bad' : u >= 0.7 ? 'warn' : 'ok')
 .head { display: flex; align-items: center; gap: 6px; }
 .head .muted { flex: 1; }
 .ico { padding: 0; width: 24px; height: 24px; border-radius: 6px; font-size: 14px; }
+@media (pointer: coarse) { .ico { width: 34px; height: 34px; border-radius: var(--radius-sm); } }
 .spin { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg) } }
 .win { display: flex; flex-direction: column; gap: 3px; }

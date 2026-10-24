@@ -58,6 +58,30 @@ watch(() => turns.value.map(t => t.a.length + t.r.length + (t.tools?.length ?? 0
   nextTick(onScroll)
 })
 watch(currentId, () => nextTick(() => { toBottom(false); onScroll() }))
+// phone keyboard: 100dvh ignores it, so the input could end up behind it. While it is up the chat
+// fills the visible part of the screen (visualViewport) and the tab bar steps aside
+// Chrome on Android only shrinks the visual viewport, Samsung Internet/Firefox may shrink the whole page,
+// so "keyboard up" = clearly shorter than the tallest it has been at this width
+let tallest = 0, wide = 0
+function onViewport() {
+  const vv = window.visualViewport
+  if (!vv || window.innerWidth > 640) return
+  if (window.innerWidth !== wide) { wide = window.innerWidth; tallest = 0 } // rotated
+  tallest = Math.max(tallest, vv.height, window.innerHeight)
+  const kb = tallest - vv.height > 150
+  const root = document.documentElement
+  const was = root.classList.contains('kb')
+  root.classList.toggle('kb', kb)
+  root.style.setProperty('--vvh', `${Math.round(vv.height)}px`)
+  if (kb) window.scrollTo(0, 0)
+  if (kb !== was && !away.value) nextTick(() => toBottom(false))
+}
+onMounted(() => { onViewport(); window.visualViewport?.addEventListener('resize', onViewport); window.visualViewport?.addEventListener('scroll', onViewport) })
+onBeforeUnmount(() => {
+  window.visualViewport?.removeEventListener('resize', onViewport)
+  window.visualViewport?.removeEventListener('scroll', onViewport)
+  document.documentElement.classList.remove('kb')
+})
 // opening the page lands on the newest message; again once markdown/images have laid out
 onMounted(() => nextTick(() => { toBottom(false); setTimeout(() => { toBottom(false); onScroll() }, 150) }))
 
@@ -188,14 +212,14 @@ function answer(text: string, picked: Record<number, string[]>) {
         <b class="ttl">{{ current?.title ?? 'Chat' }}</b>
         <span v-if="status(current) === 'input'" class="st input small hide-phone"><span class="sd" />your turn</span>
         <div class="seg" role="group" aria-label="engine">
-          <button :class="{ on: !isClaude }" :disabled="busy" title="local model on the 3060 (Ollama)" @click="engine = 'local'">Local</button>
-          <button :class="{ on: isClaude }" :disabled="busy" title="Claude Code on pve, your subscription" @click="engine = 'claude'">Claude</button>
+          <button :class="{ on: !isClaude }" :disabled="busy" title="local model on the 3060 (Ollama)" @click="engine = 'local'"><span class="only-phone-i">◆</span><span class="hide-phone">Local</span></button>
+          <button :class="{ on: isClaude }" :disabled="busy" title="Claude Code on pve, your subscription" @click="engine = 'claude'"><span class="only-phone-i">✳</span><span class="hide-phone">Claude</span></button>
         </div>
         <button
           v-if="isClaude" class="btn ghost autobtn" :class="{ armed: auto }" :disabled="busy"
           :title="auto ? 'Claude may change files, run commands and deploy. Click for read-only' : 'Claude can only look. Click to let it change things'"
           @click="auto = !auto"
-        >{{ auto ? '⚡ Auto' : '👁 Read-only' }}</button>
+        >{{ auto ? '⚡' : '👁' }}<span class="hide-phone">{{ auto ? ' Auto' : ' Read-only' }}</span></button>
         <button
           v-if="turns.length" class="btn ghost clearbtn" :disabled="busy"
           title="clear this chat and start fresh (same as typing /clear)" @click="clear"
@@ -209,7 +233,6 @@ function answer(text: string, picked: Record<number, string[]>) {
           <div class="hero" :class="engine">
             <span class="logo">{{ isClaude ? '✳' : '◆' }}</span>
             <b>{{ isClaude ? 'Claude on pve' : 'Local model' }}</b>
-            <span class="small faint">{{ isClaude ? (auto ? 'can change files, run commands and deploy' : 'read-only: looks, never touches') : 'private, runs on the 3060 · web search + weather' }}</span>
           </div>
           <div class="examples">
             <button v-for="ex in EXAMPLES[engine]" :key="ex" class="pill" @click="send(ex)">{{ ex }}</button>
@@ -256,13 +279,17 @@ function answer(text: string, picked: Record<number, string[]>) {
 aside { display: flex; flex-direction: column; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; min-height: 0; }
 .new { justify-content: center; }
 .list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; min-height: 0; }
-.conv { position: relative; display: flex; flex-direction: column; gap: 1px; text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 7px 26px 7px 10px; color: var(--muted); font: inherit; cursor: pointer; }
+.conv { position: relative; display: flex; flex-direction: column; gap: 1px; text-align: left; background: transparent; border: 0; border-radius: var(--radius-sm); padding: 7px 26px 7px 10px; color: var(--muted); font: inherit; cursor: pointer; }
 .conv:hover { background: var(--panel-2); color: var(--text); }
 .conv.on { background: var(--panel-2); color: var(--text); }
 .conv .t { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conv .x { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); opacity: 0; color: var(--muted); font-size: 11px; padding: 4px; }
 .conv:hover .x, .conv.on .x { opacity: 1; }
 .conv .x:hover { color: var(--bad); }
+@media (pointer: coarse) {
+  .conv { padding-right: 40px; }
+  .conv .x { opacity: 1; right: 2px; min-width: 34px; min-height: 34px; display: grid; place-items: center; font-size: 13px; }
+}
 .webui { border-top: 1px solid var(--line); padding: 10px 2px 0; }
 .main { position: relative; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); min-height: 0; min-width: 0; }
 .mhead { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); min-height: 48px; }
@@ -275,22 +302,18 @@ aside { display: flex; flex-direction: column; gap: 10px; background: var(--pane
 .dmin { margin-left: auto; font-size: 12px; padding: 2px 8px; }
 .flash { color: var(--accent); padding: 2px 0 6px 31px; }
 .bar { border-top: 1px solid var(--line); padding: 6px 8px 6px 12px; }
-.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
-.seg button { background: transparent; border: 0; color: var(--muted); font: inherit; font-size: 12px; padding: 4px 10px; cursor: pointer; }
-.seg button.on { background: var(--accent-soft); color: var(--accent); }
-.seg button:disabled { cursor: default; }
 .autobtn { font-size: 12px; padding: 4px 10px; flex-shrink: 0; }
 .autobtn.armed { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
 .bar select { padding: 5px 8px; font-size: 12px; }
 @media (max-width: 640px) { .bar select { flex: 1 1 40%; font-size: 16px; } }
 .clearbtn { font-size: 14px; padding: 4px 9px; flex-shrink: 0; }
 .bar.armed { box-shadow: inset 0 2px 0 var(--warn); }
-.cl { color: #d97757; margin-right: 5px; }
+.cl { color: var(--claude); margin-right: 5px; }
 .empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 30px 10px; text-align: center; }
 .hero { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .hero b { color: var(--text); font-size: 16px; }
-.hero .logo { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; font-size: 24px; margin-bottom: 6px; background: var(--accent-soft); color: var(--accent); }
-.hero.claude .logo { background: color-mix(in srgb, #d97757 16%, transparent); color: #d97757; }
+.hero .logo { display: grid; place-items: center; width: 48px; height: 48px; border-radius: var(--radius); font-size: 24px; margin-bottom: 6px; background: var(--accent-soft); color: var(--accent); }
+.hero.claude .logo { background: color-mix(in srgb, var(--claude) 16%, transparent); color: var(--claude); }
 .st { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
 .st .sd { width: 7px; height: 7px; border-radius: 50%; }
 .st.busy { color: var(--accent); }
@@ -303,7 +326,7 @@ aside { display: flex; flex-direction: column; gap: 10px; background: var(--pane
 .examples { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 560px; }
 .examples .pill { cursor: pointer; font: inherit; font-size: 12px; padding: 4px 11px; }
 .examples .pill:hover { color: var(--text); border-color: var(--faint); }
-.only-phone { display: none; }
+.only-phone, .only-phone-i { display: none; }
 .scrim { display: none; }
 @media (max-width: 760px) {
   .chat { grid-template-columns: minmax(0, 1fr); }
@@ -316,13 +339,21 @@ aside { display: flex; flex-direction: column; gap: 10px; background: var(--pane
   .scrim { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, .5); }
   .only-phone { display: inline-flex; padding: 4px 10px; font-size: 16px; }
   .hide-phone { display: none; }
+  .only-phone-i { display: inline; }
+  .seg > button { padding: 6px 12px; font-size: 14px; }
+  .autobtn, .clearbtn { padding: 4px 10px; font-size: 14px; }
   .mhead { padding: 6px 6px; }
   .body { padding: 4px 12px; }
-  .conv { padding: 10px 30px 10px 10px; }
+  .conv { padding: 10px 40px 10px 10px; }
   .conv .x { opacity: 1; }
 }
 @media (max-width: 640px) {
   /* .wrap: 12px on top, 28px + tab bar below */
   .chat { height: calc(100dvh - 24px - var(--tabbar, 0px)); margin-bottom: -16px; min-height: 0; }
 }
+</style>
+
+<style>
+/* keyboard up on the chat page: the tab bar would only eat the space above it */
+@media (max-width: 640px) { html.kb .tabs { display: none !important; } html.kb .wrap { padding-top: 6px; padding-bottom: 6px; } html.kb .chat { height: calc(var(--vvh, 100dvh) - 12px); margin-bottom: 0; } }
 </style>

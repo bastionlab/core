@@ -31,7 +31,7 @@ export function useHunter(api: '/api/deals' | '/api/flats' | '/api/jobs', every:
   const counts = computed(() => d.value?.counts ?? { per_search: {}, total: 0 })
   const feed = computed<any[]>(() => d.value?.feed ?? [])
   const tabs = (hits: (id: number | null) => number = id => (id === null ? counts.value.total : counts.value.per_search?.[String(id)] ?? 0)) => [
-    { id: null as number | null, name: 'Alle', hits: hits(null), enabled: true },
+    { id: null as number | null, name: 'All', hits: hits(null), enabled: true },
     ...searches.value.map((s: any) => ({ id: s.id as number | null, name: s.name as string, hits: hits(s.id), enabled: !!s.enabled })),
   ]
 

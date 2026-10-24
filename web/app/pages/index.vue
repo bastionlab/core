@@ -97,11 +97,11 @@ const topics = computed(() => [
       : [],
   },
   {
-    to: '/wohnungen', icon: 'key', name: 'Wohnungen', sub: 'Flat hunter',
+    to: '/wohnungen', icon: 'key', name: 'Flats', sub: 'Flat hunter',
     chips: flats.value
       ? [
-          { text: `${flats.value.status?.enabled ?? 0} Suchen` },
-          ...(flatsFresh.value ? [{ text: `${flatsFresh.value} neu`, tone: 'accent' }] : []),
+          { text: `${flats.value.status?.enabled ?? 0} searches` },
+          ...(flatsFresh.value ? [{ text: `${flatsFresh.value} new`, tone: 'accent' }] : []),
         ]
       : [],
   },
@@ -109,8 +109,8 @@ const topics = computed(() => [
     to: '/jobs', icon: 'briefcase', name: 'Jobs', sub: 'Job hunter',
     chips: jobs.value
       ? [
-          { text: `${jobs.value.status?.enabled ?? 0} Suchen` },
-          ...(jobs.value.counts?.passed ? [{ text: `${jobs.value.counts.passed} passend`, tone: 'accent' }] : []),
+          { text: `${jobs.value.status?.enabled ?? 0} searches` },
+          ...(jobs.value.counts?.passed ? [{ text: `${jobs.value.counts.passed} matches`, tone: 'accent' }] : []),
         ]
       : [],
   },
@@ -196,7 +196,7 @@ const topics = computed(() => [
   transition: border-color .15s, background .15s;
 }
 .topic:hover { text-decoration: none; border-color: var(--line-2); background: var(--panel-2); }
-.ti { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--panel-2); color: var(--muted); flex: none; }
+.ti { width: 34px; height: 34px; border-radius: var(--radius-sm); display: grid; place-items: center; background: var(--panel-2); color: var(--muted); flex: none; }
 .topic:hover .ti { color: var(--accent); }
 .name { font-weight: 600; }
 .chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; margin-left: auto; min-width: 0; }

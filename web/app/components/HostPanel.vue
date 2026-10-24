@@ -28,7 +28,7 @@ const at = computed(() => pending.value && new Date(pending.value.at * 1000).toL
         v-if="!pending" class="btn ghost small" :disabled="busy?.length || step > 0"
         :title="busy?.length ? `not now — ${busy.join('\n')}` : 'power off the whole server (all containers and this dashboard)'"
         @click="ask"
-      >⏻ Shut down</button>
+      ><Icon name="power" :size="14" /> Shut down</button>
     </template>
 
     <div v-if="pending" class="warnbox">
@@ -64,5 +64,4 @@ const at = computed(() => pending.value && new Date(pending.value.at * 1000).toL
 .warnbox .btn { align-self: flex-start; }
 .row { display: flex; gap: 8px; }
 .btn.solid-bad { background: var(--bad); border-color: var(--bad); color: #fff; }
-.btn.solid-bad:disabled { opacity: .45; }
 </style>

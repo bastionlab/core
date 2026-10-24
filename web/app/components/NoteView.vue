@@ -78,7 +78,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); document.body.
       <div class="meta small">
         <input v-model="topic" class="topic" placeholder="+ topic" list="note-topics" title="topic" @change="saveTopic" @keydown.enter="($event.target as HTMLInputElement).blur()">
         <datalist id="note-topics"><option v-for="t in topics" :key="t" :value="t" /></datalist>
-        <span class="faint when">{{ new Date(n.created * 1000).toLocaleDateString('de-DE') }} · edited {{ ago(n.updated) }}</span>
+        <span class="faint when">{{ new Date(n.created * 1000).toLocaleDateString('en-GB') }} · edited {{ ago(n.updated) }}</span>
       </div>
 
       <div v-if="n.job" class="banner accent small">✨ The AI is {{ n.job === 'expand' ? 'working out next steps' : n.job === 'merge' ? 'merging your new thoughts in' : 'tidying this note' }}…</div>
@@ -88,9 +88,8 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); document.body.
 
       <div class="content">
         <template v-if="editing">
-          <textarea v-model="draft" class="edit" rows="14" @keydown.meta.enter="saveBody" @keydown.ctrl.enter="saveBody" @keydown.esc.stop="editing = false" />
+          <textarea v-model="draft" class="edit" rows="14" title="Markdown · &quot;- [ ] &quot; makes a checkbox" @keydown.meta.enter="saveBody" @keydown.ctrl.enter="saveBody" @keydown.esc.stop="editing = false" />
           <div class="row">
-            <span class="faint small">Markdown · "- [ ] " makes a checkbox</span>
             <span class="sp" />
             <button type="button" class="btn ghost" @click="editing = false">Cancel</button>
             <button type="button" class="btn primary" @click="saveBody">Save</button>
@@ -130,7 +129,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); document.body.
         <button type="button" class="btn ghost" @click="emit('patch', { state: n.state === 'archived' ? 'active' : 'archived' })"><span class="ic">🗄️</span><span>{{ n.state === 'archived' ? 'Unarchive' : 'Archive' }}</span></button>
         <button type="button" class="btn ghost" @click="copy"><span class="ic">📋</span><span>{{ copied ? 'Copied' : 'Copy' }}</span></button>
         <span class="sp" />
-        <button type="button" class="btn danger" :class="{ armed }" @click="del"><span class="ic">🗑️</span><span>{{ armed ? 'Sure?' : 'Delete' }}</span></button>
+        <button type="button" class="btn danger" :class="{ sure: armed }" @click="del"><span class="ic">🗑️</span><span>{{ armed ? 'Sure?' : 'Delete' }}</span></button>
       </footer>
     </div>
   </div>
@@ -138,16 +137,17 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); document.body.
 
 <style scoped>
 .scrim { position: fixed; inset: 0; z-index: 60; background: rgba(0, 0, 0, .55); display: flex; justify-content: center; align-items: flex-start; padding: 5vh 16px; overflow-y: auto; }
-.sheet { width: 100%; max-width: 760px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 14px; padding: 16px 20px 14px; display: flex; flex-direction: column; gap: 12px; }
+.sheet { width: 100%; max-width: 760px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 16px; padding: 16px 20px 14px; display: flex; flex-direction: column; gap: 12px; }
 header { display: flex; align-items: flex-start; gap: 8px; }
 .kind { padding: 5px 6px; font-size: 12.5px; }
 .title { flex: 1; min-width: 0; border: 0 !important; background: transparent !important; font-size: 19px !important; font-weight: 650; line-height: 1.3; padding: 4px 2px; resize: none; overflow: hidden; }
 .x { font-size: 15px; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.topic { width: 130px; padding: 2px 10px; font-size: 12px !important; border-radius: 999px !important; color: var(--accent) !important; background: var(--accent-soft) !important; border-color: transparent !important; }
+/* input.topic + .meta: beats the global input rule without !important */
+.meta input.topic { width: 130px; padding: 2px 10px; font-size: 12px; border-radius: 999px; color: var(--accent); background: var(--accent-soft); border-color: transparent; }
 .topic::placeholder { color: var(--faint); }
 .when { margin-left: auto; }
-.banner { padding: 8px 12px; border-radius: 8px; display: flex; align-items: center; gap: 8px; }
+.banner { padding: 8px 12px; border-radius: var(--radius-sm); display: flex; align-items: center; gap: 8px; }
 .banner.accent { background: var(--accent-soft); color: var(--accent); }
 .banner.bad { background: var(--bad-soft); color: var(--bad); }
 .content { min-height: 60px; }
@@ -161,6 +161,7 @@ header { display: flex; align-items: flex-start; gap: 8px; }
 .img { position: relative; }
 .img img { display: block; width: 100%; height: 150px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
 .img button { position: absolute; top: 5px; right: 5px; width: 24px; height: 24px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, .7); color: #fff; cursor: pointer; }
+@media (pointer: coarse) { .img button { width: 34px; height: 34px; top: 4px; right: 4px; } }
 .tools .btn { font-size: 12.5px; padding: 5px 10px; }
 .btn.on { color: var(--accent); border-color: var(--accent); }
 .related { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -168,7 +169,6 @@ header { display: flex; align-items: flex-start; gap: 8px; }
 .rel:hover { color: var(--text); }
 footer { border-top: 1px solid var(--line); padding-top: 10px; }
 footer .btn.ghost.on { color: var(--accent); background: transparent; }
-.danger.armed { background: var(--bad); color: #0a0c10; border-color: var(--bad); font-weight: 600; }
 @media (max-width: 640px) {
   .scrim { padding: 0; }
   .sheet { min-height: 100dvh; border-radius: 0; border: 0; padding: 12px 14px calc(16px + env(safe-area-inset-bottom)); }
@@ -185,7 +185,7 @@ footer .btn.ghost.on { color: var(--accent); background: transparent; }
   .x { position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 10px; z-index: 3; width: 38px; height: 38px; padding: 0; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line-2); }
   header { padding-right: 44px; }
   /* phones zoom into inputs under 16px */
-  .topic, .edit { font-size: 16px !important; }
+  .edit { font-size: 16px !important; }
   .edit { min-height: 45dvh; }
   .body :deep(li > input[type='checkbox']) { width: 18px; height: 18px; vertical-align: -3px; }
   .body :deep(li:has(> input[type='checkbox'])) { padding-left: 28px; text-indent: -28px; }
@@ -197,6 +197,6 @@ footer .btn.ghost.on { color: var(--accent); background: transparent; }
   footer .sp { display: none; }
   footer .btn { flex: 1; min-width: 0; flex-direction: column; gap: 2px; padding: 6px 2px; border: 0; background: transparent; font-size: 11.5px; white-space: nowrap; }
   footer .btn .ic, footer .btn :deep(svg) { font-size: 17px; width: 18px; height: 18px; line-height: 18px; }
-  footer .btn.danger:not(.armed) { color: var(--bad); }
+  footer .btn.danger:not(.sure) { color: var(--bad); }
 }
 </style>

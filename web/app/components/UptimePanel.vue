@@ -36,7 +36,7 @@ function restart(u: any) {
           {{ label(u) }}<template v-if="u.restarts"> · {{ u.restarts }}× auto-restarted</template>
         </span>
         <button
-          class="btn small" :class="armed === u.name ? 'danger' : 'ghost'" :disabled="u.state === 'ct-stopped'"
+          class="btn sm" :class="armed === u.name ? 'danger' : 'ghost'" :disabled="u.state === 'ct-stopped'"
           :title="`restart ${u.name} in CT ${u.ct}`" @click="restart(u)"
         >
           {{ armed === u.name ? 'Restart?' : '↻' }}
@@ -48,9 +48,9 @@ function restart(u: any) {
 
 <style scoped>
 .rows { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 18px; }
-.row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; min-height: 34px; }
+.row { display: grid; grid-template-columns: auto minmax(80px, 1fr) minmax(0, max-content) auto; align-items: center; gap: 10px; min-height: 34px; }
 .row .dot { width: 7px; height: 7px; box-shadow: none; }
 .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row .small { white-space: nowrap; }
+.row .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 @media (max-width: 640px) { .rows { grid-template-columns: minmax(0, 1fr); } }
 </style>

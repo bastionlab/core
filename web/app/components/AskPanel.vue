@@ -23,7 +23,7 @@ const focused = ref(false)
       <AskTurns :turns="turns" @run="p => run(p, () => emit('refresh'))" />
       <div class="foot">
         <NuxtLink to="/chat" class="small muted">continue in chat →</NuxtLink>
-        <button class="btn ghost small" type="button" @click="clear">clear</button>
+        <button class="btn ghost sm" type="button" @click="clear">clear</button>
       </div>
     </div>
   </section>

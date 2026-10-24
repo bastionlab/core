@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
     case 'sync': return post('/sync')
     case 'ebConfig': {
       const pem = String(body.keyPem ?? '').trim().slice(0, 10_000)
-      if (!/^-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(pem)) throw createError({ statusCode: 400, statusMessage: 'Das sieht nicht nach einem privaten Schlüssel (.pem) aus' })
+      if (!/^-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(pem)) throw createError({ statusCode: 400, statusMessage: 'That does not look like a private key (.pem)' })
       return post('/eb/config', { app_id: cleanStr(body.appId, 64), key_pem: pem })
     }
     case 'ebAspsps': return money(event, '/eb/aspsps', { query: { country: cleanStr(body.country, 2) || 'DE' } })

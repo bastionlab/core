@@ -41,9 +41,9 @@ function clone(r: any) {
     </template>
 
     <div class="bar">
-      <input v-model="q" class="in grow" :placeholder="`Search ${repos.length} repos…`">
+      <input v-model="q" class="grow" :placeholder="`Search ${repos.length} repos…`">
       <label class="small muted toggle"><input v-model="mine" type="checkbox"> hide forks</label>
-      <select v-if="running.length > 1" v-model="vmid" class="in" title="which dev box to clone into">
+      <select v-if="running.length > 1" v-model="vmid" title="which dev box to clone into">
         <option v-for="b in running" :key="b.vmid" :value="b.vmid">→ {{ b.name }}</option>
       </select>
     </div>
@@ -66,7 +66,7 @@ function clone(r: any) {
           <template v-if="cloned.get(r.full.toLowerCase())">
             <span class="pill ok">on {{ cloned.get(r.full.toLowerCase()).box.name }}</span>
           </template>
-          <button v-else class="btn small" :disabled="vmid == null" :title="`clone into ~/Projects/GitHub/${r.name} on the dev box`" @click="clone(r)">
+          <button v-else class="btn sm" :disabled="vmid == null" :title="`clone into ~/Projects/GitHub/${r.name} on the dev box`" @click="clone(r)">
             Clone
           </button>
         </div>
@@ -82,12 +82,12 @@ function clone(r: any) {
 
 <style scoped>
 .bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-.in { font-size: 13px; padding: 6px 9px; }
-.in.grow { flex: 1; min-width: 180px; }
+.bar input:not([type='checkbox']), .bar select { padding: 6px 9px; }
+.grow { flex: 1; min-width: 160px; }
 .toggle { display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
 .pad { padding: 14px 0; }
 .repos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr)); gap: 8px; max-height: 420px; overflow-y: auto; }
-.repo { background: var(--panel-2); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.repo { background: var(--panel-2); border: 1px solid transparent; border-radius: var(--radius-sm); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .repo:hover { border-color: var(--line-2); }
 .lang { margin-left: auto; }
 .rh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -95,6 +95,5 @@ function clone(r: any) {
 .rname:hover { color: var(--accent); }
 .desc { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .rf { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
-.rf .btn { padding: 3px 9px; }
 .hint { margin-top: 10px; }
 </style>

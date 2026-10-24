@@ -20,7 +20,7 @@ const slots = useSlots()
   <div v-if="tabs.length > 2 || slots.default" class="tabs">
     <template v-if="tabs.length > 2">
       <button
-        v-for="t in tabs" :key="t.id ?? 'all'" class="tab"
+        v-for="t in tabs" :key="t.id ?? 'all'" class="chip"
         :class="{ on: selected === t.id, off: !t.enabled }"
         @click="selected = t.id"
       >{{ t.name }} <span class="n">{{ t.hits }}</span></button>
@@ -32,13 +32,11 @@ const slots = useSlots()
 <style scoped>
 .sec { flex-wrap: wrap; }
 .views { margin-left: auto; display: flex; flex-wrap: wrap; gap: 2px; font-weight: 400; }
-.vw { padding: 3px 9px; border-radius: 6px; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+.vw { padding: 3px 9px; border-radius: var(--radius-sm); border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
 .vw.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .n { font-size: 11px; opacity: .7; font-variant-numeric: tabular-nums; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; align-items: center; }
-.tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
-.tab:hover { color: var(--text); }
-.tab.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
-.tab.off { opacity: .55; }
+.chip.off { opacity: .55; }
 @media (max-width: 560px) { .views { margin-left: 0; } }
+@media (pointer: coarse) { .views { gap: 4px; } .vw { min-height: 32px; padding: 4px 10px; } }
 </style>
