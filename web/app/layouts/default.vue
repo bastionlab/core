@@ -8,6 +8,7 @@ const NAV: { to: string, icon: string, label: string }[] = [
   { to: '/', icon: 'home', label: 'Home' },
   { to: '/metrics', icon: 'metrics', label: 'Metrics' },
   { to: '/addons', icon: 'grid', label: 'Add-ons' },
+  { to: '/settings', icon: 'settings', label: 'Settings' },
 ]
 const problems = computed(() => alerts(o.value).filter(a => a.level === 'bad').length)
 // switched-off add-ons (Add-ons page) drop out of the nav; pins keep them so turning one back on restores its tab

@@ -21,6 +21,13 @@ marketplace — plan").
   - `apps:` — the web apps it brings: `{ name, icon, note, group (app = Home tile; media/ai/infra = topic
     pages), hue, ct, port, ts (link the CT's tailnet name), health }`. They join the core's (Immich, Jellyfin,
     Audiobookshelf, Proxmox) in `server/utils/services.ts` only while the add-on is installed and on.
+  - `settings:` — fields for /settings: `{ key, label, type (text|number|toggle|select|url), secret: true, help,
+    options, default, min, max }`. Values in `/etc/dash/settings/<id>.json`, secrets in `/etc/dash/secrets/<id>.json`
+    (root only, write-only from the browser). Server code reads `await addonSettings('<id>')`; host code
+    `dash_sdk.setting()` / `secret()`. Quote keys YAML would read as booleans (on/off/yes/no).
+  - `connections: /api/<id>/connections` — its outside links as `[{ id, name, ok, warn, detail, fix }]`; they join
+    the core's (GitHub, Tailscale key, Discord, Claude) in Settings → Connections. `settings_ui: true` + a
+    `Settings<Id>.global.vue` for a flow of its own (Money's bank logins).
   - `home: true` + `web/app/components/Home<Id>.global.vue` (renders the core `<TopicCard>`) = its card in Home's
     Sections; it fetches its own numbers.
   - `web/` — a Nuxt layer (`app/pages`, `app/components`, `server/api|utils|plugins`) the core extends; it may use

@@ -15,6 +15,7 @@ from metrics import all_updates, backups, cpu_percent, cts, datasets, gpu, host,
 from actions import check_action, job_status, marketplace_index, service_uptime, start_action
 from claude import _alive, _cc_turn, claude_send, claude_stop, claude_usage
 import dash_sdk
+import settings
 
 
 BIND = os.environ.get("AGENT_BIND", HOST_IP)
@@ -73,6 +74,10 @@ class H(BaseHTTPRequestHandler):
                 return self._claude_stream(q["turn"], int(q.get("from", 0)))
             if u.path == "/discord":
                 return self._send(200, hooks.view())
+            if u.path == "/settings":
+                return self._send(200, settings.view())
+            if u.path == "/settings/values":
+                return self._send(200, settings.values(q.get("addon", "")))
             if u.path == "/marketplace/index":
                 return self._send(200, marketplace_index())
             if u.path in dash_sdk.STREAMS:
@@ -109,6 +114,10 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, {"desc": check_action(str(body.get("name")), body.get("args"))})
             if u.path == "/action/run":
                 return self._send(200, start_action(str(body.get("name")), body.get("args")))
+            if u.path == "/settings/set":
+                return self._send(200, settings.set_value(str(body.get("addon", "")), str(body.get("key", "")), body.get("value")))
+            if u.path == "/settings/core":
+                return self._send(200, settings.set_core(str(body.get("key", "")), body.get("value")))
             fn, m = dash_sdk.route("POST", u.path)
             if fn:
                 return self._send(200, fn(body, m) if m else fn(body))

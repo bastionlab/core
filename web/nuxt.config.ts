@@ -12,7 +12,7 @@ const addonApps: any[] = []
 const addons = addonDirs.map((d) => {
   const m: any = parseYAML(readFileSync(join(root, d, 'addon.yaml'), 'utf8'))
   for (const a of m.apps ?? []) addonApps.push({ ...a, addon: m.id })
-  return { id: m.id, name: m.name, label: m.label, icon: m.icon, version: String(m.version ?? ''), order: m.order ?? 100, routes: m.routes ?? [], home: !!m.home, author: m.author, desc: m.desc, needs: m.needs ?? [], ct: m.ct, dependsOn: m.depends_on?.length ? m.depends_on : undefined }
+  return { id: m.id, name: m.name, label: m.label, icon: m.icon, version: String(m.version ?? ''), order: m.order ?? 100, routes: m.routes ?? [], home: !!m.home, connections: m.connections, settingsUi: !!m.settings_ui, author: m.author, desc: m.desc, needs: m.needs ?? [], ct: m.ct, dependsOn: m.depends_on?.length ? m.depends_on : undefined }
 }).sort((a, b) => a.order - b.order) // order: where its tab sits among the add-on tabs
 // the marketplace index this build ships (addons/index.json, rebuilt by addons/build-index.py): used until the real one is reachable
 const marketplaceLocal = existsSync(join(root, 'index.json')) ? JSON.parse(readFileSync(join(root, 'index.json'), 'utf8')) : { addons: [] }

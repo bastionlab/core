@@ -40,7 +40,6 @@ const { jobs, run, dismiss } = useActions()
         />
       </div>
       <div class="grid"><PortsPanel :ports="o.ports" :cts="o.cts" /></div>
-      <div class="grid"><DiscordPanel /></div>
 
       <h2 class="sec">Infrastructure</h2>
       <ServicesPanel :services="o.services.filter((s: any) => s.group === 'infra' || s.group === 'ai')" />

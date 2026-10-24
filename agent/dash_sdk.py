@@ -114,6 +114,18 @@ def route(method, path):
     return None, None
 
 
+def setting(addon, key, default=None):
+    """a value the owner set for this add-on on /settings (addon.yaml `settings:`)"""
+    import settings
+    return settings.setting(addon, key, default)
+
+
+def secret(addon, key):
+    """a secret the owner set on /settings; only ever read on the host, never sent anywhere but where it's for"""
+    import settings
+    return settings.secret(addon, key)
+
+
 def pct(name, *argv, timeout=20):
     """run argv inside the CT that config.json calls `name`"""
     return sh("pct", "exec", str(ct(name)), "--", *argv, timeout=timeout)

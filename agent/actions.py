@@ -230,6 +230,16 @@ def marketplace_index():
     return _addon_get().index()
 
 
+def a_config_set(args):
+    """Settings → General: one config.json value, shown old → new on the Run button; config-set checks it again"""
+    from config import config_change
+    path = str(args.get("path", ""))
+    old, new, _ = config_change(path, args.get("value"))
+    return (f"set {path} from {json.dumps(old)} to {json.dumps(new)} in /etc/dash/config.json (old file kept), "
+            f"then rebuild the dashboard (gone for a few minutes)",
+            ["python3", "-I", f"{DASHBOARD}/agent/config-set", path, json.dumps(new)], 1800)
+
+
 def a_addon_install(args):
     return _addon(args, "install")
 
@@ -250,6 +260,7 @@ ACTIONS = {
 "host_shutdown": a_host_shutdown, "host_shutdown_cancel": a_host_shutdown_cancel,
     # not offered to the Ask model (server/utils/actions.ts): only the Add-ons page's own buttons run these
     "addon_install": a_addon_install, "addon_update": a_addon_update, "addon_remove": a_addon_remove,
+    "config_set": a_config_set,
 }
 
 MAX_LOG = 400

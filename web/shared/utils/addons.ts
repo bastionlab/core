@@ -20,6 +20,10 @@ export interface Addon {
   needs: string[]
   /** addon.yaml only: shorter name for the tab, if `name` is too long for it */
   label?: string
+  /** addon.yaml only: API path listing its outside connections ({ id, name, ok, warn, detail, fix }[]) for /settings */
+  connections?: string
+  /** addon.yaml only: brings a Settings<Id>.global.vue section for /settings */
+  settingsUi?: boolean
   /** addon.yaml only: brings a Home<Id>.global.vue card for the home page */
   home?: boolean
   /** config.json `cts` key of the container it lives in */
@@ -27,7 +31,7 @@ export interface Addon {
   dependsOn?: string[]
 }
 
-export const CORE_PAGES = ['/', '/metrics', '/addons', '/login']
+export const CORE_PAGES = ['/', '/metrics', '/addons', '/settings', '/login']
 
 /** add-ons still built into the core: none any more, every tab is an addons/<id>/ folder */
 export const ADDONS: Addon[] = []

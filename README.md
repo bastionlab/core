@@ -7,6 +7,7 @@ https://dash.example-tailnet.ts.net/ — tailnet only, owner's Tailscale login +
 | `/` | the apps you open (Immich, Jellyfin, Seerr, …), alerts, one card per add-on |
 | `/metrics` | host, GPU, storage, backups, uptime, containers, ports, tailnet, Discord webhooks, host shutdown |
 | `/addons` | every add-on: on/off, install, update, remove; the marketplace |
+| `/settings` | every connection's status in one list, config.json (edits go through Run + rebuild), Discord, each add-on's fields |
 
 Everything else is an add-on in `addons/<id>/`: Notes, Learn, Kanji, Habits, Media, Dev, Game servers, Deals,
 Flats, Jobs, Money, Chat, and Local AI (no tab of its own).
