@@ -8,6 +8,17 @@ onMounted(load)
 
 // marketplace index (server/utils/marketplace.ts): Update badges here, the not-installed ones below
 const { data: market } = useFetch<any>('/api/marketplace', { server: false })
+const refreshing = ref(false)
+async function refreshMarket(fresh = true) {
+  refreshing.value = fresh
+  try { market.value = await $fetch<any>('/api/marketplace', { query: fresh ? { fresh: '1' } : {} }) } catch { /* keep what we have */ } finally { refreshing.value = false }
+}
+// new versions and add-ons show up while the page is open; the agent installs updates by itself every hour
+let poll: any
+onMounted(() => { poll = setInterval(() => refreshMarket(false), 5 * 60_000) })
+onBeforeUnmount(() => clearInterval(poll))
+/** 'new' | 'changed': this box's folder differs from the marketplace's, so it can be published */
+const publishable = (id: string) => market.value?.local?.[id] as string | undefined
 const entry = (id: string) => market.value?.addons?.find((e: any) => e.id === id)
 const available = computed(() => (market.value?.addons ?? []).filter((e: any) => !e.installed))
 const count = (n: number | null) => (n == null ? '' : `${n} install${n === 1 ? '' : 's'}`)
@@ -39,7 +50,7 @@ async function ask(name: string, id: string) {
     const r = await $fetch<{ desc: string }>('/api/ai/action/check', { method: 'POST', body: { name, args: { id } } })
     pending.value = { name, id, desc: r.desc }
     scan.value = null
-    if (name !== 'addon_remove') check(id)
+    if (name === 'addon_install' || name === 'addon_update') check(id)
     armed.value = false
     clearTimeout(armTimer)
     armTimer = setTimeout(() => (armed.value = true), 1500)
@@ -49,10 +60,10 @@ function go() {
   const p = pending.value
   if (!p || !armed.value || blocked.value) return
   pending.value = null
-  run(p.name, { id: p.id })
+  run(p.name, { id: p.id }, p.name === 'addon_publish' ? () => refreshMarket() : undefined)
 }
 onBeforeUnmount(() => clearTimeout(armTimer))
-const rebuilding = computed(() => jobs.value.some(j => j.state === 'done' && j.name.startsWith('addon_')))
+const rebuilding = computed(() => jobs.value.some(j => j.state === 'done' && j.name.startsWith('addon_') && j.name !== 'addon_publish'))
 
 const busy = ref('')
 const error = ref('')
@@ -122,13 +133,19 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
           <span v-if="ctState(a.ct)" class="pill" :class="ctState(a.ct)!.tone">{{ ctState(a.ct)!.text }}</span>
           <span v-for="n in a.needs" :key="n" class="pill">{{ n }}</span>
           <span v-if="a.dependsOn" class="pill accent">needs {{ names(a.dependsOn) }}</span>
+          <button v-if="publishable(a.id)" type="button" class="pill accent lnk-pill" @click="ask('addon_publish', a.id)">
+            {{ publishable(a.id) === 'new' ? 'Publish' : 'Publish changes' }}
+          </button>
           <button v-if="a.version" type="button" class="lnk small rm" @click="ask('addon_remove', a.id)">Remove</button>
         </div>
       </div>
     </div>
     <p class="faint small">Always on: Home, Notes, Chat, Metrics. Turning an add-on off hides it here; its container keeps running.</p>
 
-    <h2 class="sec">Marketplace <span v-if="market?.source === 'local'" class="faint small">offline copy</span></h2>
+    <h2 class="sec mk">
+      <span>Marketplace <span v-if="market?.source === 'local'" class="faint small">offline copy</span></span>
+      <button type="button" class="btn ghost sm" :disabled="refreshing" @click="refreshMarket()">{{ refreshing ? 'Checking…' : 'Refresh' }}</button>
+    </h2>
     <div v-if="!market" class="faint small">Loading…</div>
     <div v-else-if="!available.length" class="empty-state">Nothing new yet.</div>
     <div v-else class="grid cols-2 list">
@@ -162,6 +179,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
 .desc { margin: 0; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .tags .rm { margin-left: auto; }
+.mk { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .lnk-pill { cursor: pointer; font: inherit; font-size: 11.5px; }
 .confirm { border-color: var(--warn); margin-bottom: 14px; }
 .confirm p { margin: 0; }

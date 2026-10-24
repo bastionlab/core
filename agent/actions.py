@@ -224,6 +224,29 @@ def _addon(args, cmd):
     return desc, ["python3", "-I", ADDON_GET, cmd, aid], 3600
 
 
+def a_addon_publish(args):
+    """the Publish button: addons/<id> → a publish/<id> PR on the marketplace repo; GitHub checks it and merges"""
+    ag = _addon_get()
+    aid = str(args.get("id", ""))
+    if not ag.ID_RE.match(aid) or not (ag.ADDONS / aid / "addon.yaml").exists():
+        raise ValueError(f"{aid} is not an add-on folder here")
+    state = marketplace_local().get(aid)
+    if not state:
+        raise ValueError(f"{aid} has no changes to publish")
+    v = ag.manifest(ag.ADDONS / aid).get("version", "?")
+    repo = ag.MK.get("repo") or "https://github.com/pvedash/addons"
+    what = "a new add-on" if state == "new" else f"changes to {v} (the version goes up if needed)"
+    return (f"publish {aid}, {what}, to {repo}: GitHub checks it for malware, secrets, style and lint, then merges it "
+            f"and every install gets it. Nothing merges if a check fails.",
+            ["python3", "-I", f"{DASHBOARD}/agent/addon-publish", aid], 2400)
+
+
+@cached(20)
+def marketplace_local():
+    """{id: "new" | "changed"}: add-ons here that differ from the marketplace (what Publish would send)"""
+    return _addon_get().local_changes()
+
+
 @cached(300)
 def marketplace_index():
     """the marketplace index as addon-get sees it (with the token for a private repo); the app shows it from here"""
@@ -291,6 +314,7 @@ ACTIONS = {
 "host_shutdown": a_host_shutdown, "host_shutdown_cancel": a_host_shutdown_cancel,
     # not offered to the Ask model (server/utils/actions.ts): only the Add-ons page's own buttons run these
     "addon_install": a_addon_install, "addon_update": a_addon_update, "addon_remove": a_addon_remove,
+    "addon_publish": a_addon_publish,
     "config_set": a_config_set, "secrets_rotate": a_secrets_rotate,
 }
 

@@ -14,9 +14,9 @@ BACK=$(c .paths.backends); BACK=${BACK:-/root}   # backend repos (deals, money) 
 
 echo "→ agent"
 # the units live in the repo; link them in so an edit to a .service/.timer takes effect on the next deploy
-for u in dash-agent.service dash-alerts.service dash-alerts.timer; do ln -sf "$DIR/agent/$u" /etc/systemd/system/$u; done
+for u in dash-agent.service dash-alerts.service dash-alerts.timer dash-addons-update.service dash-addons-update.timer; do ln -sf "$DIR/agent/$u" /etc/systemd/system/$u; done
 systemctl daemon-reload
-systemctl enable -q --now dash-alerts.timer
+systemctl enable -q --now dash-alerts.timer dash-addons-update.timer
 systemctl restart dash-agent
 
 echo "→ add-on hooks"
@@ -27,7 +27,7 @@ echo "→ config + sources → CT $CT"
 pct exec $CT -- mkdir -p /etc/dash && pct push $CT "$CONF" /etc/dash/config.json --perms 644
 # app/, server/ and public/ are replaced, not overlaid: a file deleted here must not keep being built there
 # add-ons ride along as addons/<id>/ (web/nuxt.config.ts extends their web/ layers)
-tar -C "$DIR" --exclude=node_modules --exclude=.nuxt --exclude=.output --exclude=__pycache__ --exclude=.git --exclude='addons/*/agent' --exclude='addons/*/deploy.sh' --transform 's,^web/,,;s,^web$,.,' -cf - web addons | pct exec $CT -- sh -c 'mkdir -p /opt/dash && cd /opt/dash && rm -rf app server public shared addons && tar -xf -'
+tar -C "$DIR" --exclude=node_modules --exclude=.nuxt --exclude=.output --exclude=__pycache__ --exclude=.git --exclude='addons/*/agent' --exclude='addons/*/deploy.sh' --exclude='addons/.github' --transform 's,^web/,,;s,^web$,.,' -cf - web addons | pct exec $CT -- sh -c 'mkdir -p /opt/dash && cd /opt/dash && rm -rf app server public shared addons && tar -xf -'
 
 echo "→ env + service"
 pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_URL=http://%s:7070\nNUXT_OLLAMA_URL=http://%s:11434\nNUXT_DEALS_URL=http://%s:8090\nNUXT_MONEY_URL=http://%s:8090\nNUXT_OWNER_LOGINS=%s\nNUXT_AGENT_TOKEN=%s\nNUXT_DEALS_TOKEN=%s\nNUXT_MONEY_TOKEN=%s\nNUXT_PIN_HASH=%s\nNUXT_LAN_KEY=%s\nHOST=127.0.0.1\nPORT=3000\nNODE_ENV=production\n' '$(c .lan.host_ip)' '$(c .cts.ai.ip)' '$(c .cts.deals.ip)' '$(c .cts.money.ip)' '$(c '.owner_logins | join(",")')' '$(cat "$DIR/agent/token")' '$(cat "$BACK/deals/token" 2>/dev/null)' '$(cat "$BACK/money/token" 2>/dev/null)' '$(cat "$DIR/agent/pin_hash")' '$(cat "$DIR/agent/lan_key")' > /etc/dash.env"

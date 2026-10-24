@@ -59,6 +59,12 @@ marketplace — plan").
   confirm card (`/marketplace/scan`). Own add-ons must pass it: no `eval`/`exec` of decoded data, read only
   `/etc/dash/secrets/<own id>.json`. A false positive → `marketplace.scan_allow: ["<id>:<rule>"]` in config.json.
 - New add-on: `templates/new-addon <id> "<Name>"` (or `/new-addon`); release: `/publish-addon`.
+- Publishing = the Publish button on /addons (`addon_publish` → `agent/addon-publish`): a `publish/<id>` PR that
+  `pvedash/addons/.github/workflows/publish.yml` checks (`.github/check/check.py`: scope, manifest, owner, safety
+  + ClamAV, leaks, style, ruff + ESLint) and merges itself when green. Run the gate before you publish:
+  `python3 addons/.github/check/check.py --id <id> --pr addons`. Installs pull new versions hourly
+  (`dash-addons-update.timer` → `addon-get autoupdate`; `marketplace.auto_update: false` turns it off) or on
+  Refresh. An add-on with local edits is never auto-updated (`addon-get` `local_changes()`).
 - Shared by several add-ons, so it stays in core: the Ask bar + chat engine (`/api/chat`, `/api/claude`, chats sync,
   `useAsk`/`useChats`), notes and deals server utils (chat images, AI context; Flats/Jobs), the hunter strip/tabs,
   `Panel`/`Stat`/`ServicesPanel`/`ContainersPanel`, and the agent's own modules (metrics, backups, claude,

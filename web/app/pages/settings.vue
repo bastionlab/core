@@ -53,6 +53,7 @@ const general = computed(() => [
   { path: 'marketplace.repo', label: 'Marketplace repo', value: cfg.value.marketplace?.repo },
   { path: 'marketplace.counter', label: 'Install counter', value: cfg.value.marketplace?.counter || '' },
   { path: 'marketplace.share_installs', label: 'Share my installs', value: cfg.value.marketplace?.share_installs ? 'on' : 'off' },
+  { path: 'marketplace.auto_update', label: 'Auto-update add-ons', value: cfg.value.marketplace?.auto_update === false ? 'off' : 'on' },
 ])
 const cts = computed(() => Object.entries(cfg.value.cts ?? {}) as [string, any][])
 

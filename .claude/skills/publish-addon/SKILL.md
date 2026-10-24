@@ -1,16 +1,24 @@
 ---
 name: publish-addon
-description: Release a pvedash add-on to the marketplace (bump version, rebuild the index, open a PR to pvedash/addons). Use when the owner wants to share or update an add-on.
+description: Release a pvedash add-on to the marketplace (Publish button / agent/addon-publish → GitHub checks → auto-merge). Use when the owner wants to share or update an add-on.
 ---
 
 # Publish an add-on
 
-1. Check `addons/<id>/` builds (scratch build) and holds no secrets, tokens, IPs or personal data.
-2. Bump `version:` in `addons/<id>/addon.yaml` (patch for fixes, minor for features, major if it breaks setups).
-3. Run `python3 build-index.py` inside `addons/`.
-4. `addons/` is a checkout of `pvedash/addons`: `cd addons && git add <id> index.json && git commit && git push`
-   (MaxJC0, no Claude lines). Other people's add-ons arrive as PRs to that repo; review before merging, the code
-   runs as root on every install.
-5. An add-on kept in its own repo instead: add `{"id", "name", "version", "author", "desc", "repo": "https://github.com/<o>/<r>"}`
-   to `pvedash/addons/index.json` by PR; `build-index.py` keeps such entries.
-6. Once merged, installs see it on /addons (Install, or "update to vX").
+Publishing is one button: **/addons → Publish** on the add-on's card (shown when `addons/<id>` differs from the
+marketplace). It runs `agent/addon-publish <id>`; from a terminal the same is `python3 -I agent/addon-publish <id>`.
+
+What happens:
+1. The version goes up a patch if it isn't already higher than the marketplace's (written back into addon.yaml);
+   a new add-on gets the publisher's GitHub login as `author`.
+2. A pre-check on pve runs the marketplace's own gate (`pvedash/addons/.github/check/check.py`, no lint).
+3. The folder is pushed to the `publish/<id>` branch and a PR opened. `.github/workflows/publish.yml` checks it:
+   scope (only `<id>/`), manifest + version, owner (only the author or an org admin updates an add-on),
+   safety scan + ClamAV, leaked secrets, style (no hex colours in styles, no hardcoded IPs / tailnet / CT ids,
+   no native confirm/alert), ruff + ESLint. All green → it merges itself and rebuilds `index.json`.
+4. Every install picks it up within the hour (`dash-addons-update.timer`, off with `marketplace.auto_update: false`)
+   or on Refresh in /addons.
+
+Before pressing it, make the gate pass locally: `python3 addons/.github/check/check.py --id <id> --pr addons`.
+A failure is reported in the job log and as a comment on the PR; fix and Publish again (same branch, same PR).
+A minor/major bump (features / breaking) is set by hand in addon.yaml before publishing.

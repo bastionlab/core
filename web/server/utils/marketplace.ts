@@ -24,15 +24,22 @@ export function newer(a = '', b = '') {
   return false
 }
 
-async function fetchIndex() {
+async function fetchIndex(force: boolean) {
   const { agentUrl, agentToken } = useRuntimeConfig()
-  return upstream<any>('agent', agentUrl, agentToken, '/marketplace/index', 20_000).catch(() => null)
+  return upstream<any>('agent', agentUrl, agentToken, `/marketplace/index${force ? '?fresh=1' : ''}`, 20_000).catch(() => null)
+}
+
+/** add-ons here whose folder differs from the marketplace's ({ id: 'new' | 'changed' }): they get a Publish button */
+async function fetchLocal() {
+  const { agentUrl, agentToken } = useRuntimeConfig()
+  return upstream<Record<string, string>>('agent', agentUrl, agentToken, '/marketplace/local', 20_000).catch(() => ({}))
 }
 
 export async function marketplace(force = false) {
-  if (!force && cache && Date.now() - cache.at < TTL) return cache.data
+  const local = await fetchLocal()
+  if (!force && cache && Date.now() - cache.at < TTL) return { ...cache.data, local }
   const m = cfg().marketplace ?? {}
-  const got = await fetchIndex()
+  const got = await fetchIndex(force)
   const index = got?.addons ? got : { ...useRuntimeConfig().marketplaceLocal, source: 'local' }
   const counts: Record<string, number> = m.counter
     ? await $fetch<any>(`${m.counter.replace(/\/$/, '')}/counts`, { timeout: 5000 }).catch(() => ({}))
@@ -49,5 +56,5 @@ export async function marketplace(force = false) {
   })
   const data = { source: index.source === 'remote' ? 'remote' : 'local', updated: index.updated ?? null, shareInstalls: !!m.share_installs, addons }
   cache = { at: Date.now(), data }
-  return data
+  return { ...data, local }
 }

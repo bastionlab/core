@@ -4,6 +4,8 @@
   addon-get install <id>    fetch it from the marketplace into addons/<id>, run its install.sh once
   addon-get update  <id>    replace addons/<id> with the marketplace's newer version
   addon-get remove  <id>    take addons/<id> out (its CT and data stay)
+  addon-get autoupdate      every installed add-on the marketplace has newer, in one go (dash-addons-update.timer);
+                            off with config.json marketplace.auto_update = false
 On a box whose addons/ is a git checkout of the marketplace repo (the owner's), the same three are
 sparse-checkout add / drop and a pull.
   --no-rebuild              stage only (tests); otherwise deploy.sh runs in its own unit, dash-rebuild
@@ -169,6 +171,112 @@ def stash(aid):
     return dest
 
 
+STATE = Path(os.environ.get("DASH_ADDONS_STATE") or "/var/lib/dash-addons/state.json")
+HASH_SKIP = {"__pycache__", "node_modules", ".nuxt", ".output"}
+
+
+def folder_hash(d: Path):
+    """what an add-on folder holds, as one hash (paths + contents), to tell local edits from what was installed"""
+    import hashlib
+    h = hashlib.sha256()
+    for p in sorted(d.rglob("*")):
+        rel = p.relative_to(d)
+        if p.is_file() and not HASH_SKIP & set(rel.parts) and p.suffix != ".pyc":
+            h.update(str(rel).encode() + b"\0" + p.read_bytes() + b"\0")
+    return h.hexdigest()
+
+
+def _state():
+    try:
+        return json.loads(STATE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def remember(aid):
+    """addons/<id> now matches the marketplace (just installed, updated or published)"""
+    s = _state()
+    here = ADDONS / aid
+    if (here / "addon.yaml").exists():
+        s[aid] = folder_hash(here)
+    else:
+        s.pop(aid, None)
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    STATE.write_text(json.dumps(s, indent=1))
+
+
+def local_changes():
+    """{id: "new" | "changed"} for add-ons whose folder differs from the marketplace's: what Publish would send.
+    Owner's checkout: git status (untracked = new). Elsewhere: the folder hash against the one remembered."""
+    out = {}
+    if checkout_mode():
+        r = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"], cwd=ADDONS, capture_output=True,
+                           text=True, timeout=30)
+        for line in r.stdout.splitlines():
+            parts = line[3:].strip().strip('"').split("/")
+            if len(parts) > 1 and ID_RE.match(parts[0]) and (ADDONS / parts[0] / "addon.yaml").exists():
+                tracked = subprocess.run(["git", "ls-files", "--error-unmatch", f"{parts[0]}/addon.yaml"], cwd=ADDONS,
+                                         capture_output=True).returncode == 0
+                out[parts[0]] = "changed" if tracked else "new"
+        ahead = subprocess.run(["git", "diff", "--name-only", "@{u}", "HEAD"], cwd=ADDONS, capture_output=True, text=True, timeout=30)
+        for f in ahead.stdout.split():  # committed here, never pushed
+            a = f.split("/")[0]
+            if "/" in f and ID_RE.match(a) and (ADDONS / a / "addon.yaml").exists():
+                out.setdefault(a, "changed")
+        return out
+    s = _state()
+    for aid in installed_dirs():
+        if aid not in s:
+            continue  # installed before this was tracked: treat as the marketplace's
+        if folder_hash(ADDONS / aid) != s[aid]:
+            out[aid] = "changed"
+    return out
+
+
+def autoupdate():
+    """the hourly pull: whatever the marketplace has newer gets installed here, then one rebuild.
+    An add-on with local edits is left alone (they would be lost); so is everything while a rebuild runs."""
+    if MK.get("auto_update") is False:
+        say("auto-update is off (marketplace.auto_update)")
+        return False
+    busy = subprocess.run(["systemctl", "is-active", "--quiet", "dash-rebuild"]).returncode == 0
+    if busy:
+        say("a rebuild is running; next time")
+        return False
+    mine = local_changes()
+    if checkout_mode():
+        git("fetch", "-q", cwd=ADDONS)
+        behind = subprocess.run(["git", "diff", "--name-only", "HEAD", "FETCH_HEAD"], cwd=ADDONS, capture_output=True,
+                                text=True, timeout=60).stdout.split()
+        touched = sorted({f.split("/")[0] for f in behind if "/" in f} & set(installed_dirs()))
+        if not touched and not any(f == "index.json" for f in behind):
+            say("everything is up to date")
+            return False
+        if set(touched) & set(mine):
+            say(f"not pulling: local edits in {', '.join(sorted(set(touched) & set(mine)))} (publish them first)")
+            return False
+        with tempfile.TemporaryDirectory() as t:
+            tree = remote_tree(Path(t), *touched)
+            for s in touched:
+                if (tree / s).is_dir():
+                    check(tree / s, s, ADDONS / s)
+        git("merge", "--ff-only", "-q", "FETCH_HEAD", cwd=ADDONS)
+        say(f"pulled: {', '.join(touched) or 'index only'}")
+        return bool(touched)
+    todo = [e for e in index()["addons"] if (ADDONS / e["id"] / "addon.yaml").exists()
+            and newer(e.get("version"), manifest(ADDONS / e["id"]).get("version"))]
+    done = []
+    for e in todo:
+        if e["id"] in mine:
+            say(f"{e['id']}: local edits, not updating")
+            continue
+        r = subprocess.run([sys.executable, "-I", __file__, "update", e["id"], "--no-rebuild"], timeout=1800)
+        if r.returncode == 0:
+            done.append(e["id"])
+    say(f"updated: {', '.join(done)}" if done else "everything is up to date")
+    return bool(done)
+
+
 def newer(a, b):
     p = lambda v: [int(x) if x.isdigit() else 0 for x in (v or "").lstrip("v").split(".")[:3]] + [0] * 3
     return p(a)[:3] > p(b)[:3]
@@ -198,6 +306,9 @@ def checkout_mode():
     return (ADDONS / ".git").exists()
 
 
+KEEP = (".github",)  # the publish checks, not an add-on: stays in the checkout
+
+
 def sparse(*a):
     git("sparse-checkout", *a, cwd=ADDONS)
 
@@ -214,7 +325,7 @@ def main_checkout(cmd, aid):
         OLD.mkdir(parents=True, exist_ok=True)
         dest = OLD / f"{aid}-{manifest(here).get('version') or 'x'}-{time.strftime('%Y%m%d-%H%M%S')}"
         shutil.copytree(here, dest)  # a copy, in case it held edits that were never pushed
-        sparse("set", *[d for d in installed_dirs() if d != aid])
+        sparse("set", *KEEP, *[d for d in installed_dirs() if d != aid])
         say(f"{aid} left the checkout (still in the repo; a copy is in {dest})")
         return
     e = entry(aid)
@@ -245,7 +356,7 @@ def main_checkout(cmd, aid):
             say("running its install.sh")
             r = subprocess.run(["bash", "install.sh"], cwd=here, env={**os.environ, "DASH_CONFIG": "/etc/dash/config.json"}, timeout=3600)
             if r.returncode:
-                sparse("set", *[d for d in installed_dirs() if d != aid])
+                sparse("set", *KEEP, *[d for d in installed_dirs() if d != aid])
                 sys.exit(f"install.sh failed (exit {r.returncode}); the add-on was taken out again")
     else:  # update: the pull above already brought every installed add-on to the repo's version
         say(f"{aid} is now {manifest(here).get('version', '?')} (the pull updates every installed add-on)")
@@ -253,6 +364,10 @@ def main_checkout(cmd, aid):
 
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if args == ["autoupdate"]:
+        if autoupdate() and "--no-rebuild" not in sys.argv:
+            rebuild()
+        return
     if len(args) != 2 or args[0] not in ("install", "update", "remove") or not ID_RE.match(args[1]):
         sys.exit(__doc__)
     cmd, aid = args
@@ -293,6 +408,10 @@ def main():
                 sys.exit(f"install.sh failed (exit {r.returncode}); the add-on was taken out again")
         if old:
             say(f"previous version: {old.name}")
+    remember(aid)
+    if checkout_mode() and cmd == "update":
+        for d in installed_dirs():
+            remember(d)
     if "--no-rebuild" in sys.argv:
         say("staged only (--no-rebuild)")
     else:

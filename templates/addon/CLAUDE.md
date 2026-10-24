@@ -7,4 +7,6 @@ core's rules — they apply here too:
 
 Layout: `addon.yaml` (manifest), `web/` (Nuxt layer: `app/pages`, `app/components`, `server/api`), `agent/*.py`
 (host side through `dash_sdk`), optional `install.sh` (runs once as root on install, e.g. to create its CT).
-Test with a scratch build as the core's CLAUDE.md describes; ship with `/publish-addon`.
+Test with a scratch build as the core's CLAUDE.md describes; ship with the Publish button on /addons. Its gate
+(no hex colours in styles, no hardcoded IPs/tailnet/CT ids, no native confirm/alert, no secrets, ruff + ESLint
+clean) runs locally too: `python3 ../.github/check/check.py --id <id> --pr ..` from this folder.

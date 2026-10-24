@@ -8,7 +8,7 @@
   --track: #1d222b;
   --mono: ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
   --radius: 12px; --radius-sm: 8px;
-  --claude: #d97757; --term-bg: #07090c;
+  --claude: #d97757; --term-bg: #07090c; --term-fg: #d0d4dc;
   --tabbar: 0px;
   color-scheme: dark;
 }

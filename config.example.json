@@ -24,6 +24,7 @@
     "repo": "https://github.com/pvedash/addons",
     "token_file": "/root/devbox/keys/github_token",
     "counter": "",
-    "share_installs": false
+    "share_installs": false,
+    "auto_update": true
   }
 }

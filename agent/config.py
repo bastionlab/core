@@ -83,7 +83,7 @@ def _check(path, v):
         return _ip(v)
     if path in ("marketplace.index", "marketplace.repo", "marketplace.counter"):
         return _url(v)
-    if path == "marketplace.share_installs":
+    if path in ("marketplace.share_installs", "marketplace.auto_update"):
         return v in (True, "true", "1", 1, "on")
     raise ValueError(f"{path} can't be changed from the dashboard")
 

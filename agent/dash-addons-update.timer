@@ -1,0 +1,10 @@
+[Unit]
+Description=dashboard add-ons auto-update every hour
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
