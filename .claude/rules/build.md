@@ -37,6 +37,10 @@ marketplace — plan").
   `useAsk`/`useChats`), notes and deals server utils (chat images, AI context; Flats/Jobs), the hunter strip/tabs,
   `Panel`/`Stat`/`ServicesPanel`/`ContainersPanel`, and — for now — the agent's host modules (media, dev, games,
   claude, actions). A new feature starts as `addons/<id>/` (`templates/new-addon`), never in core.
+- `addons/` on this box is a sparse checkout of `pvedash/addons`, not part of the core repo (`/addons/` is
+  ignored). Edit an add-on there, bump its `version:`, run `python3 build-index.py`, then commit and push in
+  `addons/`. Install / Remove = `git sparse-checkout add` / drop, Update = `git pull` (every installed add-on).
+  On a box without the checkout (friends), `addon-get` copies folders instead.
 - `pvedash/addons` is private for now: `agent/addon-get` reads `marketplace.token_file` (default
   `/root/devbox/keys/github_token`) and sends it only to GitHub (header via env, never argv); the app gets the
   index from the agent (`/marketplace/index`), so the token never leaves pve.

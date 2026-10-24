@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 agent/pin_hash
 agent/lan_key
+
+# add-ons are their own repo (pvedash/addons), checked out here
+/addons/

@@ -4,6 +4,8 @@
   addon-get install <id>    fetch it from the marketplace into addons/<id>, run its install.sh once
   addon-get update  <id>    replace addons/<id> with the marketplace's newer version
   addon-get remove  <id>    take addons/<id> out (its CT and data stay)
+On a box whose addons/ is a git checkout of the marketplace repo (the owner's), the same three are
+sparse-checkout add / drop and a pull.
   --no-rebuild              stage only (tests); otherwise deploy.sh runs in its own unit, dash-rebuild
 
 Where things come from: config.json marketplace.index (the pvedash/addons index.json, or the copy in
@@ -40,7 +42,8 @@ def say(*a):
 
 
 def index():
-    url = MK.get("index")
+    # DASH_MARKET_INDEX="" (tests) skips the remote index and reads addons/index.json
+    url = os.environ.get("DASH_MARKET_INDEX", MK.get("index"))
     if url:
         try:
             t = token()
@@ -135,13 +138,63 @@ def rebuild():
     say(f"rebuild started (dash-rebuild, log {log}); the dashboard is back in a few minutes")
 
 
+def checkout_mode():
+    """addons/ is a git checkout of the marketplace repo (the owner's box, where add-ons are edited and pushed):
+    installed = the folders in its sparse checkout, so install/remove/update are git operations, not copies"""
+    return (ADDONS / ".git").exists()
+
+
+def sparse(*a):
+    git("sparse-checkout", *a, cwd=ADDONS)
+
+
+def installed_dirs():
+    return sorted(d.name for d in ADDONS.iterdir() if (d / "addon.yaml").exists())
+
+
+def main_checkout(cmd, aid):
+    here = ADDONS / aid
+    if cmd == "remove":
+        if not (here / "addon.yaml").exists():
+            sys.exit(f"{aid} is not installed")
+        OLD.mkdir(parents=True, exist_ok=True)
+        dest = OLD / f"{aid}-{manifest(here).get('version') or 'x'}-{time.strftime('%Y%m%d-%H%M%S')}"
+        shutil.copytree(here, dest)  # a copy, in case it held edits that were never pushed
+        sparse("set", *[d for d in installed_dirs() if d != aid])
+        say(f"{aid} left the checkout (still in the repo; a copy is in {dest})")
+        return
+    e = entry(aid)
+    if e.get("repo"):
+        sys.exit(f"{aid} lives in its own repo; this box's addons/ is a checkout of the marketplace repo only")
+    sub = e.get("path") or aid
+    if not PATH_RE.match(sub):
+        sys.exit(f"bad folder name {sub!r}")
+    say("pulling the marketplace repo")
+    git("pull", "--ff-only", "-q", cwd=ADDONS)
+    if cmd == "install":
+        if here.exists():
+            sys.exit(f"{aid} is already installed")
+        sparse("add", sub)
+        say(f"{aid} {manifest(here).get('version', '?')} is in {here}")
+        if (here / "install.sh").exists():
+            say("running its install.sh")
+            r = subprocess.run(["bash", "install.sh"], cwd=here, env={**os.environ, "DASH_CONFIG": "/etc/dash/config.json"}, timeout=3600)
+            if r.returncode:
+                sparse("set", *[d for d in installed_dirs() if d != aid])
+                sys.exit(f"install.sh failed (exit {r.returncode}); the add-on was taken out again")
+    else:  # update: the pull above already brought every installed add-on to the repo's version
+        say(f"{aid} is now {manifest(here).get('version', '?')} (the pull updates every installed add-on)")
+
+
 def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if len(args) != 2 or args[0] not in ("install", "update", "remove") or not ID_RE.match(args[1]):
         sys.exit(__doc__)
     cmd, aid = args
     here = ADDONS / aid
-    if cmd == "remove":
+    if checkout_mode():
+        main_checkout(cmd, aid)
+    elif cmd == "remove":
         if not (here / "addon.yaml").exists():
             sys.exit(f"{aid} is not installed as an add-on folder")
         stash(aid)

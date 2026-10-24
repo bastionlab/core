@@ -54,6 +54,8 @@ ping -c1 -W1 "$CT_IP" >/dev/null 2>&1 && die "$CT_IP answers already — pick a 
 say "packages + core sources in $DIR"
 run apt-get install -y -q git jq curl python3-yaml
 if [ -d "$DIR/.git" ]; then run git -C "$DIR" pull -q --ff-only; else run git clone -q "$REPO" "$DIR"; fi
+# add-ons are installed into addons/ from the Add-ons page (pvedash/addons)
+run mkdir -p "$DIR/addons"
 
 # --- config.json ----------------------------------------------------------------------------------------
 say "writing $CONF"

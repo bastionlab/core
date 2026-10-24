@@ -24,9 +24,9 @@ Flats, Jobs, Money, Chat, and Local AI (no tab of its own).
   `tailscale serve`). Notes and chats are SQLite in `/var/lib/dash` there. Calls to the agent / CT 107 / CT 108 /
   Ollama all go through `server/utils/upstream.ts`.
 - `addons/<id>/` — every tab except Home/Metrics/Add-ons: `addon.yaml`, `web/` (a Nuxt layer the app extends) and
-  `agent/*.py` (loaded through `agent/dash_sdk.py`). `addons/index.json` is the marketplace index
-  (`addons/build-index.py`), a stand-in for the private `pvedash/addons` repo. `/addons` switches any of them off or
-  removes it.
+  `agent/*.py` (loaded through `agent/dash_sdk.py`). `addons/` is not part of this repo: it is a sparse checkout of
+  the private `pvedash/addons` (the marketplace; HTTPS with the token file as credential helper). The checked-out
+  folders are what is installed; `/addons` switches any of them off, installs, updates (a pull) or removes them.
 - `/etc/dash/config.json` — this install's tailnet, LAN, CT ids/IPs and paths (shape: `config.example.json`).
 - `/root/devbox/pv` — helper inside dev boxes (`pv ls|start|stop|log|cc|ccstop|cclog|shiplog|fetch|push|new|rm|remote`).
   Per-project overrides in `<project>/.dashboard.yml` (`command:`, `ports:`, `name:`).

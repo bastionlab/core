@@ -9,7 +9,7 @@ See README.md for what lives where. This file is how to change it without breaki
   so don't deploy someone else's half-finished files.
 - Unsure a change compiles? Test-build a scratch copy in CT 104 first (there is no node on pve): copy
   `/opt/dash/node_modules` to `/tmp/x` in CT 104, ship the sources the way deploy.sh does
-  (`tar -C . --exclude=node_modules --exclude='addons/*/agent' --transform 's,^web/,,;s,^web$,.,' -cf - web addons`),
+  (`tar -C . --exclude=node_modules --exclude=.git --exclude='addons/*/agent' --transform 's,^web/,,;s,^web$,.,' -cf - web addons`),
   `npx nuxi build`, then delete `/tmp/x`. If you start it, use `NOTES_DIR=<scratch dir> LEARN_WORKER=0` so it
   can't touch the real databases or start Claude jobs through the agent.
 - Commits: author MaxJC0 (repo-local git config is set). No Co-Authored-By / Claude / Anthropic lines, ever.
