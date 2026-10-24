@@ -1,0 +1,12 @@
+# one add-on: this file is what the Add-ons page (and later the marketplace index) shows
+id: habits
+name: Habits
+icon: check
+order: 3
+author: MaxJC0
+desc: Offline-first habit tracker with streaks, a calendar and a perfect-day celebration.
+routes: [/habits]
+ct: habits
+needs: [own CT]
+depends_on: []
+# web/ only frames the tracker, which is its own app (MaxJC0/habits) in the `habits` CT of config.json

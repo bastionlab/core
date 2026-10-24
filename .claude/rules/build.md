@@ -14,9 +14,9 @@ marketplace — plan").
 
 ## Add-ons
 - Everything beyond the core (Home, Notes, Chat, Metrics, Add-ons) is an add-on. Moved-out ones live in
-  `addons/<id>/` (Learn is the first):
-  - `addon.yaml` — id, name, icon, author, desc (one or two lines), routes, needs, ct, depends_on. The Add-ons
-    page, nav entry and route guard all come from it (via `runtimeConfig.public.addons`).
+  `addons/<id>/` (so far Learn, Kanji, Habits):
+  - `addon.yaml` — id, name, icon, order (tab position), author, desc (one or two lines), routes, needs, ct,
+    depends_on. The Add-ons page, nav entry and route guard all come from it (via `runtimeConfig.public.addons`).
   - `web/` — a Nuxt layer (`app/pages`, `app/components`, `server/api|utils|plugins`) the core extends; it may use
     the core's utils and composables (`agentCall`, `upstream`, `Panel`, …).
   - `agent/*.py` — loaded by the agent; register routes with `dash_sdk` (`@get`, `@post`) and use its `pct`,

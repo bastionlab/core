@@ -6,7 +6,6 @@ const route = useRoute()
 const NAV = [
   { to: '/', icon: 'home', label: 'Home' },
   { to: '/notes', icon: 'note', label: 'Notes' },
-  { to: '/habits', icon: 'check', label: 'Habits' },
   { to: '/media', icon: 'media', label: 'Media' },
   { to: '/dev', icon: 'dev', label: 'Dev' },
   { to: '/servers', icon: 'gamepad', label: 'Servers' },

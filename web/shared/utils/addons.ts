@@ -8,6 +8,8 @@ export interface Addon {
   id: string
   name: string
   icon: string
+  /** addon.yaml only: position among the add-on tabs (lower = earlier) */
+  order?: number
   /** pages that belong to it; none = a backend others build on (local AI) */
   routes: string[]
   author: string
@@ -26,12 +28,6 @@ export const ADDONS: Addon[] = [
   { id: 'ai', name: 'Local AI', icon: 'spark', routes: [], author: 'MaxJC0', ct: 'ai',
     desc: 'Ollama + Open WebUI on the GPU. Powers the Ask bar and reads ads, postings and bank lines for the hunters and Money.',
     needs: ['NVIDIA GPU (8 GB+)', '16 GB RAM'] },
-  { id: 'kanji', name: 'Kanji', icon: 'kanji', routes: ['/kanji'], author: 'MaxJC0',
-    desc: 'Anki-style JLPT kanji reviews with stroke-order tracing and write-the-word cards.',
-    needs: [] },
-  { id: 'habits', name: 'Habits', icon: 'check', routes: ['/habits'], author: 'MaxJC0', ct: 'habits',
-    desc: 'Offline-first habit tracker with streaks, a calendar and a perfect-day celebration.',
-    needs: ['own CT'] },
   { id: 'media', name: 'Media', icon: 'media', routes: ['/media'], author: 'MaxJC0', ct: 'dl',
     desc: 'VPN-isolated download stack (*arr, qBittorrent, Seerr) feeding Jellyfin and Audiobookshelf; queues, library, removal.',
     needs: ['VPN account', 'storage pool'] },
