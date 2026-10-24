@@ -18,7 +18,8 @@ Flats, Jobs, Money, Chat, and Local AI (no tab of its own).
   `core` (shell helpers, cache, pools), `metrics`, `actions` (the host's allowlist + jobs), `claude` (one
   `claude -p` systemd unit per chat turn), `dash_sdk` (what add-ons build on: routes, streams, actions, services,
   startup hooks). Everything an add-on does on the host lives in `addons/<id>/agent/` (Media: `media.py` +
-  `media-rm`; Dev: `dev.py`, `github.py`, `devroutes.py`, `gh-new`; Game servers: `games.py` + `gsm`) and is
+  `media-rm`; Dev: `dev.py`, `github.py`, `devroutes.py`, `gh-new`; Game servers: `games.py` + `gsm`; Local AI:
+  `localai.py` with the ollama actions and its containers) and is
   loaded only while that add-on is installed. `addons/<id>/deploy.sh` runs on every deploy (pv into dev boxes,
   gsm into the gameservers CT). `hooks.py` (Discord webhooks, `/etc/dash/discord.json`), `alerts.py` + `dash-alerts.timer` (failed backups
   and full disks → #alerts every 15 min).

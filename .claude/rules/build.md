@@ -40,7 +40,7 @@ marketplace — plan").
 - Shared by several add-ons, so it stays in core: the Ask bar + chat engine (`/api/chat`, `/api/claude`, chats sync,
   `useAsk`/`useChats`), notes and deals server utils (chat images, AI context; Flats/Jobs), the hunter strip/tabs,
   `Panel`/`Stat`/`ServicesPanel`/`ContainersPanel`, and the agent's own modules (metrics, backups, claude,
-  host actions, Discord hooks). Local AI's ollama actions and its containers in SERVICES are still core.
+  host actions, Discord hooks) — nothing in the core agent belongs to a single add-on any more.
   A new feature starts as `addons/<id>/` (`templates/new-addon`), never in core.
 - `addons/` on this box is a sparse checkout of `pvedash/addons`, not part of the core repo (`/addons/` is
   ignored). Edit an add-on there, bump its `version:`, run `python3 build-index.py`, then commit and push in

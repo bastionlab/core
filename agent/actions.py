@@ -7,7 +7,7 @@ from metrics import backup_busy, cts, pools, scheduled_shutdown, unit
 
 
 # Every action the dashboard (and through it the AI) may run: the host's own here, an add-on's in its agent module
-# (dash_sdk.action; Dev's git/project/newdev, Media's media_remove). Arguments are validated, argv is fixed:
+# (dash_sdk.action; Dev's git/project/newdev, Media's media_remove, Local AI's ollama_pull/stop). Arguments are validated, argv is fixed:
 # nothing the caller sends is ever passed to a shell. No CT destroy and no dataset/volume deletion. What does
 # delete or power off is guarded: project_remove only moves the folder to ~/.pv-trash and refuses unpushed work,
 # media_remove and host_shutdown sit behind a double confirm and are not offered to the Ask model.
@@ -15,16 +15,12 @@ from metrics import backup_busy, cts, pools, scheduled_shutdown, unit
 # what service_restart / service_uptime know: name -> (CT, systemd or docker, unit or container)
 SERVICES = {
     "dash": (ct("dash"), "systemd", "dash"),
-    "ollama": (ct("ai"), "systemd", "ollama"),
-    "open-webui": (ct("ai"), "systemd", "open-webui"),
-    "searxng": (ct("ai"), "docker", "searxng"),
     "immich": (ct("immich"), "docker", "immich_server"),
     "immich-ml": (ct("immich"), "docker", "immich_machine_learning"),
     "jellyfin": (ct("jellyfin"), "docker", "jellyfin"),
     "audiobookshelf": (ct("books"), "docker", "audiobookshelf"),
-    "subgen": (ct("ai"), "docker", "subgen"),
 }
-AI_CT = ct("ai")
+SERVICES = {k: v for k, v in SERVICES.items() if v[0]}  # a CT this box doesn't have (0) is not a service here
 
 
 @cached(30)
@@ -181,23 +177,6 @@ def a_unit_start(args):
     return what, ["systemctl", "start", unit], 6 * 3600
 
 
-MODEL_RE = re.compile(r"^[a-zA-Z0-9][\w.:/-]{0,80}$")
-
-
-def a_ollama_pull(args):
-    model = str(args.get("model", ""))
-    if not MODEL_RE.match(model):
-        raise ValueError("invalid model name")
-    return f"download the Ollama model {model} (can take a while)", _pct(AI_CT, "ollama", "pull", model), 4 * 3600
-
-
-def a_ollama_stop(args):
-    model = str(args.get("model", ""))
-    if not MODEL_RE.match(model):
-        raise ValueError("invalid model name")
-    return f"unload {model} from VRAM (the model stays on disk)", _pct(AI_CT, "ollama", "stop", model), 120
-
-
 # --- add-ons: install / update / remove from the marketplace (agent/addon-get does the work) ---------------
 ADDON_GET = f"{DASHBOARD}/agent/addon-get"
 _ag = None
@@ -267,7 +246,7 @@ ACTIONS = {
     "backup_ct": a_backup_ct, "backup_all": a_backup_all, "ct_start": a_ct_start, "ct_shutdown": a_ct_shutdown, "ct_reboot": a_ct_reboot,
     "service_restart": a_service_restart, "apt_upgrade": a_apt_upgrade,
     "apt_upgrade_all": a_apt_upgrade_all, "zfs_scrub": a_zfs_scrub,
-    "unit_start": a_unit_start, "ollama_pull": a_ollama_pull, "ollama_stop": a_ollama_stop, 
+    "unit_start": a_unit_start, 
 "host_shutdown": a_host_shutdown, "host_shutdown_cancel": a_host_shutdown_cancel,
     # not offered to the Ask model (server/utils/actions.ts): only the Add-ons page's own buttons run these
     "addon_install": a_addon_install, "addon_update": a_addon_update, "addon_remove": a_addon_remove,
