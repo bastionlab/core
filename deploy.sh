@@ -7,6 +7,7 @@ CONF=/etc/dash/config.json   # this install's tailnet, LAN, CT ids/IPs (shape: c
 [ -s "$CONF" ] || { echo "no $CONF yet — copy $DIR/config.example.json there and fill it in" >&2; exit 1; }
 c() { jq -r "($1) // empty" "$CONF"; }   # a key this install lacks is empty, not "null"
 CT=$(c .cts.dash.id)
+BACK=$(c .paths.backends); BACK=${BACK:-/root}   # backend repos (deals, money) keep their API tokens there
 
 [ -s "$DIR/agent/lan_key" ] || (umask 077; openssl rand -hex 32 > "$DIR/agent/lan_key")
 [ -s "$DIR/agent/pin_hash" ] || { echo "no dashboard PIN yet — run $DIR/set-pin first" >&2; exit 1; }
@@ -29,7 +30,7 @@ pct exec $CT -- mkdir -p /etc/dash && pct push $CT "$CONF" /etc/dash/config.json
 tar -C "$DIR" --exclude=node_modules --exclude=.nuxt --exclude=.output --exclude=__pycache__ --exclude=.git --exclude='addons/*/agent' --exclude='addons/*/deploy.sh' --transform 's,^web/,,;s,^web$,.,' -cf - web addons | pct exec $CT -- sh -c 'mkdir -p /opt/dash && cd /opt/dash && rm -rf app server public shared addons && tar -xf -'
 
 echo "→ env + service"
-pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_URL=http://%s:7070\nNUXT_OLLAMA_URL=http://%s:11434\nNUXT_DEALS_URL=http://%s:8090\nNUXT_MONEY_URL=http://%s:8090\nNUXT_OWNER_LOGINS=%s\nNUXT_AGENT_TOKEN=%s\nNUXT_DEALS_TOKEN=%s\nNUXT_MONEY_TOKEN=%s\nNUXT_PIN_HASH=%s\nNUXT_LAN_KEY=%s\nHOST=127.0.0.1\nPORT=3000\nNODE_ENV=production\n' '$(c .lan.host_ip)' '$(c .cts.ai.ip)' '$(c .cts.deals.ip)' '$(c .cts.money.ip)' '$(c '.owner_logins | join(",")')' '$(cat "$DIR/agent/token")' '$(cat /root/deals/token 2>/dev/null)' '$(cat /root/money/token 2>/dev/null)' '$(cat "$DIR/agent/pin_hash")' '$(cat "$DIR/agent/lan_key")' > /etc/dash.env"
+pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_URL=http://%s:7070\nNUXT_OLLAMA_URL=http://%s:11434\nNUXT_DEALS_URL=http://%s:8090\nNUXT_MONEY_URL=http://%s:8090\nNUXT_OWNER_LOGINS=%s\nNUXT_AGENT_TOKEN=%s\nNUXT_DEALS_TOKEN=%s\nNUXT_MONEY_TOKEN=%s\nNUXT_PIN_HASH=%s\nNUXT_LAN_KEY=%s\nHOST=127.0.0.1\nPORT=3000\nNODE_ENV=production\n' '$(c .lan.host_ip)' '$(c .cts.ai.ip)' '$(c .cts.deals.ip)' '$(c .cts.money.ip)' '$(c '.owner_logins | join(",")')' '$(cat "$DIR/agent/token")' '$(cat "$BACK/deals/token" 2>/dev/null)' '$(cat "$BACK/money/token" 2>/dev/null)' '$(cat "$DIR/agent/pin_hash")' '$(cat "$DIR/agent/lan_key")' > /etc/dash.env"
 pct push $CT "$DIR/dash.service" /etc/systemd/system/dash.service
 
 echo "→ build"

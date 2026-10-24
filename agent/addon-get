@@ -138,6 +138,13 @@ def rebuild():
     say(f"rebuild started (dash-rebuild, log {log}); the dashboard is back in a few minutes")
 
 
+def need_deps(e):
+    """an add-on installs only after what it depends on (Deals needs the Hunters backend and Local AI)"""
+    missing = [d for d in (e.get("depends_on") or []) if not (ADDONS / d / "addon.yaml").exists()]
+    if missing:
+        sys.exit(f"install {', '.join(missing)} first: {e.get('name', e['id'])} needs {'it' if len(missing) == 1 else 'them'}")
+
+
 def checkout_mode():
     """addons/ is a git checkout of the marketplace repo (the owner's box, where add-ons are edited and pushed):
     installed = the folders in its sparse checkout, so install/remove/update are git operations, not copies"""
@@ -174,6 +181,7 @@ def main_checkout(cmd, aid):
     if cmd == "install":
         if here.exists():
             sys.exit(f"{aid} is already installed")
+        need_deps(e)
         sparse("add", sub)
         say(f"{aid} {manifest(here).get('version', '?')} is in {here}")
         if (here / "install.sh").exists():
@@ -202,6 +210,8 @@ def main():
         e = entry(aid)
         if cmd == "install" and here.exists():
             sys.exit(f"{aid} is already installed")
+        if cmd == "install":
+            need_deps(e)
         if cmd == "update":
             if not (here / "addon.yaml").exists():
                 sys.exit(f"{aid} is not installed")

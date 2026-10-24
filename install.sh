@@ -63,7 +63,7 @@ CFG=$(jq -n --arg tn "$TAILNET" --arg owner "$OWNER" --arg subnet "$SUBNET" --ar
   --arg dir "$DIR" --argjson ct "$CT" --arg ctip "$CT_IP" --arg lo "${DEV_IDS%-*}" --arg hi "${DEV_IDS#*-}" --arg pfx "$PREFIX" '{
   name: "pve", tailnet: $tn, owner_logins: [$owner],
   lan: { subnet: $subnet, host_ip: $host },
-  paths: { dashboard: $dir, devbox: "/root/devbox" },
+  paths: { dashboard: $dir, devbox: "/root/devbox", backends: "/opt/pvedash" },
   devbox: { ids: [($lo|tonumber), ($hi|tonumber)], ips: [($pfx + ".60"), ($pfx + ".99")] },
   cts: { dash: { id: $ct, ip: $ctip } },
   marketplace: { index: "https://raw.githubusercontent.com/pvedash/addons/main/index.json",

@@ -38,6 +38,13 @@ marketplace — plan").
     `@on_start` threads, `stale_after_jobs(...)`. Use its `pct`, `sh`, `cached`, `ct`/`ip`, `cts`, … rather than
     importing core modules. Helper scripts next to it reach the core via `Path(__file__).parents[3] / "agent"`.
   - `deploy.sh` (optional, executable) — run by the core's deploy.sh every time (e.g. push a helper into a CT).
+  - `install.sh` (optional) — runs once on Install. An add-on with an app of its own (`backend:` repo, own CT)
+    makes it one line: `agent/backend-install <cts key> <repo> <hostname> <MB> <GB> <features> [tun]`. That
+    creates a Debian CT (DHCP), records `cts.<key>` in config.json, clones the repo into `paths.backends` and runs
+    the repo's `bootstrap.sh` (first-time setup, `DASH_CT` = the CT) and `deploy.sh` (CT + addresses from
+    config.json). A CT config.json already knows is left alone. Backend repos: pvedash/deals (shared by
+    Deals/Flats/Jobs through the `hunters` add-on), pvedash/money, pvedash/habits.
+  - `depends_on` is enforced on install too: Deals won't install before `hunters` and `ai`.
 - `addon.yaml` also carries `version:` (x.y.z). Bump it on every change worth shipping, then run
   `python3 addons/build-index.py`: `addons/index.json` is the marketplace index (this folder stands in for the
   `pvedash/addons` repo). The app reads the real one from `config.json` `marketplace.index` and falls back to the

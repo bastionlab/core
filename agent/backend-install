@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# backend-install <cts key> <backend repo> <hostname> <memory MB> <disk GB> <features> [tun]
+#
+# What an add-on's install.sh calls when the add-on needs an app of its own in its own CT (Money, Habits, the
+# hunters): create a Debian CT, record it as cts.<key> in /etc/dash/config.json, clone the backend repo into
+# paths.backends, then run the backend's bootstrap.sh (first-time setup inside the CT) and deploy.sh.
+#
+# A CT that config.json already knows and that exists is left alone completely (no clone, no bootstrap, no
+# deploy): this is for new installs, never for re-provisioning a running one. Nothing is ever destroyed; if a step
+# fails after the CT exists, the CT stays for a look and the error says which one.
+set -euo pipefail
+KEY=${1:?cts key}; REPO=${2:?repo}; HOST=${3:?hostname}; MEM=${4:-2048}; DISK=${5:-12}; FEAT=${6:-nesting=1}; TUN=${7:-}
+CONF=/etc/dash/config.json
+c() { jq -r "($1) // empty" "$CONF"; }
+DASH=$(c .paths.dashboard); DASH=${DASH:-/root/dashboard}
+[[ "$KEY" =~ ^[a-z][a-z0-9-]{1,20}$ ]] || { echo "bad cts key $KEY" >&2; exit 1; }
+[[ "$REPO" =~ ^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || { echo "refusing repo $REPO" >&2; exit 1; }
+
+HAVE=$(c ".cts[\"$KEY\"].id")
+if [ -n "$HAVE" ] && pct status "$HAVE" >/dev/null 2>&1; then
+  echo "CT $HAVE ($KEY) is already set up; leaving it alone"
+  exit 0
+fi
+
+# --- the backend's code ---------------------------------------------------------------------------------------
+BACK=${DASH_BACKENDS:-$(c .paths.backends)}; BACK=${BACK:-/opt/pvedash}   # DASH_BACKENDS: tests
+NAME=${REPO##*/}; DIR="$BACK/$NAME"
+TOKEN_FILE=$(c .marketplace.token_file); TOKEN_FILE=${TOKEN_FILE:-$(c .paths.devbox)/keys/github_token}
+git_() {  # the GitHub token (private org repos) goes in through the environment, never argv
+  if [ -s "$TOKEN_FILE" ]; then
+    GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+      GIT_CONFIG_VALUE_0="Authorization: Basic $(printf 'x-access-token:%s' "$(tr -d '\n' < "$TOKEN_FILE")" | base64 -w0)" git "$@"
+  else GIT_TERMINAL_PROMPT=0 git "$@"; fi
+}
+mkdir -p "$BACK"
+if [ -d "$DIR/.git" ]; then echo "→ updating $DIR"; git_ -C "$DIR" pull -q --ff-only
+else echo "→ cloning $REPO into $DIR"; git_ clone -q "$REPO" "$DIR"; fi
+[ -x "$DIR/bootstrap.sh" ] && [ -x "$DIR/deploy.sh" ] || { echo "$REPO has no bootstrap.sh / deploy.sh" >&2; exit 1; }
+
+# --- the CT -------------------------------------------------------------------------------------------------
+ID=$(pvesh get /cluster/nextid)
+STORAGE=$(pvesm status --content rootdir 2>/dev/null | awk 'NR>1 && $3=="active"{print $1}' | grep -x local-lvm || \
+  pvesm status --content rootdir 2>/dev/null | awk 'NR>1 && $3=="active"{print $1; exit}')
+TPL=$(pveam list local 2>/dev/null | awk -v a="$(dpkg --print-architecture)" '$1 ~ "debian-13-standard_.*_" a {print $1}' | sort -V | tail -1)
+if [ -z "$TPL" ]; then
+  T=$(pveam available --section system | awk -v a="$(dpkg --print-architecture)" '$2 ~ "debian-13-standard_.*_" a {print $2}' | sort -V | tail -1)
+  echo "→ downloading $T"; pveam download local "$T" >/dev/null; TPL="local:vztmpl/$T"
+fi
+echo "→ creating CT $ID ($HOST, ${MEM} MB, ${DISK} GB on $STORAGE)"
+pct create "$ID" "$TPL" --hostname "$HOST" --cores 2 --memory "$MEM" --rootfs "$STORAGE:$DISK" \
+  --net0 name=eth0,bridge=vmbr0,ip=dhcp --unprivileged 1 --features "$FEAT" --onboot 1 --ostype debian >/dev/null
+if [ "$TUN" = tun ]; then
+  printf 'lxc.cgroup2.devices.allow: c 10:200 rwm\nlxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file\n' >> "/etc/pve/lxc/$ID.conf"
+fi
+pct start "$ID"
+IP=""
+for _ in $(seq 60); do IP=$(pct exec "$ID" -- hostname -I 2>/dev/null | awk '{print $1}'); [ -n "$IP" ] && break; sleep 1; done
+[ -n "$IP" ] || { echo "CT $ID got no IP (DHCP); it stays for a look" >&2; exit 1; }
+echo "→ CT $ID is at $IP"
+
+echo "→ recording cts.$KEY in config.json"
+python3 -I "$DASH/agent/config-set" "cts.$KEY.id" "$ID" --no-rebuild
+python3 -I "$DASH/agent/config-set" "cts.$KEY.ip" "\"$IP\"" --no-rebuild
+
+echo "→ bootstrap"; DASH_CT=$ID "$DIR/bootstrap.sh" || { echo "bootstrap failed; CT $ID stays for a look" >&2; exit 1; }
+echo "→ deploy";    DASH_CT=$ID "$DIR/deploy.sh"    || { echo "deploy failed; CT $ID stays for a look" >&2; exit 1; }
+echo "✓ $NAME runs in CT $ID ($IP)"
