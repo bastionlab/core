@@ -3,14 +3,13 @@ import json, subprocess, threading, time, urllib.error, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from config import DASHBOARD, DEVBOX
+from config import DEVBOX
 
 
 HERE = Path(__file__).resolve().parent
 TSKEY = DEVBOX / "keys/tailscale_authkey"
 TSKEY_DAYS = 90
 PV = "/usr/local/bin/pv"
-GH_NEW = f"{DASHBOARD}/agent/gh-new"
 POOL = ThreadPoolExecutor(8)
 # leaf work fanned out from inside a POOL task (per-CT probes, *arr calls) runs here: a POOL task waiting on
 # its own pool could take every worker and hang /overview for good

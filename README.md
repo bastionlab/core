@@ -15,10 +15,12 @@ Flats, Jobs, Money, Chat, and Local AI (no tab of its own).
 
 - `agent/` — runs on pve (`dash-agent.service`, 192.168.1.50:7070). Only answers CT 104 (and pve itself) with
   the bearer token in `agent/token`. `agent.py` is just the HTTP server; the rest is split by topic:
-  `core` (shell helpers, cache, pools), `metrics`, `media`, `dev` (previews, shells, terminals), `github`,
-  `actions` (the allowlist + jobs), `claude` (one `claude -p` systemd unit per chat turn).
-  Helpers next to it: `media-rm` and `gh-new` (run as actions, keep secrets out of the visible argv),
-  `hooks.py` (Discord webhooks, `/etc/dash/discord.json`), `alerts.py` + `dash-alerts.timer` (failed backups
+  `core` (shell helpers, cache, pools), `metrics`, `actions` (the host's allowlist + jobs), `claude` (one
+  `claude -p` systemd unit per chat turn), `dash_sdk` (what add-ons build on: routes, streams, actions, services,
+  startup hooks). Everything an add-on does on the host lives in `addons/<id>/agent/` (Media: `media.py` +
+  `media-rm`; Dev: `dev.py`, `github.py`, `devroutes.py`, `gh-new`; Game servers: `games.py` + `gsm`) and is
+  loaded only while that add-on is installed. `addons/<id>/deploy.sh` runs on every deploy (pv into dev boxes,
+  gsm into the gameservers CT). `hooks.py` (Discord webhooks, `/etc/dash/discord.json`), `alerts.py` + `dash-alerts.timer` (failed backups
   and full disks → #alerts every 15 min).
 - `web/` — Nuxt 4, built and run in CT 104 `dash` (`/opt/dash`, `dash.service`, 127.0.0.1:3000, published with
   `tailscale serve`). Notes and chats are SQLite in `/var/lib/dash` there. Calls to the agent / CT 107 / CT 108 /

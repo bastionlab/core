@@ -1,15 +1,13 @@
 """the action allowlist (the only things the dashboard and the Ask model can run) and the jobs that run them"""
 import importlib.machinery, importlib.util, json, os, re, secrets, shlex, signal, subprocess, threading, time
 
-from config import DASHBOARD, DEVBOX_IDS, DEVBOX_IPS, ct
-from core import FAN, GH_NEW, GH_TOKEN_FILE, JOBS, JOBS_LOCK, PV, cached, invalidate, sh
+from config import DASHBOARD, ct
+from core import FAN, JOBS, JOBS_LOCK, cached, invalidate, sh
 from metrics import backup_busy, cts, pools, scheduled_shutdown, unit
-from media import a_media_remove
-from dev import checked_project, dev_cts, pv
-from github import _gh_user
 
 
-# Every action the dashboard (and through it the AI) may run. Arguments are validated here, argv is fixed:
+# Every action the dashboard (and through it the AI) may run: the host's own here, an add-on's in its agent module
+# (dash_sdk.action; Dev's git/project/newdev, Media's media_remove). Arguments are validated, argv is fixed:
 # nothing the caller sends is ever passed to a shell. No CT destroy and no dataset/volume deletion. What does
 # delete or power off is guarded: project_remove only moves the folder to ~/.pv-trash and refuses unpushed work,
 # media_remove and host_shutdown sit behind a double confirm and are not offered to the Ask model.
@@ -24,17 +22,6 @@ SERVICES = {
     "immich-ml": (ct("immich"), "docker", "immich_machine_learning"),
     "jellyfin": (ct("jellyfin"), "docker", "jellyfin"),
     "audiobookshelf": (ct("books"), "docker", "audiobookshelf"),
-    # download stack (CT 106). Restarting gluetun drops the network namespace
-    # that qbittorrent, prowlarr and flaresolverr share; media-vpn-sync.service
-    # on CT 106 re-attaches them automatically, so restarting it here is safe.
-    "seerr": (ct("dl"), "docker", "seerr"),
-    "qbittorrent": (ct("dl"), "docker", "qbittorrent"),
-    "prowlarr": (ct("dl"), "docker", "prowlarr"),
-    "radarr": (ct("dl"), "docker", "radarr"),
-    "sonarr": (ct("dl"), "docker", "sonarr"),
-    "bazarr": (ct("dl"), "docker", "bazarr"),
-    "lazylibrarian": (ct("dl"), "docker", "lazylibrarian"),
-    "gluetun": (ct("dl"), "docker", "gluetun"),
     "subgen": (ct("ai"), "docker", "subgen"),
 }
 AI_CT = ct("ai")
@@ -45,7 +32,7 @@ def service_uptime():
     """state, start time and restart count of every SERVICES entry — one pct exec per container"""
     running = {c["vmid"] for c in cts() if c["status"] == "running"}
     by_ct = {}
-    for name, (vmid, kind, ref) in SERVICES.items():
+    for name, (vmid, kind, ref) in _services().items():
         by_ct.setdefault(vmid, []).append((name, kind, ref))
 
     def one(vmid, items):
@@ -147,9 +134,10 @@ def a_host_shutdown_cancel(args):
 
 def a_service_restart(args):
     name = str(args.get("service", ""))
-    if name not in SERVICES:
-        raise ValueError(f"unknown service {name}; known: {', '.join(sorted(SERVICES))}")
-    vmid, kind, ref = SERVICES[name]
+    svc = _services()
+    if name not in svc:
+        raise ValueError(f"unknown service {name}; known: {', '.join(sorted(svc))}")
+    vmid, kind, ref = svc[name]
     _ct({"vmid": vmid}, running=True)
     cmd = ["systemctl", "restart", ref] if kind == "systemd" else ["docker", "restart", ref]
     return f"restart {name} in CT {vmid}", _pct(vmid, *cmd), 300
@@ -193,113 +181,6 @@ def a_unit_start(args):
     return what, ["systemctl", "start", unit], 6 * 3600
 
 
-def _dev_project(args):
-    """a running dev box plus one of the projects `pv ls` reports in it"""
-    try:
-        vmid = int(args["vmid"])
-    except (KeyError, TypeError, ValueError):
-        raise ValueError("vmid must be a dev container id")
-    path = str(args.get("path", ""))
-    checked_project(vmid, path)
-    name = next((c["name"] for c in cts() if c["vmid"] == vmid), vmid)
-    return vmid, path, name
-
-
-def a_git_push(args):
-    vmid, path, name = _dev_project(args)
-    msg = str(args.get("message", "")).strip()
-    if msg and (len(msg) > 200 or "\n" in msg):
-        raise ValueError("commit message must be one line, max 200 characters")
-    short = path.rsplit("/", 1)[-1]
-    if msg:
-        return f"commit everything in {short} as “{msg}” and push it to GitHub ({name})", \
-            _pct(vmid, PV, "push", path, msg), 600
-    return f"push the committed work in {short} to GitHub ({name})", _pct(vmid, PV, "push", path), 600
-
-
-def a_git_fetch(args):
-    vmid, path, name = _dev_project(args)
-    return f"fetch {path.rsplit('/', 1)[-1]} from GitHub ({name})", _pct(vmid, PV, "fetch", path), 300
-
-
-def a_project_new(args):
-    try:
-        vmid = int(args["vmid"])
-    except (KeyError, TypeError, ValueError):
-        raise ValueError("vmid must be a dev container id")
-    if not any(c["vmid"] == vmid and c["status"] == "running" for c in dev_cts()):
-        raise ValueError(f"CT {vmid} is not a running dev box")
-    name = str(args.get("name", ""))
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,40}", name):
-        raise ValueError("project name: letters, digits, dot, dash, underscore")
-    repo = str(args.get("repo", "")).strip()
-    box = next((c["name"] for c in cts() if c["vmid"] == vmid), vmid)
-    if repo:
-        if not re.fullmatch(r"(?:git@[\w.-]+:[\w.-]+/[\w.-]+|https://[\w.-]+/[\w.-]+/[\w.-]+)(?:\.git)?", repo):
-            raise ValueError("repo must be git@host:owner/name or https://host/owner/name")
-        return f"clone {repo} into ~/Projects/GitHub/{name} on {box}", _pct(vmid, PV, "new", name, repo), 1800
-    if args.get("github"):
-        if not GH_TOKEN_FILE.exists():
-            raise ValueError("creating repos on GitHub needs a token (repo scope) in /root/devbox/keys/github_token")
-        vis = _visibility(args)
-        return (f"create ~/Projects/GitHub/{name} on {box}, create the {vis} GitHub repo {_gh_user()}/{name} and push it",
-                ["python3", GH_NEW, "new", str(vmid), name, vis], 1800)
-    return f"create a new git project ~/Projects/GitHub/{name} on {box}", _pct(vmid, PV, "new", name), 600
-
-
-def _visibility(args):
-    vis = str(args.get("visibility", "private"))
-    if vis not in ("private", "public"):
-        raise ValueError("visibility must be private or public")
-    return vis
-
-
-def a_github_publish(args):
-    """an existing project that has no remote yet: create the repo on GitHub and push it there"""
-    vmid, path, _box = _dev_project(args)
-    if not GH_TOKEN_FILE.exists():
-        raise ValueError("creating repos on GitHub needs a token (repo scope) in /root/devbox/keys/github_token")
-    name = str(args.get("name") or path.rstrip("/").split("/")[-1])
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,40}", name):
-        raise ValueError("repo name: letters, digits, dot, dash, underscore")
-    vis = _visibility(args)
-    box = next((c["name"] for c in cts() if c["vmid"] == vmid), vmid)
-    return (f"create the {vis} GitHub repo {_gh_user()}/{name} and push {path} on {box} to it",
-            ["python3", GH_NEW, "publish", str(vmid), path, name, vis], 1800)
-
-
-def a_project_remove(args):
-    """Destructive, so the description the owner reads on the Run button must be exact: it names the box,
-    the project and whether anything would be lost. `pv rm` itself refuses unpushed work unless forced,
-    and moves the project to ~/.pv-trash rather than deleting it."""
-    vmid, path, box = _dev_project(args)
-    short = path.rstrip("/").rsplit("/", 1)[-1]
-    force = bool(args.get("force"))
-    bits = []
-    try:
-        pr = next((x for x in json.loads(pv(vmid, "ls", "--json")) if x["path"] == path), None)
-        g = (pr or {}).get("git") or {}
-        if g.get("dirty"):
-            bits.append(f"{g['dirty']} uncommitted change(s)")
-        if not g.get("repo"):
-            bits.append("no GitHub remote")
-        elif g.get("ahead"):
-            bits.append(f"{g['ahead']} unpushed commit(s)")
-    except Exception:
-        pass
-    # A model asked to "delete X" sets force=true by reflex, so the Run button — the only thing the owner
-    # actually reads — has to say what forcing costs, in front, instead of a parenthesis at the end.
-    if force and bits:
-        desc = (f"FORCE: remove {short} from {box} (CT {vmid}) although it has {' and '.join(bits)} — "
-                f"that work exists nowhere else and would live on only as the ~/.pv-trash copy")
-    elif force:
-        desc = f"remove the project {short} from {box} (CT {vmid}) (clean and pushed) — it is moved to ~/.pv-trash, not deleted"
-    else:
-        state = f" ({', '.join(bits)}, so this will be refused — push it first)" if bits else " (clean and pushed)"
-        desc = f"remove the project {short} from {box} (CT {vmid}){state} — it is moved to ~/.pv-trash, not deleted"
-    return desc, _pct(vmid, PV, "rm", path, *(["--force"] if force else [])), 600
-
-
 MODEL_RE = re.compile(r"^[a-zA-Z0-9][\w.:/-]{0,80}$")
 
 
@@ -315,29 +196,6 @@ def a_ollama_stop(args):
     if not MODEL_RE.match(model):
         raise ValueError("invalid model name")
     return f"unload {model} from VRAM (the model stays on disk)", _pct(AI_CT, "ollama", "stop", model), 120
-
-
-def a_newdev(args):
-    vmid, name, ip = args.get("vmid"), str(args.get("name", "")), str(args.get("ip", ""))
-    try:
-        vmid = int(vmid)
-    except (TypeError, ValueError):
-        raise ValueError("vmid must be a number")
-    lo, hi = DEVBOX_IDS
-    if not lo <= vmid <= hi:
-        raise ValueError(f"dev boxes use ids {lo}-{hi}")
-    if any(c["vmid"] == vmid for c in cts()):
-        raise ValueError(f"CT {vmid} already exists")
-    if not re.fullmatch(r"[a-z][a-z0-9-]{1,20}", name):
-        raise ValueError("name must be lowercase letters, digits and dashes")
-    net, first = DEVBOX_IPS[0].rsplit(".", 1)
-    last = DEVBOX_IPS[1].rsplit(".", 1)[1]
-    m = re.fullmatch(re.escape(net) + r"\.(\d{1,3})", ip)
-    if not m or not int(first) <= int(m[1]) <= int(last):
-        raise ValueError(f"ip must be {net}.{first}-{last}")
-    if any(c["ip"] == ip for c in cts()):
-        raise ValueError(f"{ip} is already used")
-    return f"create dev box CT {vmid} {name} at {ip} (newdev, several minutes)", ["/usr/local/bin/newdev", str(vmid), name, ip], 3 * 3600
 
 
 # --- add-ons: install / update / remove from the marketplace (agent/addon-get does the work) ---------------
@@ -409,10 +267,8 @@ ACTIONS = {
     "backup_ct": a_backup_ct, "backup_all": a_backup_all, "ct_start": a_ct_start, "ct_shutdown": a_ct_shutdown, "ct_reboot": a_ct_reboot,
     "service_restart": a_service_restart, "apt_upgrade": a_apt_upgrade,
     "apt_upgrade_all": a_apt_upgrade_all, "zfs_scrub": a_zfs_scrub,
-    "unit_start": a_unit_start, "ollama_pull": a_ollama_pull, "ollama_stop": a_ollama_stop, "newdev": a_newdev,
-    "git_push": a_git_push, "git_fetch": a_git_fetch, "project_new": a_project_new,
-    "github_publish": a_github_publish, "project_remove": a_project_remove,
-    "media_remove": a_media_remove, "host_shutdown": a_host_shutdown, "host_shutdown_cancel": a_host_shutdown_cancel,
+    "unit_start": a_unit_start, "ollama_pull": a_ollama_pull, "ollama_stop": a_ollama_stop, 
+"host_shutdown": a_host_shutdown, "host_shutdown_cancel": a_host_shutdown_cancel,
     # not offered to the Ask model (server/utils/actions.ts): only the Add-ons page's own buttons run these
     "addon_install": a_addon_install, "addon_update": a_addon_update, "addon_remove": a_addon_remove,
 }
@@ -420,9 +276,20 @@ ACTIONS = {
 MAX_LOG = 400
 
 
+def _actions():
+    """the core's actions plus those installed add-ons registered with dash_sdk.action"""
+    import dash_sdk
+    return {**ACTIONS, **dash_sdk.ACTIONS}
+
+
+def _services():
+    import dash_sdk
+    return {**SERVICES, **dash_sdk.SERVICES}
+
+
 def check_action(name, args):
     """validate without running — returns the human-readable description"""
-    fn = ACTIONS.get(name)
+    fn = _actions().get(name)
     if not fn:
         raise ValueError(f"unknown action {name}")
     return fn(dict(args or {}))[0]
@@ -461,13 +328,15 @@ def _run_job(job, argv, timeout):
         if killer:
             killer.cancel()
         job["done"] = int(time.time())
-        invalidate("updates", "ct_ports", "overview", "media_items", "media", "media_sizes", "service_uptime")
+        import dash_sdk
+        invalidate("updates", "ct_ports", "overview", "service_uptime", *dash_sdk.JOB_STALE)
 
 
 def start_action(name, args):
-    if name not in ACTIONS:
+    acts = _actions()
+    if name not in acts:
         raise ValueError(f"unknown action {name}")
-    desc, argv, timeout = ACTIONS[name](dict(args or {}))
+    desc, argv, timeout = acts[name](dict(args or {}))
     now = int(time.time())
     job = {"id": f"{now}-{secrets.token_hex(3)}", "action": name, "args": args, "desc": desc,
            "argv": argv, "started": now, "done": None, "rc": None, "log": []}

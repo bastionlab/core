@@ -22,8 +22,12 @@ marketplace — plan").
     Sections; it fetches its own numbers.
   - `web/` — a Nuxt layer (`app/pages`, `app/components`, `server/api|utils|plugins`) the core extends; it may use
     the core's utils and composables (`agentCall`, `upstream`, `Panel`, …).
-  - `agent/*.py` — loaded by the agent; register routes with `dash_sdk` (`@get`, `@post`) and use its `pct`,
-    `sh`, `cached`, `ct`/`ip`, Claude-job helpers instead of importing core modules directly.
+  - `agent/*.py` — loaded by the agent while installed, under their file name (must not clash with a core
+    module). Register with `dash_sdk`: `@get`/`@post` (`regex=True` → `fn(body, match)`), `@stream` (SSE, gets the
+    handler), `@action` (approve-then-Run, `(desc, argv, timeout)`), `services({...})` for service_restart,
+    `@on_start` threads, `stale_after_jobs(...)`. Use its `pct`, `sh`, `cached`, `ct`/`ip`, `cts`, … rather than
+    importing core modules. Helper scripts next to it reach the core via `Path(__file__).parents[3] / "agent"`.
+  - `deploy.sh` (optional, executable) — run by the core's deploy.sh every time (e.g. push a helper into a CT).
 - `addon.yaml` also carries `version:` (x.y.z). Bump it on every change worth shipping, then run
   `python3 addons/build-index.py`: `addons/index.json` is the marketplace index (this folder stands in for the
   `pvedash/addons` repo). The app reads the real one from `config.json` `marketplace.index` and falls back to the
@@ -35,8 +39,9 @@ marketplace — plan").
 - New add-on: `templates/new-addon <id> "<Name>"` (or `/new-addon`); release: `/publish-addon`.
 - Shared by several add-ons, so it stays in core: the Ask bar + chat engine (`/api/chat`, `/api/claude`, chats sync,
   `useAsk`/`useChats`), notes and deals server utils (chat images, AI context; Flats/Jobs), the hunter strip/tabs,
-  `Panel`/`Stat`/`ServicesPanel`/`ContainersPanel`, and — for now — the agent's host modules (media, dev, games,
-  claude, actions). A new feature starts as `addons/<id>/` (`templates/new-addon`), never in core.
+  `Panel`/`Stat`/`ServicesPanel`/`ContainersPanel`, and the agent's own modules (metrics, backups, claude,
+  host actions, Discord hooks). Local AI's ollama actions and its containers in SERVICES are still core.
+  A new feature starts as `addons/<id>/` (`templates/new-addon`), never in core.
 - `addons/` on this box is a sparse checkout of `pvedash/addons`, not part of the core repo (`/addons/` is
   ignored). Edit an add-on there, bump its `version:`, run `python3 build-index.py`, then commit and push in
   `addons/`. Install / Remove = `git sparse-checkout add` / drop, Update = `git pull` (every installed add-on).
