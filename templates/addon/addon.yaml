@@ -10,3 +10,5 @@ routes: [/__ID__]
 needs: []              # what the box needs, e.g. [own CT, Claude login, NVIDIA GPU]
 depends_on: []         # other add-on ids, e.g. [ai]
 # ct: __ID__           # config.json `cts` key if it lives in its own container (install.sh creates it)
+# apps:                # web apps it brings: a Home tile (group: app) + a health check
+#   - { name: __NAME__, icon: "🧩", note: "What it is", group: app, ct: __ID__, port: 8080, health: / }

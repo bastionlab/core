@@ -18,6 +18,9 @@ marketplace — plan").
   - `addon.yaml` — id, name, label (shorter tab name), icon, order (tab position; ≥ 90 = after Add-ons), author,
     version, desc (quoted: one or two lines), routes, home, needs, ct, depends_on. The Add-ons page, nav entry
     and route guard all come from it (via `runtimeConfig.public.addons`).
+  - `apps:` — the web apps it brings: `{ name, icon, note, group (app = Home tile; media/ai/infra = topic
+    pages), hue, ct, port, ts (link the CT's tailnet name), health }`. They join the core's (Immich, Jellyfin,
+    Audiobookshelf, Proxmox) in `server/utils/services.ts` only while the add-on is installed and on.
   - `home: true` + `web/app/components/Home<Id>.global.vue` (renders the core `<TopicCard>`) = its card in Home's
     Sections; it fetches its own numbers.
   - `web/` — a Nuxt layer (`app/pages`, `app/components`, `server/api|utils|plugins`) the core extends; it may use

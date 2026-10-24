@@ -7,8 +7,11 @@ import { parseYAML } from 'confbox'
 const here = import.meta.dirname
 const root = existsSync(join(here, 'addons')) ? join(here, 'addons') : resolve(here, '../addons')
 const addonDirs = existsSync(root) ? readdirSync(root).filter(d => existsSync(join(root, d, 'addon.yaml'))).sort() : []
+// app tiles an add-on brings (addon.yaml `apps:`), server-side only: URLs are built from config.json at runtime
+const addonApps: any[] = []
 const addons = addonDirs.map((d) => {
   const m: any = parseYAML(readFileSync(join(root, d, 'addon.yaml'), 'utf8'))
+  for (const a of m.apps ?? []) addonApps.push({ ...a, addon: m.id })
   return { id: m.id, name: m.name, label: m.label, icon: m.icon, version: String(m.version ?? ''), order: m.order ?? 100, routes: m.routes ?? [], home: !!m.home, author: m.author, desc: m.desc, needs: m.needs ?? [], ct: m.ct, dependsOn: m.depends_on?.length ? m.depends_on : undefined }
 }).sort((a, b) => a.order - b.order) // order: where its tab sits among the add-on tabs
 // the marketplace index this build ships (addons/index.json, rebuilt by addons/build-index.py): used until the real one is reachable
@@ -48,6 +51,7 @@ export default defineNuxtConfig({
     pinHash: '', // NUXT_PIN_HASH — scrypt hash written by ../set-pin
     ownerLogins: '', // NUXT_OWNER_LOGINS — Tailscale logins let in (comma-separated)
     marketplaceLocal,
+    addonApps,
     public: { addons }, // add-ons from addons/*/addon.yaml, merged with the built-in list (shared/utils/addons.ts)
     lanKey: '', // NUXT_LAN_KEY — shared with Caddy (lan/Caddyfile) so LAN requests can be told apart
   },
