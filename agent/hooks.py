@@ -7,7 +7,7 @@ from config import DASH_URL, ct
 
 FILE = Path("/etc/dash/discord.json")
 CHANNELS = ("deals", "wohnungen", "jobs", "money", "alerts")
-CONSUMERS = (ct("deals"), ct("money"))  # CTs that read /etc/discord.json
+CONSUMERS = tuple(c for c in (ct("deals"), ct("money")) if c)  # CTs that read /etc/discord.json
 HOOK = re.compile(r"^https://(?:ptb\.|canary\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+$")
 UA = f"DiscordBot ({DASH_URL}, 1.0)"  # Cloudflare turns away urllib's default agent
 

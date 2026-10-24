@@ -1,0 +1,12 @@
+# one add-on: this file is what the Add-ons page and the marketplace show
+id: __ID__
+name: __NAME__
+icon: spark            # a name from web/app/components/Icon.vue in the core
+order: 50              # where its tab sits among the add-on tabs
+author: __AUTHOR__
+version: 0.1.0         # bump on every release; installs see "update to vX" when this is higher than theirs
+desc: One or two lines on what it does for you.
+routes: [/__ID__]
+needs: []              # what the box needs, e.g. [own CT, Claude login, NVIDIA GPU]
+depends_on: []         # other add-on ids, e.g. [ai]
+# ct: __ID__           # config.json `cts` key if it lives in its own container (install.sh creates it)

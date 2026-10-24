@@ -1,7 +1,7 @@
 """the action allowlist (the only things the dashboard and the Ask model can run) and the jobs that run them"""
-import json, os, re, secrets, shlex, signal, subprocess, threading, time
+import importlib.machinery, importlib.util, json, os, re, secrets, shlex, signal, subprocess, threading, time
 
-from config import DEVBOX_IDS, DEVBOX_IPS, ct
+from config import DASHBOARD, DEVBOX_IDS, DEVBOX_IPS, ct
 from core import FAN, GH_NEW, GH_TOKEN_FILE, JOBS, JOBS_LOCK, PV, cached, invalidate, sh
 from metrics import backup_busy, cts, pools, scheduled_shutdown, unit
 from media import a_media_remove
@@ -340,6 +340,65 @@ def a_newdev(args):
     return f"create dev box CT {vmid} {name} at {ip} (newdev, several minutes)", ["/usr/local/bin/newdev", str(vmid), name, ip], 3 * 3600
 
 
+# --- add-ons: install / update / remove from the marketplace (agent/addon-get does the work) ---------------
+ADDON_GET = f"{DASHBOARD}/agent/addon-get"
+_ag = None
+
+
+def _addon_get():
+    """addon-get as a module, for its index lookup and checks; the action itself runs it as a process"""
+    global _ag
+    if not _ag:
+        loader = importlib.machinery.SourceFileLoader("addon_get", ADDON_GET)
+        _ag = importlib.util.module_from_spec(importlib.util.spec_from_loader("addon_get", loader))
+        loader.exec_module(_ag)
+    return _ag
+
+
+def _addon(args, cmd):
+    ag = _addon_get()
+    aid = str(args.get("id", ""))
+    if not ag.ID_RE.match(aid):
+        raise ValueError("bad add-on id")
+    here = ag.ADDONS / aid
+    rebuild = "then rebuilds the dashboard (it is gone for a few minutes)"
+    if cmd == "remove":
+        if not (here / "addon.yaml").exists():
+            raise ValueError(f"{aid} is not an installed add-on folder")
+        v = ag.manifest(here).get("version", "?")
+        desc = f"remove the add-on {aid} {v} (moved to /var/lib/dash-addons/old, its CT and data stay), {rebuild}"
+    else:
+        e = next((a for a in ag.index()["addons"] if a.get("id") == aid), None)
+        if not e:
+            raise ValueError(f"{aid} is not in the marketplace")
+        src = e.get("repo") or f"{(ag.MK.get('repo') or 'https://github.com/pvedash/addons')}/{e.get('path') or aid}"
+        if cmd == "install":
+            if here.exists():
+                raise ValueError(f"{aid} is already installed")
+            desc = (f"install the add-on {e.get('name', aid)} {e.get('version')} by {e.get('author')} from {src} — "
+                    f"its code runs as root on pve (install.sh, if it has one, runs now), {rebuild}")
+        else:
+            if not (here / "addon.yaml").exists():
+                raise ValueError(f"{aid} is not installed")
+            cur = ag.manifest(here).get("version")
+            if not ag.newer(e.get("version"), cur):
+                raise ValueError(f"{aid} is already at {cur}")
+            desc = f"update the add-on {aid} {cur} → {e.get('version')} from {src} (old copy kept), {rebuild}"
+    return desc, ["python3", "-I", ADDON_GET, cmd, aid], 3600
+
+
+def a_addon_install(args):
+    return _addon(args, "install")
+
+
+def a_addon_update(args):
+    return _addon(args, "update")
+
+
+def a_addon_remove(args):
+    return _addon(args, "remove")
+
+
 ACTIONS = {
     "backup_ct": a_backup_ct, "backup_all": a_backup_all, "ct_start": a_ct_start, "ct_shutdown": a_ct_shutdown, "ct_reboot": a_ct_reboot,
     "service_restart": a_service_restart, "apt_upgrade": a_apt_upgrade,
@@ -348,6 +407,8 @@ ACTIONS = {
     "git_push": a_git_push, "git_fetch": a_git_fetch, "project_new": a_project_new,
     "github_publish": a_github_publish, "project_remove": a_project_remove,
     "media_remove": a_media_remove, "host_shutdown": a_host_shutdown, "host_shutdown_cancel": a_host_shutdown_cancel,
+    # not offered to the Ask model (server/utils/actions.ts): only the Add-ons page's own buttons run these
+    "addon_install": a_addon_install, "addon_update": a_addon_update, "addon_remove": a_addon_remove,
 }
 
 MAX_LOG = 400

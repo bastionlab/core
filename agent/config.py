@@ -15,9 +15,11 @@ DEVBOX_IDS = tuple(CFG["devbox"]["ids"])
 DEVBOX_IPS = tuple(CFG["devbox"]["ips"])
 
 
+# a fresh install has only some of these CTs: a missing one is 0 / "" (the add-on using it starts switched off)
+# rather than a KeyError that would stop the whole agent from starting
 def ct(name: str) -> int:
-    return int(CFG["cts"][name]["id"])
+    return int(CFG["cts"].get(name, {}).get("id") or 0)
 
 
 def ip(name: str) -> str:
-    return CFG["cts"][name]["ip"]
+    return CFG["cts"].get(name, {}).get("ip") or ""

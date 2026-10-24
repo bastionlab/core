@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# new-addon <id> "<Name>" [author] — copy templates/addon to addons/<id> with the placeholders filled in
+set -euo pipefail
+DIR=$(dirname "$(readlink -f "$0")")/..
+id=${1:-}; name=${2:-}; author=${3:-$(git -C "$DIR" config user.name || echo you)}
+[[ "$id" =~ ^[a-z][a-z0-9-]{1,30}$ ]] || { echo "usage: new-addon <id: lowercase, dashes> \"<Name>\" [author]" >&2; exit 1; }
+[ -n "$name" ] || { echo "a display name is needed" >&2; exit 1; }
+dest="$DIR/addons/$id"
+[ -e "$dest" ] && { echo "addons/$id exists already" >&2; exit 1; }
+cp -r "$DIR/templates/addon" "$dest"
+find "$dest" -depth -name '*__ID__*' -execdir sh -c 'mv "$1" "$(echo "$1" | sed "s/__ID__/$2/g")"' _ {} "$id" \;
+grep -rl -e __ID__ -e __NAME__ -e __AUTHOR__ "$dest" | while read -r f; do
+  sed -i "s/__ID__/$id/g; s/__NAME__/$name/g; s/__AUTHOR__/$author/g" "$f"; done
+echo "addons/$id created — edit addon.yaml, then test-build"

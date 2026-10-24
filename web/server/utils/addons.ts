@@ -7,8 +7,10 @@ const FILE = `${DIR}/addons.json`
 /** built-in add-ons + the ones from addons/<id>/addon.yaml */
 export const allAddons = (): Addon[] => [...ADDONS, ...(useRuntimeConfig().public.addons as Addon[] ?? [])]
 
+/** until the owner switches anything, a built-in whose CT isn't in config.json (a fresh install) starts off */
 export function addonsOff(): string[] {
-  try { return JSON.parse(readFileSync(FILE, 'utf8')).off ?? [] } catch { return [] }
+  try { return JSON.parse(readFileSync(FILE, 'utf8')).off ?? [] } catch {}
+  return ADDONS.filter(a => a.ct && !ctId(a.ct)).map(a => a.id)
 }
 
 export function setAddon(id: string, on: boolean) {

@@ -23,7 +23,7 @@ export const services: Service[] = [
   { name: 'Sonarr', url: `http://${ctIp('dl')}:8989`, health: '/ping', ct: ctId('dl'), icon: '📺', note: 'Series automation', group: 'media' },
   { name: 'Bazarr', url: `http://${ctIp('dl')}:6767`, health: '/', ct: ctId('dl'), icon: '💬', note: 'Subtitles', group: 'media' },
   { name: 'LazyLibrarian', url: `http://${ctIp('dl')}:5299`, health: '/', ct: ctId('dl'), icon: '📚', note: 'Audiobook automation', group: 'media' },
-]
+].filter(s => s.ct !== 0) // a CT this install doesn't have (not in config.json) has no tile
 
 export function check(url: string, timeout = 3000): Promise<{ up: boolean, status?: number, ms?: number, error?: string }> {
   const t0 = performance.now()

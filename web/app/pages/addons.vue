@@ -12,6 +12,31 @@ const entry = (id: string) => market.value?.addons?.find((e: any) => e.id === id
 const available = computed(() => (market.value?.addons ?? []).filter((e: any) => !e.installed))
 const count = (n: number | null) => (n == null ? '' : `${n} install${n === 1 ? '' : 's'}`)
 
+// install / update / remove: the agent describes exactly what will happen, Run arms after a moment
+// (third-party code, root on pve), then deploy.sh rebuilds the app in its own unit
+const { jobs, run, dismiss } = useActions()
+const pending = ref<{ name: string, id: string, desc: string } | null>(null)
+const armed = ref(false)
+let armTimer: any
+async function ask(name: string, id: string) {
+  error.value = ''
+  try {
+    const r = await $fetch<{ desc: string }>('/api/ai/action/check', { method: 'POST', body: { name, args: { id } } })
+    pending.value = { name, id, desc: r.desc }
+    armed.value = false
+    clearTimeout(armTimer)
+    armTimer = setTimeout(() => (armed.value = true), 1500)
+  } catch (e: any) { error.value = e?.data?.statusMessage || e?.statusMessage || e?.message }
+}
+function go() {
+  const p = pending.value
+  if (!p || !armed.value) return
+  pending.value = null
+  run(p.name, { id: p.id })
+}
+onBeforeUnmount(() => clearTimeout(armTimer))
+const rebuilding = computed(() => jobs.value.some(j => j.state === 'done' && j.name.startsWith('addon_')))
+
 const busy = ref('')
 const error = ref('')
 async function toggle(id: string) {
@@ -30,6 +55,15 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
   <div>
     <h2 class="sec">Add-ons <span class="faint small">{{ list.length - (off?.length ?? 0) }} of {{ list.length }} on</span></h2>
     <div v-if="error" class="errbox">{{ error }}</div>
+    <div v-if="pending" class="card confirm">
+      <p class="small">{{ pending.desc }}</p>
+      <div class="row">
+        <button type="button" class="btn primary sm" :disabled="!armed" @click="go">Run</button>
+        <button type="button" class="btn ghost sm" @click="pending = null">Cancel</button>
+      </div>
+    </div>
+    <JobList :jobs="jobs" @dismiss="dismiss" />
+    <div v-if="rebuilding" class="small warn">Rebuilding: the dashboard is back in a few minutes; reload then.</div>
     <div class="grid cols-2 list">
       <div v-for="a in list" :key="a.id" class="card" :class="{ dim: !isOn(a.id) }">
         <div class="top">
@@ -45,11 +79,12 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
         <p class="small muted desc">{{ a.desc }}</p>
         <div class="tags">
           <span v-if="a.version" class="pill">v{{ a.version }}</span>
-          <span v-if="entry(a.id)?.update" class="pill accent">update: v{{ entry(a.id).version }}</span>
+          <button v-if="entry(a.id)?.update" type="button" class="pill accent lnk-pill" @click="ask('addon_update', a.id)">update to v{{ entry(a.id).version }}</button>
           <span v-if="count(entry(a.id)?.installs ?? null)" class="pill">{{ count(entry(a.id).installs) }}</span>
           <span v-if="ctState(a.ct)" class="pill" :class="ctState(a.ct)!.tone">{{ ctState(a.ct)!.text }}</span>
           <span v-for="n in a.needs" :key="n" class="pill">{{ n }}</span>
           <span v-if="a.dependsOn" class="pill accent">needs {{ names(a.dependsOn) }}</span>
+          <button v-if="a.version" type="button" class="lnk small rm" @click="ask('addon_remove', a.id)">Remove</button>
         </div>
       </div>
     </div>
@@ -66,6 +101,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
             <b>{{ e.name }}</b>
             <span class="faint small">by {{ e.author }}</span>
           </div>
+          <button type="button" class="btn primary sm" @click="ask('addon_install', e.id)">Install</button>
         </div>
         <p class="small muted desc">{{ e.desc }}</p>
         <div class="tags">
@@ -86,5 +122,11 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
 .top .i { color: var(--accent); flex: none; }
 .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .desc { margin: 0; }
-.tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.tags .rm { margin-left: auto; }
+.lnk-pill { cursor: pointer; font: inherit; font-size: 11.5px; }
+.confirm { border-color: var(--warn); margin-bottom: 14px; }
+.confirm p { margin: 0; }
+.row { display: flex; gap: 8px; }
+@media (pointer: coarse) { .tags .rm, .lnk-pill { padding: 6px 10px; } }
 </style>

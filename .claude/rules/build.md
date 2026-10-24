@@ -25,6 +25,11 @@ marketplace — plan").
   `python3 addons/build-index.py`: `addons/index.json` is the marketplace index (this folder stands in for the
   `pvedash/addons` repo). The app reads the real one from `config.json` `marketplace.index` and falls back to the
   copy it was built with; a higher version there shows as an Update badge on `/addons`.
+- Install / Update / Remove on `/addons` are the `addon_*` actions: `agent/addon-get` fetches from
+  `marketplace.repo` (one folder per add-on) or the entry's own GitHub repo, keeps every replaced copy in
+  `/var/lib/dash-addons/old`, runs `install.sh` once on install, then `deploy.sh` in its own unit `dash-rebuild`
+  (an agent restart would kill it as a child). Not offered to the Ask model.
+- New add-on: `templates/new-addon <id> "<Name>"` (or `/new-addon`); release: `/publish-addon`.
 - Not yet moved: the entries in `web/shared/utils/addons.ts`. A new feature starts as `addons/<id>/`, not there.
 - Switched-off add-ons drop out of the nav/home and redirect to `/addons` (`useAddons().pageOn`,
   `middleware/pages.global.ts`). On/off state is `/var/lib/dash/addons.json` in CT 104; dependencies are checked

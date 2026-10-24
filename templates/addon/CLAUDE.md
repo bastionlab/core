@@ -1,0 +1,10 @@
+# __NAME__ (a pvedash add-on)
+
+This folder plugs into the pvedash core (`/root/dashboard` on the host). Before changing anything, read the
+core's rules — they apply here too:
+- `../../.claude/rules/design.md` — UI kit, phone-first (Samsung/Chrome), copy, propose-and-approve for writes
+- `../../.claude/rules/build.md` — add-on layout, `addon.yaml`, config instead of hardcoded IDs/IPs, `dash_sdk`
+
+Layout: `addon.yaml` (manifest), `web/` (Nuxt layer: `app/pages`, `app/components`, `server/api`), `agent/*.py`
+(host side through `dash_sdk`), optional `install.sh` (runs once as root on install, e.g. to create its CT).
+Test with a scratch build as the core's CLAUDE.md describes; ship with `/publish-addon`.

@@ -37,6 +37,12 @@ https://dash.example-tailnet.ts.net/ — tailnet only, owner's Tailscale login +
 Deploy after changes: `./deploy.sh` — links and reloads the agent's systemd units, restarts the agent, pushes `pv`
 to the dev boxes, replaces the app sources in CT 104 and rebuilds. Needs a PIN first: `./set-pin` (in a real terminal).
 
+## Fresh install
+
+`install.sh` sets the core up on a new Proxmox host (asks for tailnet, LAN IP, CT id; creates the dashboard CT,
+writes `/etc/dash/config.json`, PIN, first deploy). `./install.sh --dry-run` prints every step and changes nothing.
+Add-ons then come from the Add-ons page (Install / Update / Remove, each shown and confirmed before it runs).
+
 ## Access
 
 1. `tailscale serve` stamps each request with the person's login; only `NUXT_OWNER_LOGINS` gets past it.

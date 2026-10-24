@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""addon-get — install, update or remove a marketplace add-on, then rebuild the dashboard.
+
+  addon-get install <id>    fetch it from the marketplace into addons/<id>, run its install.sh once
+  addon-get update  <id>    replace addons/<id> with the marketplace's newer version
+  addon-get remove  <id>    take addons/<id> out (its CT and data stay)
+  --no-rebuild              stage only (tests); otherwise deploy.sh runs in its own unit, dash-rebuild
+
+Where things come from: config.json marketplace.index (the pvedash/addons index.json, or the copy in
+addons/index.json when that is unreachable) names each add-on's folder in marketplace.repo, or its own repo.
+Nothing is deleted: a replaced or removed add-on is moved to /var/lib/dash-addons/old/<id>-<version>-<time>.
+The rebuild restarts the agent, which would kill a deploy running as its child, so it gets a unit of its own.
+"""
+import json, os, re, shutil, subprocess, sys, tempfile, time, urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from config import CFG, DASHBOARD  # noqa: E402
+
+ADDONS = Path(os.environ.get("DASH_ADDONS_DIR") or f"{DASHBOARD}/addons")
+OLD = Path(os.environ.get("DASH_ADDONS_OLD") or "/var/lib/dash-addons/old")
+ID_RE = re.compile(r"^[a-z][a-z0-9-]{1,30}$")
+PATH_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,60}$")
+GH_RE = re.compile(r"^https://github\.com/[\w.-]+/[\w.-]+$")
+MK = CFG.get("marketplace") or {}
+
+
+def say(*a):
+    print(*a, flush=True)
+
+
+def index():
+    url = MK.get("index")
+    if url:
+        try:
+            with urllib.request.urlopen(url, timeout=10) as r:
+                j = json.loads(r.read())
+            if isinstance(j.get("addons"), list):
+                return j
+        except Exception as e:
+            say(f"marketplace index unreachable ({e.__class__.__name__}), using the local copy")
+    return json.loads((ADDONS / "index.json").read_text())
+
+
+def entry(aid):
+    e = next((a for a in index()["addons"] if a.get("id") == aid), None)
+    if not e:
+        sys.exit(f"{aid} is not in the marketplace")
+    return e
+
+
+def manifest(d: Path):
+    """the few addon.yaml fields we need, without a YAML dependency on a fresh host"""
+    m = {}
+    for line in (d / "addon.yaml").read_text().splitlines():
+        k, sep, v = line.partition(":")
+        if sep and not line.startswith((" ", "#")):
+            m[k.strip()] = v.split("#")[0].strip().strip("'\"")
+    return m
+
+
+def git(*a, cwd=None):
+    r = subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True, timeout=300)
+    if r.returncode:
+        sys.exit(f"git {a[0]} failed: {(r.stderr or r.stdout).strip()[:400]}")
+
+
+def fetch(e, tmp: Path) -> Path:
+    if e.get("repo"):  # an add-on with its own repo: the whole repo is the add-on
+        repo, sub = e["repo"], None
+        if not GH_RE.match(repo):
+            sys.exit(f"refusing source {repo!r}: only https://github.com/<owner>/<repo>")
+    else:
+        # the marketplace repo itself is the owner's setting; DASH_MARKET_REPO lets a test point it at a local repo
+        repo = os.environ.get("DASH_MARKET_REPO") or MK.get("repo") or "https://github.com/pvedash/addons"
+        sub = e.get("path") or e["id"]
+        if not PATH_RE.match(sub):
+            sys.exit(f"bad folder name {sub!r}")
+    say(f"fetching {repo}{'/' + sub if sub else ''}")
+    src = tmp / "src"
+    if sub:
+        git("clone", "--depth", "1", "--filter=blob:none", "--sparse", repo, str(src))
+        git("sparse-checkout", "set", sub, cwd=src)
+        d = src / sub
+    else:
+        git("clone", "--depth", "1", repo, str(src))
+        d = src
+    if not (d / "addon.yaml").exists():
+        sys.exit("no addon.yaml there")
+    shutil.rmtree(d / ".git", ignore_errors=True)
+    return d
+
+
+def stash(aid):
+    """move addons/<id> out of the way, never delete it"""
+    cur = ADDONS / aid
+    OLD.mkdir(parents=True, exist_ok=True)
+    dest = OLD / f"{aid}-{manifest(cur).get('version') or 'x'}-{time.strftime('%Y%m%d-%H%M%S')}"
+    shutil.move(str(cur), dest)
+    say(f"old copy kept in {dest}")
+    return dest
+
+
+def newer(a, b):
+    p = lambda v: [int(x) if x.isdigit() else 0 for x in (v or "").lstrip("v").split(".")[:3]] + [0] * 3
+    return p(a)[:3] > p(b)[:3]
+
+
+def rebuild():
+    log = "/var/log/dash-rebuild.log"
+    r = subprocess.run(["systemd-run", "--unit", "dash-rebuild", "--collect", "--quiet",
+                        "-p", f"StandardOutput=append:{log}", "-p", f"StandardError=append:{log}",
+                        "-p", "RuntimeMaxSec=30min", "-E", "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                        f"{DASHBOARD}/deploy.sh"], capture_output=True, text=True, timeout=20)
+    if r.returncode:
+        sys.exit(f"could not start the rebuild (one already running?): {r.stderr.strip()[:300]}")
+    say(f"rebuild started (dash-rebuild, log {log}); the dashboard is back in a few minutes")
+
+
+def main():
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if len(args) != 2 or args[0] not in ("install", "update", "remove") or not ID_RE.match(args[1]):
+        sys.exit(__doc__)
+    cmd, aid = args
+    here = ADDONS / aid
+    if cmd == "remove":
+        if not (here / "addon.yaml").exists():
+            sys.exit(f"{aid} is not installed as an add-on folder")
+        stash(aid)
+    else:
+        e = entry(aid)
+        if cmd == "install" and here.exists():
+            sys.exit(f"{aid} is already installed")
+        if cmd == "update":
+            if not (here / "addon.yaml").exists():
+                sys.exit(f"{aid} is not installed")
+            if not newer(e.get("version"), manifest(here).get("version")):
+                sys.exit(f"{aid} is already at {manifest(here).get('version')}")
+        with tempfile.TemporaryDirectory() as t:
+            d = fetch(e, Path(t))
+            m = manifest(d)
+            if m.get("id") != aid:
+                sys.exit(f"addon.yaml says id {m.get('id')!r}, expected {aid!r}")
+            old = stash(aid) if cmd == "update" else None
+            shutil.move(str(d), here)
+        say(f"{aid} {m.get('version', '?')} is in {here}")
+        if cmd == "install" and (here / "install.sh").exists():
+            say("running its install.sh")
+            r = subprocess.run(["bash", "install.sh"], cwd=here, env={**os.environ, "DASH_CONFIG": "/etc/dash/config.json"},
+                               timeout=3600)
+            if r.returncode:
+                OLD.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(here), OLD / f"{aid}-failed-{time.strftime('%Y%m%d-%H%M%S')}")
+                sys.exit(f"install.sh failed (exit {r.returncode}); the add-on was taken out again")
+        if old:
+            say(f"previous version: {old.name}")
+    if "--no-rebuild" in sys.argv:
+        say("staged only (--no-rebuild)")
+    else:
+        rebuild()
+
+
+if __name__ == "__main__":
+    main()

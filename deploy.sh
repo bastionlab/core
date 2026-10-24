@@ -5,7 +5,7 @@ set -euo pipefail
 DIR=$(dirname "$(readlink -f "$0")")
 CONF=/etc/dash/config.json   # this install's tailnet, LAN, CT ids/IPs (shape: config.example.json)
 [ -s "$CONF" ] || { echo "no $CONF yet — copy $DIR/config.example.json there and fill it in" >&2; exit 1; }
-c() { jq -r "$1" "$CONF"; }
+c() { jq -r "($1) // empty" "$CONF"; }   # a key this install lacks is empty, not "null"
 CT=$(c .cts.dash.id)
 GS=$(c '.cts.gameservers.id // empty')
 
