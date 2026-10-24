@@ -13,10 +13,13 @@ marketplace — plan").
 - Comments and AI prompt prose may still say "CT 107"; code may not.
 
 ## Add-ons
-- Everything beyond the core (Home, Notes, Chat, Metrics, Add-ons) is an add-on. Moved-out ones live in
-  `addons/<id>/` (so far Learn, Kanji, Habits):
-  - `addon.yaml` — id, name, icon, order (tab position), author, desc (one or two lines), routes, needs, ct,
-    depends_on. The Add-ons page, nav entry and route guard all come from it (via `runtimeConfig.public.addons`).
+- The core is Home, Metrics and Add-ons. Every other tab is an add-on in `addons/<id>/` and can be switched off
+  or removed on `/addons`:
+  - `addon.yaml` — id, name, label (shorter tab name), icon, order (tab position; ≥ 90 = after Add-ons), author,
+    version, desc (quoted: one or two lines), routes, home, needs, ct, depends_on. The Add-ons page, nav entry
+    and route guard all come from it (via `runtimeConfig.public.addons`).
+  - `home: true` + `web/app/components/Home<Id>.global.vue` (renders the core `<TopicCard>`) = its card in Home's
+    Sections; it fetches its own numbers.
   - `web/` — a Nuxt layer (`app/pages`, `app/components`, `server/api|utils|plugins`) the core extends; it may use
     the core's utils and composables (`agentCall`, `upstream`, `Panel`, …).
   - `agent/*.py` — loaded by the agent; register routes with `dash_sdk` (`@get`, `@post`) and use its `pct`,
@@ -30,7 +33,13 @@ marketplace — plan").
   `/var/lib/dash-addons/old`, runs `install.sh` once on install, then `deploy.sh` in its own unit `dash-rebuild`
   (an agent restart would kill it as a child). Not offered to the Ask model.
 - New add-on: `templates/new-addon <id> "<Name>"` (or `/new-addon`); release: `/publish-addon`.
-- Not yet moved: the entries in `web/shared/utils/addons.ts`. A new feature starts as `addons/<id>/`, not there.
+- Shared by several add-ons, so it stays in core: the Ask bar + chat engine (`/api/chat`, `/api/claude`, chats sync,
+  `useAsk`/`useChats`), notes and deals server utils (chat images, AI context; Flats/Jobs), the hunter strip/tabs,
+  `Panel`/`Stat`/`ServicesPanel`/`ContainersPanel`, and — for now — the agent's host modules (media, dev, games,
+  claude, actions). A new feature starts as `addons/<id>/` (`templates/new-addon`), never in core.
+- `pvedash/addons` is private for now: `agent/addon-get` reads `marketplace.token_file` (default
+  `/root/devbox/keys/github_token`) and sends it only to GitHub (header via env, never argv); the app gets the
+  index from the agent (`/marketplace/index`), so the token never leaves pve.
 - Switched-off add-ons drop out of the nav/home and redirect to `/addons` (`useAddons().pageOn`,
   `middleware/pages.global.ts`). On/off state is `/var/lib/dash/addons.json` in CT 104; dependencies are checked
   both ways, so e.g. Local AI can't go off while Deals uses it.

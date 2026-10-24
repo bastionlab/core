@@ -4,15 +4,12 @@ https://dash.example-tailnet.ts.net/ — tailnet only, owner's Tailscale login +
 
 | page | what lives there |
 |---|---|
-| `/` | the apps you open (Immich, Jellyfin, Seerr, …), alerts, one glance card per topic |
-| `/chat` | Claude (on pve, read-only or ⚡Auto per message) or a local Ollama model; chats sync across devices |
-| `/notes` | notebook the local model tidies (one topic per note, pasted images, undo) |
-| `/dev` | dev boxes, projects, previews, git/GitHub, Claude Code and `/ship` sessions, web terminals, new project |
-| `/media` | download stack: VPN verdict, queues, library, removing a film/series |
+| `/` | the apps you open (Immich, Jellyfin, Seerr, …), alerts, one card per add-on |
 | `/metrics` | host, GPU, storage, backups, uptime, containers, ports, tailnet, Discord webhooks, host shutdown |
-| `/deals` `/wohnungen` `/jobs` | the three hunters in CT 107 (`/root/deals`): searches, AI-judged feed, 👍/👎 |
-| `/money` | Firefly III + bank sync in CT 108 (`/root/money`) |
-| `/habits` | the habit tracker in CT 204, framed |
+| `/addons` | every add-on: on/off, install, update, remove; the marketplace |
+
+Everything else is an add-on in `addons/<id>/`: Notes, Learn, Kanji, Habits, Media, Dev, Game servers, Deals,
+Flats, Jobs, Money, Chat, and Local AI (no tab of its own).
 
 ## Pieces
 
@@ -26,10 +23,10 @@ https://dash.example-tailnet.ts.net/ — tailnet only, owner's Tailscale login +
 - `web/` — Nuxt 4, built and run in CT 104 `dash` (`/opt/dash`, `dash.service`, 127.0.0.1:3000, published with
   `tailscale serve`). Notes and chats are SQLite in `/var/lib/dash` there. Calls to the agent / CT 107 / CT 108 /
   Ollama all go through `server/utils/upstream.ts`.
-- `addons/<id>/` — add-ons moved out of the core (so far: `learn`, `kanji`, `habits`): `addon.yaml`, `web/` (a Nuxt layer the app
-  extends) and `agent/*.py` (loaded through `agent/dash_sdk.py`). `addons/index.json` is the marketplace index
-  (`addons/build-index.py`), a stand-in for the future `pvedash/addons` repo. The rest are still built in and listed in
-  `web/shared/utils/addons.ts`; `/addons` switches any of them off.
+- `addons/<id>/` — every tab except Home/Metrics/Add-ons: `addon.yaml`, `web/` (a Nuxt layer the app extends) and
+  `agent/*.py` (loaded through `agent/dash_sdk.py`). `addons/index.json` is the marketplace index
+  (`addons/build-index.py`), a stand-in for the private `pvedash/addons` repo. `/addons` switches any of them off or
+  removes it.
 - `/etc/dash/config.json` — this install's tailnet, LAN, CT ids/IPs and paths (shape: `config.example.json`).
 - `/root/devbox/pv` — helper inside dev boxes (`pv ls|start|stop|log|cc|ccstop|cclog|shiplog|fetch|push|new|rm|remote`).
   Per-project overrides in `<project>/.dashboard.yml` (`command:`, `ports:`, `name:`).

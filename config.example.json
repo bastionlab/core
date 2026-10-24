@@ -22,6 +22,7 @@
   "marketplace": {
     "index": "https://raw.githubusercontent.com/pvedash/addons/main/index.json",
     "repo": "https://github.com/pvedash/addons",
+    "token_file": "/root/devbox/keys/github_token",
     "counter": "",
     "share_installs": false
   }

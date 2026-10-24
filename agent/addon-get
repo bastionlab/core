@@ -11,11 +11,11 @@ addons/index.json when that is unreachable) names each add-on's folder in market
 Nothing is deleted: a replaced or removed add-on is moved to /var/lib/dash-addons/old/<id>-<version>-<time>.
 The rebuild restarts the agent, which would kill a deploy running as its child, so it gets a unit of its own.
 """
-import json, os, re, shutil, subprocess, sys, tempfile, time, urllib.request
+import base64, json, os, re, shutil, subprocess, sys, tempfile, time, urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import CFG, DASHBOARD  # noqa: E402
+from config import CFG, DASHBOARD, DEVBOX  # noqa: E402
 
 ADDONS = Path(os.environ.get("DASH_ADDONS_DIR") or f"{DASHBOARD}/addons")
 OLD = Path(os.environ.get("DASH_ADDONS_OLD") or "/var/lib/dash-addons/old")
@@ -23,6 +23,16 @@ ID_RE = re.compile(r"^[a-z][a-z0-9-]{1,30}$")
 PATH_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,60}$")
 GH_RE = re.compile(r"^https://github\.com/[\w.-]+/[\w.-]+$")
 MK = CFG.get("marketplace") or {}
+
+
+def token():
+    """a private marketplace (pvedash/addons while it is private) needs a GitHub token; it is read here, on pve,
+    and only ever sent to GitHub — never to the dashboard, never in an argv"""
+    f = Path(MK.get("token_file") or DEVBOX / "keys/github_token")
+    try:
+        return f.read_text().strip() or None
+    except OSError:
+        return None
 
 
 def say(*a):
@@ -33,13 +43,15 @@ def index():
     url = MK.get("index")
     if url:
         try:
-            with urllib.request.urlopen(url, timeout=10) as r:
+            t = token()
+            req = urllib.request.Request(url, headers={"Authorization": f"token {t}"} if t and url.startswith("https://raw.githubusercontent.com/") else {})
+            with urllib.request.urlopen(req, timeout=10) as r:
                 j = json.loads(r.read())
             if isinstance(j.get("addons"), list):
-                return j
+                return {**j, "source": "remote"}
         except Exception as e:
             say(f"marketplace index unreachable ({e.__class__.__name__}), using the local copy")
-    return json.loads((ADDONS / "index.json").read_text())
+    return {**json.loads((ADDONS / "index.json").read_text()), "source": "local"}
 
 
 def entry(aid):
@@ -60,7 +72,13 @@ def manifest(d: Path):
 
 
 def git(*a, cwd=None):
-    r = subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True, timeout=300)
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    t = token()
+    if t:  # the header goes in through the environment, so the token is in no process' argv
+        basic = base64.b64encode(f"x-access-token:{t}".encode()).decode()
+        env |= {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader",
+                "GIT_CONFIG_VALUE_0": f"Authorization: Basic {basic}"}
+    r = subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True, timeout=300, env=env)
     if r.returncode:
         sys.exit(f"git {a[0]} failed: {(r.stderr or r.stdout).strip()[:400]}")
 

@@ -1,0 +1,13 @@
+# one add-on: this file is what the Add-ons page (and later the marketplace index) shows
+id: jobs
+name: Jobs
+icon: briefcase
+order: 10
+author: MaxJC0
+version: 1.0.0
+desc: "Reads your CV, polls job portals and scores every posting for fit, with the apply link found for you."
+routes: [/jobs]
+home: true          # brings app/components/HomeJobs.global.vue for the home page
+ct: deals
+needs: [your CV]
+depends_on: [ai]

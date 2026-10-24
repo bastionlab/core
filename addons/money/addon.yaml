@@ -1,0 +1,12 @@
+# one add-on: this file is what the Add-ons page (and later the marketplace index) shows
+id: money
+name: Money
+icon: euro
+order: 11
+author: MaxJC0
+version: 1.0.0
+desc: "Firefly III with bank sync: categories, subscriptions, depot, net worth, forecast and a monthly report."
+routes: [/money]
+ct: money
+needs: [bank login (Enable Banking), own CT]
+depends_on: [ai]

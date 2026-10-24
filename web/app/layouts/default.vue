@@ -3,26 +3,20 @@ const { data: o, error, updated, refresh } = useOverview()
 usePoll(refresh, 5000)
 
 const route = useRoute()
-const NAV = [
+// the core pages; every other tab is an add-on (addons/<id>/addon.yaml) and slots in by its `order`
+const NAV: { to: string, icon: string, label: string }[] = [
   { to: '/', icon: 'home', label: 'Home' },
-  { to: '/notes', icon: 'note', label: 'Notes' },
-  { to: '/media', icon: 'media', label: 'Media' },
-  { to: '/dev', icon: 'dev', label: 'Dev' },
-  { to: '/servers', icon: 'gamepad', label: 'Servers' },
-  { to: '/deals', icon: 'deals', label: 'Deals' },
-  { to: '/wohnungen', icon: 'key', label: 'Flats' },
-  { to: '/jobs', icon: 'briefcase', label: 'Jobs' },
-  { to: '/money', icon: 'euro', label: 'Money' },
   { to: '/metrics', icon: 'metrics', label: 'Metrics' },
   { to: '/addons', icon: 'grid', label: 'Add-ons' },
-  { to: '/chat', icon: 'chat', label: 'Chat' },
 ]
 const problems = computed(() => alerts(o.value).filter(a => a.level === 'bad').length)
 // switched-off add-ons (Add-ons page) drop out of the nav; pins keep them so turning one back on restores its tab
 const { list, load: loadAddons, pageOn } = useAddons()
-// pages of add-ons that moved out (addons/<id>/) come from their addon.yaml and slot in after Notes
-NAV.splice(NAV.findIndex(n => n.to === '/notes') + 1, 0,
-  ...list.filter(a => a.routes[0] && !NAV.some(n => n.to === a.routes[0])).map(a => ({ to: a.routes[0]!, icon: a.icon, label: a.name })))
+// add-on tabs go between Home and Metrics; order ≥ 90 (Chat) goes after Add-ons, at the end
+const tab = (a: Addon) => ({ to: a.routes[0]!, icon: a.icon, label: a.label || a.name })
+const withPage = list.filter(a => a.routes[0])
+NAV.splice(1, 0, ...withPage.filter(a => (a.order ?? 100) < 90).map(tab))
+NAV.push(...withPage.filter(a => (a.order ?? 100) >= 90).map(tab))
 onMounted(loadAddons)
 const nav = computed(() => NAV.filter(n => pageOn(n.to)))
 const badge = (to: string) => (to === '/metrics' ? problems.value : 0)

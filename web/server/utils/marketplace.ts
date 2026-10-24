@@ -1,6 +1,7 @@
 /**
- * The marketplace: the pvedash/addons index (config.json marketplace.index) next to what is installed here.
- * Until that repo exists, or when GitHub is unreachable, the index this build ships is used instead.
+ * The marketplace: the pvedash/addons index next to what is installed here. The agent fetches it (it holds the
+ * GitHub token a private repo needs); when it can't, it answers with the local addons/index.json, and when the
+ * agent itself is unreachable the copy this build ships is used.
  * Install counts come from the counter Worker (marketplace.counter) when one is set.
  */
 export interface MarketEntry {
@@ -23,18 +24,16 @@ export function newer(a = '', b = '') {
   return false
 }
 
-async function fetchIndex(url?: string) {
-  if (!url) return null
-  // raw.githubusercontent answers text/plain, so parse it ourselves
-  const r = await $fetch<string>(url, { timeout: 8000, responseType: 'text' }).catch(() => null)
-  try { const j = r && JSON.parse(r); return Array.isArray(j?.addons) ? j : null } catch { return null }
+async function fetchIndex() {
+  const { agentUrl, agentToken } = useRuntimeConfig()
+  return upstream<any>('agent', agentUrl, agentToken, '/marketplace/index', 20_000).catch(() => null)
 }
 
 export async function marketplace(force = false) {
   if (!force && cache && Date.now() - cache.at < TTL) return cache.data
   const m = cfg().marketplace ?? {}
-  const remote = await fetchIndex(m.index)
-  const index = remote ?? useRuntimeConfig().marketplaceLocal
+  const got = await fetchIndex()
+  const index = got?.addons ? got : { ...useRuntimeConfig().marketplaceLocal, source: 'local' }
   const counts: Record<string, number> = m.counter
     ? await $fetch<any>(`${m.counter.replace(/\/$/, '')}/counts`, { timeout: 5000 }).catch(() => ({}))
     : {}
@@ -48,7 +47,7 @@ export async function marketplace(force = false) {
       update: !!(i?.version && newer(e.version, i.version)),
     }
   })
-  const data = { source: remote ? 'remote' : 'local', updated: index.updated ?? null, shareInstalls: !!m.share_installs, addons }
+  const data = { source: index.source === 'remote' ? 'remote' : 'local', updated: index.updated ?? null, shareInstalls: !!m.share_installs, addons }
   cache = { at: Date.now(), data }
   return data
 }

@@ -387,6 +387,12 @@ def _addon(args, cmd):
     return desc, ["python3", "-I", ADDON_GET, cmd, aid], 3600
 
 
+@cached(300)
+def marketplace_index():
+    """the marketplace index as addon-get sees it (with the token for a private repo); the app shows it from here"""
+    return _addon_get().index()
+
+
 def a_addon_install(args):
     return _addon(args, "install")
 

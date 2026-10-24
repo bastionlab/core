@@ -16,7 +16,7 @@ from media import media, media_items, media_plan
 from dev import _dims, _winsize, claude_code, preview, projects, shell_kill, shell_new, shells, ship_log, term_close, term_get, term_open, term_reaper
 from github import github_repos
 from games import games, games_do, games_log
-from actions import check_action, job_status, service_uptime, start_action
+from actions import check_action, job_status, marketplace_index, service_uptime, start_action
 from claude import _alive, _cc_turn, claude_send, claude_stop, claude_usage
 import dash_sdk
 
@@ -102,6 +102,8 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, hooks.view())
             if u.path == "/term/stream":
                 return self._term_stream(term_get(q["id"]), int(q.get("from", 0)))
+            if u.path == "/marketplace/index":
+                return self._send(200, marketplace_index())
             fn = dash_sdk.ROUTES.get(("GET", u.path))
             if fn:
                 return self._send(200, fn(q))

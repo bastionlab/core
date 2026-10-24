@@ -10,7 +10,7 @@ export const allAddons = (): Addon[] => [...ADDONS, ...(useRuntimeConfig().publi
 /** until the owner switches anything, a built-in whose CT isn't in config.json (a fresh install) starts off */
 export function addonsOff(): string[] {
   try { return JSON.parse(readFileSync(FILE, 'utf8')).off ?? [] } catch {}
-  return ADDONS.filter(a => a.ct && !ctId(a.ct)).map(a => a.id)
+  return allAddons().filter(a => a.ct && !ctId(a.ct)).map(a => a.id)
 }
 
 export function setAddon(id: string, on: boolean) {

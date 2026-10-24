@@ -1,0 +1,12 @@
+# one add-on: this file is what the Add-ons page (and later the marketplace index) shows
+id: chat
+name: Chat
+icon: chat
+order: 99
+author: MaxJC0
+version: 1.0.0
+desc: "Full-page chat with Claude (on the host, read-only or Auto) or a local model; chats sync across devices."
+routes: [/chat]
+home: true          # brings app/components/HomeChat.global.vue for the home page
+needs: [Claude login]
+depends_on: []
