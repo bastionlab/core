@@ -1,0 +1,32 @@
+# Caddyfile — the dashboard on the home network, no Tailscale: https://192.168.1.50 (or https://dash.lan)
+# Only the LAN gets an answer; the app still asks for the PIN. LAN_KEY (from /etc/caddy/lan.env, written by
+# deploy.sh) proves to the app that a request came through here — tailnet clients can't forge it.
+{
+	default_bind 192.168.1.50
+	auto_https disable_redirects
+	skip_install_trust
+}
+
+https://192.168.1.50, https://dash.lan {
+	tls internal
+	@away not remote_ip 192.168.1.0/24
+	abort @away
+	reverse_proxy 127.0.0.1:3000 {
+		header_up X-Dash-Lan {env.LAN_KEY}
+	}
+}
+
+# plain http: hand out the local CA (install it once on the phone to drop the warning), otherwise go to https
+http://192.168.1.50, http://dash.lan {
+	@away not remote_ip 192.168.1.0/24
+	abort @away
+	handle /ca.crt {
+		root * /var/lib/caddy/.local/share/caddy/pki/authorities/local
+		rewrite * /root.crt
+		header Content-Type application/x-x509-ca-cert
+		file_server
+	}
+	handle {
+		redir https://{host}{uri}
+	}
+}

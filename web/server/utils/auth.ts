@@ -67,6 +67,17 @@ export function ownerLogin(event: H3Event) {
   return !!login && allowed.includes(login)
 }
 
+/**
+ * The home-network door (lan/Caddyfile): Caddy on the CT's LAN IP answers only 192.168.1.0/24 and stamps each
+ * request with NUXT_LAN_KEY. `tailscale serve` passes client headers through, so the key — not the header's
+ * presence — is what proves a request took that path.
+ */
+export function fromLan(event: H3Event) {
+  const want = Buffer.from(String(useRuntimeConfig(event).lanKey || ''))
+  const got = Buffer.from(String(event.node.req.headers['x-dash-lan'] ?? ''))
+  return want.length >= 32 && got.length === want.length && timingSafeEqual(got, want)
+}
+
 /** a write's Origin (or Referer, if a browser left Origin out) must be this host */
 export function sameOrigin(event: H3Event) {
   const h = event.node.req.headers

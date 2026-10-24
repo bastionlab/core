@@ -30,5 +30,6 @@ export default defineNuxtConfig({
     moneyToken: '', // NUXT_MONEY_TOKEN
     pinHash: '', // NUXT_PIN_HASH — scrypt hash written by ../set-pin
     ownerLogins: 'owner@example.com', // NUXT_OWNER_LOGINS — Tailscale logins let in (comma-separated)
+    lanKey: '', // NUXT_LAN_KEY — shared with Caddy (lan/Caddyfile) so LAN requests can be told apart
   },
 })

@@ -2,3 +2,4 @@ agent/token
 __pycache__/
 *.pyc
 agent/pin_hash
+agent/lan_key
