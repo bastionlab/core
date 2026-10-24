@@ -18,7 +18,7 @@ from pathlib import Path
 TEXT_EXT = {".py", ".sh", ".bash", ".js", ".mjs", ".cjs", ".ts", ".vue", ".json", ".yaml", ".yml", ".toml",
             ".cfg", ".ini", ".conf", ".service", ".timer", ".txt", ".md", ".html", ".css", ".sql", ".env", ""}
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".nuxt", ".output", ".venv", "venv"}
-LAYOUT = {"addon.yaml", "web", "agent", "install.sh", "deploy.sh", "scripts", "README.md", "LICENSE", "assets"}
+LAYOUT = {"addon.yaml", "web", "agent", "install.sh", "deploy.sh", "scripts", "README.md", "CLAUDE.md", "LICENSE", "assets"}
 BIN_MAGIC = {b"\x7fELF": "Linux executable (ELF)", b"MZ": "Windows executable", b"\xcf\xfa\xed\xfe": "macOS executable",
              b"\xca\xfe\xba\xbe": "macOS/Java binary", b"\x00asm": "WebAssembly module"}
 ARCHIVES = (".zip", ".tar", ".tgz", ".gz", ".xz", ".bz2", ".7z", ".rar", ".jar", ".whl", ".deb", ".so", ".exe", ".dll", ".bin", ".pyc")
