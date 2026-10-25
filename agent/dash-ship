@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# dash-ship — the Deploy button: send this box's work to GitHub so every other install gets it. (This box needs no
+# deploy: agent/dash-live puts every edit live by itself.) Runs in dash-rebuild like dash-deploy; same log + markers.
+#   core:    commit the whole working tree (author from the repo's git config), tag a release (patch bump, or
+#            VERSION as is while it has no tag yet), push main + tag → release.yml builds it, Add-ons → Core offers it
+#   add-ons: every folder that differs from the marketplace goes through agent/addon-publish (PR, checks, merge)
+# Refuses to push anything that looks like a key or token.
+LOG=/var/log/dash-rebuild.log
+DIR=$(dirname "$(readlink -f "$0")")/..
+cd "$DIR" || exit 1
+exec >> "$LOG" 2>&1
+echo "=== deploy start $(date +%s) $(date '+%F %T')"
+rc=0
+
+echo "→ core"
+git add -A
+if ! git diff --cached --quiet; then
+  if git diff --cached -U0 | grep -nE '^\+.*(BEGIN [A-Z ]*PRIVATE KEY|ghp_[A-Za-z0-9]{30}|github_pat_[A-Za-z0-9_]{40}|xox[bp]-[0-9]|sk-ant-[A-Za-z0-9-]{20})' | head -5 | grep .; then
+    git reset -q
+    echo "   stopped: the lines above look like a secret — nothing was committed or pushed"
+    echo "=== deploy end $(date +%s) rc=1"; exit 1
+  fi
+  n=$(git diff --cached --name-only | wc -l)
+  areas=$(git diff --cached --name-only | sed -E 's,^web/app/(components|pages|composables|utils)/,,;s,^web/server/api/,api/,;s,\.(vue|ts|py)$,,' | awk -F/ '{print ($1=="agent"||$1=="api")?$1"/"$2:$NF}' | sort -u | head -6 | paste -sd, | sed 's/,/, /g')
+  git commit -q -m "deploy: $areas$( [ "$n" -gt 6 ] && echo " (+ more, $n files)")" && echo "   committed $n files"
+fi
+V=$(cat VERSION 2>/dev/null || echo 0.1.0)
+if [ -n "$(git log --oneline "v$V..HEAD" 2>/dev/null)" ] || ! git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
+  if git rev-parse -q --verify "refs/tags/v$V" >/dev/null; then
+    IFS=. read -r a b c <<< "${V%%-*}"; V="$a.$b.$((c + 1))"
+  fi
+  if [ "$(cat VERSION 2>/dev/null)" = "$V" ]; then  # first tag: VERSION is already right
+    git tag -a "v$V" -m "v$V"
+  else
+    scripts/release "$V" | sed 's/^/   /' || rc=1
+  fi
+fi
+if [ $rc = 0 ]; then
+  git push -q origin HEAD "v$V" 2>&1 | sed 's/^/   /'
+  [ "${PIPESTATUS[0]}" = 0 ] && echo "   pushed, release v$V" || rc=1
+fi
+
+echo "→ add-ons"
+ids=$(python3 -I - "$DIR/agent/addon-get" <<'EOF'
+import importlib.machinery, importlib.util, sys
+l = importlib.machinery.SourceFileLoader("addon_get", sys.argv[1])
+m = importlib.util.module_from_spec(importlib.util.spec_from_loader("addon_get", l)); l.exec_module(m)
+print(" ".join(sorted(m.local_changes())))
+EOF
+)
+[ -z "$ids" ] && echo "   nothing changed"
+for id in $ids; do
+  echo "   $id"
+  python3 -I "$DIR/agent/addon-publish" "$id" 2>&1 | sed 's/^/     /'
+  [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+done
+echo "=== deploy end $(date +%s) rc=$rc"
+exit $rc

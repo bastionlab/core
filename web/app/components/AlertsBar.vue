@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const props = defineProps<{ items: Alert[] }>()
-const open = ref(false)
+const open = useSticky('alerts:open', false)
 const shown = computed(() => (open.value ? props.items : props.items.slice(0, 3)))
 // the panels behind most sections live on /metrics, so from the home page they link there. "services" is an app
 // that is down: home has it in the app tiles, /metrics only in the uptime panel (its services list is infra only)

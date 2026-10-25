@@ -14,9 +14,9 @@ BACK=$(c .paths.backends); BACK=${BACK:-/root}   # backend repos (deals, money) 
 
 echo "→ agent"
 # the units live in the repo; link them in so an edit to a .service/.timer takes effect on the next deploy
-for u in dash-agent.service dash-alerts.service dash-alerts.timer dash-addons-update.service dash-addons-update.timer; do ln -sf "$DIR/agent/$u" /etc/systemd/system/$u; done
+for u in dash-agent.service dash-alerts.service dash-alerts.timer dash-addons-update.service dash-addons-update.timer dash-backup.service dash-backup.timer dash-live.service; do ln -sf "$DIR/agent/$u" /etc/systemd/system/$u; done
 systemctl daemon-reload
-systemctl enable -q --now dash-alerts.timer dash-addons-update.timer
+systemctl enable -q --now dash-alerts.timer dash-addons-update.timer dash-backup.timer dash-live.service
 systemctl restart dash-agent
 
 echo "→ add-on hooks"
@@ -27,23 +27,29 @@ echo "→ config + sources → CT $CT"
 pct exec $CT -- mkdir -p /etc/dash && pct push $CT "$CONF" /etc/dash/config.json --perms 644
 # app/, server/ and public/ are replaced, not overlaid: a file deleted here must not keep being built there
 # add-ons ride along as addons/<id>/ (web/nuxt.config.ts extends their web/ layers)
-tar -C "$DIR" --exclude=node_modules --exclude=.nuxt --exclude=.output --exclude=__pycache__ --exclude=.git --exclude='addons/*/agent' --exclude='addons/*/deploy.sh' --exclude='addons/.github' --transform 's,^web/,,;s,^web$,.,' -cf - web addons | pct exec $CT -- sh -c 'mkdir -p /opt/dash && cd /opt/dash && rm -rf app server public shared addons && tar -xf -'
+tar -C "$DIR" --exclude=node_modules --exclude=.nuxt --exclude=.output --exclude=__pycache__ --exclude=.git --exclude='addons/*/agent' --exclude='addons/*/deploy.sh' --exclude='addons/.github' --transform 's,^web/,,;s,^web$,.,' -cf - web addons VERSION | pct exec $CT -- sh -c 'mkdir -p /opt/dash && cd /opt/dash && rm -rf app server public shared addons i18n && tar -xf -'
 
 echo "→ env + service"
 pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_URL=http://%s:7070\nNUXT_OLLAMA_URL=http://%s:11434\nNUXT_DEALS_URL=http://%s:8090\nNUXT_MONEY_URL=http://%s:8090\nNUXT_OWNER_LOGINS=%s\nNUXT_AGENT_TOKEN=%s\nNUXT_DEALS_TOKEN=%s\nNUXT_MONEY_TOKEN=%s\nNUXT_PIN_HASH=%s\nNUXT_LAN_KEY=%s\nHOST=127.0.0.1\nPORT=3000\nNODE_ENV=production\n' '$(c .lan.host_ip)' '$(c .cts.ai.ip)' '$(c .cts.deals.ip)' '$(c .cts.money.ip)' '$(c '.owner_logins | join(",")')' '$(cat "$DIR/agent/token")' '$(cat "$BACK/deals/token" 2>/dev/null)' '$(cat "$BACK/money/token" 2>/dev/null)' '$(cat "$DIR/agent/pin_hash")' '$(cat "$DIR/agent/lan_key")' > /etc/dash.env"
 pct push $CT "$DIR/dash.service" /etc/systemd/system/dash.service
 
 echo "→ build"
-pct exec $CT -- sh -c 'cd /opt/dash && npm install --no-audit --no-fund --loglevel=error && npm run build 2>&1 | tail -3'
+# a release tarball brings web/.output prebuilt (core only): used as long as no add-on brings pages of its own
+if [ -f "$DIR/web/.output/VERSION" ] && [ "$(cat "$DIR/web/.output/VERSION")" = "$(cat "$DIR/VERSION" 2>/dev/null)" ] && ! ls -d "$DIR"/addons/*/web >/dev/null 2>&1; then
+  echo "   prebuilt $(cat "$DIR/VERSION")"
+  tar -C "$DIR/web" -cf - .output | pct exec $CT -- sh -c 'cd /opt/dash && rm -rf .output && tar -xf -'
+else
+  pct exec $CT -- sh -c 'cd /opt/dash && npm install --no-audit --no-fund --loglevel=error && npm run build 2>&1 | tail -3'
+fi
 
 pct exec $CT -- sh -c 'systemctl daemon-reload && systemctl enable -q dash && systemctl restart dash'
 pct exec $CT -- sh -c 'tailscale serve status --json | jq -e ".TCP[\"443\"]" >/dev/null 2>&1 || tailscale serve --bg --https=443 http://127.0.0.1:3000 >/dev/null'
 
-echo "→ home network (Caddy on the LAN IP)"
+echo "→ home network (Caddy on the LAN IP; waits for / retries until the CT has that address after a boot)"
 pct exec $CT -- sh -c 'command -v caddy >/dev/null || apt-get install -y -q caddy >/dev/null'
 pct push $CT "$DIR/lan/Caddyfile" /etc/caddy/Caddyfile
 pct exec $CT -- sh -c "umask 077; printf 'LAN_KEY=%s\\nDASH_IP=%s\\nLAN_SUBNET=%s\\n' '$(cat "$DIR/agent/lan_key")' '$(c .cts.dash.ip)' '$(c .lan.subnet)' > /etc/caddy/lan.env; chown caddy /etc/caddy/lan.env
-  mkdir -p /etc/systemd/system/caddy.service.d; printf '[Service]\\nEnvironmentFile=/etc/caddy/lan.env\\n' > /etc/systemd/system/caddy.service.d/lan.conf
+  mkdir -p /etc/systemd/system/caddy.service.d; printf '[Unit]\\nWants=network-online.target\\nAfter=network-online.target\\nStartLimitIntervalSec=0\\n[Service]\\nEnvironmentFile=/etc/caddy/lan.env\\nRestart=on-failure\\nRestartSec=5\\n' > /etc/systemd/system/caddy.service.d/lan.conf
   systemctl daemon-reload; systemctl enable -q caddy; systemctl restart caddy"
 sleep 2
 pct exec $CT -- curl -sf -o /dev/null http://127.0.0.1:3000/api/auth/status && echo "✅ https://$(pct exec $CT -- tailscale status --json | jq -r '.Self.DNSName | rtrimstr(".")')/"

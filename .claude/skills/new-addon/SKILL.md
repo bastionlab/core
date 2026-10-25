@@ -1,6 +1,6 @@
 ---
 name: new-addon
-description: Scaffold a new pvedash add-on in addons/<id> from templates/addon and build it out. Use when the owner wants a new dashboard tab/feature.
+description: Scaffold a new Bastion add-on in addons/<id> from templates/addon and build it out. Use when the owner wants a new dashboard tab/feature.
 ---
 
 # New add-on

@@ -1,6 +1,6 @@
-# __NAME__ (a pvedash add-on)
+# __NAME__ (a Bastion add-on)
 
-This folder plugs into the pvedash core (`/root/dashboard` on the host). Before changing anything, read the
+This folder plugs into the Bastion core (`/root/dashboard` on the host). Before changing anything, read the
 core's rules — they apply here too:
 - `../../.claude/rules/design.md` — UI kit, phone-first (Samsung/Chrome), copy, propose-and-approve for writes
 - `../../.claude/rules/build.md` — add-on layout, `addon.yaml`, config instead of hardcoded IDs/IPs, `dash_sdk`

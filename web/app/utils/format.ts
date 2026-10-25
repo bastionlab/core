@@ -34,7 +34,7 @@ export const vor = (ts?: number | null, now = Date.now() / 1000) => ago(ts, now)
 export const errText = (e: any, fallback = 'failed') => e?.data?.statusMessage || e?.data?.message || e?.statusMessage || e?.message || fallback
 
 export const clock = (ts?: number | null) =>
-  ts == null ? '–' : new Date(ts * 1000).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+  ts == null ? '–' : fmtDate(ts, { weekday: 'short', hour: '2-digit', minute: '2-digit' })
 
 /** tone for a 0–100 usage value */
 export const tone = (v: number, warn = 75, bad = 90) => (v >= bad ? 'bad' : v >= warn ? 'warn' : 'ok')

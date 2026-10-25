@@ -1,9 +1,11 @@
 """Discord webhooks, one per channel of the homelab server. The dashboard sets them through the agent;
-the file is copied into the CTs whose apps post (deals 107, money 108) and read on pve for host alerts."""
-import json, os, re, subprocess, time, urllib.error, urllib.request
+the file is copied into the CTs whose apps post (deals 107, money 108) and read on pve for host alerts.
+A topic routed to push (Settings → Notifications, push.py) gets the agent's relay URL in that copy instead."""
+import json, os, re, subprocess, tempfile, time, urllib.error, urllib.request
 from pathlib import Path
 
-from config import DASH_URL, ct
+from config import DASH_URL, HOST_IP, ct
+import push as webpush
 
 FILE = Path("/etc/dash/discord.json")
 CHANNELS = ("deals", "wohnungen", "jobs", "money", "alerts")
@@ -32,13 +34,29 @@ def view():
     return {"channels": [{"key": k, "set": bool(h.get(k)), "name": (h.get("_names") or {}).get(k)} for k in CHANNELS]}
 
 
+def for_cts():
+    """the CTs' copy: real webhooks, or the relay on this agent for topics that push (it forwards to Discord itself)"""
+    h = {k: v for k, v in load().items() if not k.startswith("_")}
+    relay = None
+    for ch in CHANNELS:
+        if webpush.route(ch) != "discord":
+            relay = relay or webpush.keys()["relay"]
+            h[ch] = f"http://{HOST_IP}:{os.environ.get('AGENT_PORT', '7070')}/relay/{ch}/{relay}"
+    return h
+
+
 def push():
     """copy the file into every CT that posts; a stopped CT gets it on the next save"""
     out = {}
-    for ct in CONSUMERS:
-        r = subprocess.run(["pct", "push", str(ct), str(FILE), "/etc/discord.json", "--perms", "0600"],
-                           capture_output=True, text=True, timeout=30)
-        out[ct] = r.returncode == 0
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump(for_cts(), f)
+    try:
+        for ct in CONSUMERS:
+            r = subprocess.run(["pct", "push", str(ct), f.name, "/etc/discord.json", "--perms", "0600"],
+                               capture_output=True, text=True, timeout=30)
+            out[ct] = r.returncode == 0
+    finally:
+        os.unlink(f.name)
     return out
 
 
@@ -67,7 +85,19 @@ def set_hook(channel, url):
     return view() | {"pushed": push()}
 
 
-def send(channel, content="", embeds=None):
+def send(channel, content="", embeds=None, topic=None):
+    """to Discord and/or push, as the topic (default: the channel) is routed. False when neither took it"""
+    r = webpush.route(topic or channel)
+    pushed = False
+    if r in ("push", "both"):
+        title, body = webpush.from_discord({"content": content, "embeds": embeds})
+        pushed = webpush.notify(topic or channel, title, body)
+    if r == "push":
+        return pushed
+    return _discord(channel, content, embeds) or pushed
+
+
+def _discord(channel, content="", embeds=None):
     """False when the channel has no hook or Discord refused; one retry after a rate limit"""
     url = load().get(channel)
     if not url:

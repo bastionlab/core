@@ -57,7 +57,7 @@ onBeforeUnmount(() => clearTimeout(armTimer))
 
 <template>
   <Panel id="secrets" title="Secrets" :sub="!list ? '' : old ? `${old} need you` : `${list.length} keys`" fold="phone">
-    <div v-if="!list" class="faint small">Loading…</div>
+    <Skeleton v-if="!list" kind="rows" :n="4" />
     <div v-for="r in list ?? []" :key="r.where + r.name" class="row">
       <span class="dot" :class="tone(r)" />
       <div class="what">

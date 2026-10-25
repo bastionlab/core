@@ -1,0 +1,175 @@
+#!/usr/bin/env python3
+"""dash-live — an edit in the working tree goes live on this box by itself; there is no deploy step for that.
+(The Deploy button sends the work to GitHub instead: agent/dash-ship.)
+
+Polls the repo every 1.5 s; once nothing has changed for 2 s it applies only what the changed files need:
+  agent/*.py, addons/*/agent/**          → compile check, restart dash-agent (a syntax error keeps the old one running)
+  web/**, addons/*/web/**, addon.yaml    → build a copy in the dashboard CT (/opt/dash-next, ~15 s); green = swap it
+                                           into /opt/dash + restart the app, red = the running app stays as it was
+  an add-on's other files                → its deploy.sh hook, if it has one
+  deploy.sh, units, dash.service, Caddy, package.json → the full ./deploy.sh (dash-deploy, in dash-rebuild)
+While dash-rebuild runs (full deploy, add-on install, config change) it waits and treats that run as the baseline.
+Status for Settings → Deploy: /var/lib/dash-live/status.json.
+"""
+import json, os, py_compile, subprocess, sys, time
+from pathlib import Path
+
+DIR = Path(__file__).resolve().parent.parent
+STATUS = Path("/var/lib/dash-live/status.json")
+SKIP_DIRS = {"node_modules", ".nuxt", ".output", ".git", "__pycache__", ".cache", "dist"}
+SKIP_FILES = {"agent/token", "agent/pin_hash", "agent/lan_key"}
+FULL = {"deploy.sh", "dash.service", "lan/Caddyfile", "web/package.json", "web/package-lock.json"}
+CT = json.load(open("/etc/dash/config.json"))["cts"]["dash"]["id"]
+PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+
+def snap():
+    out = {}
+    for root, dirs, files in os.walk(DIR):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for f in files:
+            if f.endswith((".pyc", ".swp", "~", ".old", ".log")) or f.startswith(".#"):
+                continue
+            p = os.path.join(root, f)
+            rel = os.path.relpath(p, DIR)
+            if rel in SKIP_FILES:
+                continue
+            try:
+                st = os.stat(p)
+            except OSError:
+                continue
+            out[rel] = (st.st_mtime_ns, st.st_size)
+    return out
+
+
+def classify(paths):
+    need = {"agent": set(), "web": False, "hooks": set(), "full": False}
+    for p in paths:
+        parts = p.split("/")
+        if p in FULL or (parts[0] == "agent" and p.endswith((".service", ".timer"))):
+            need["full"] = True
+        elif parts[0] == "agent" and p.endswith(".py"):
+            need["agent"].add(p)
+        elif parts[0] == "web" or p == "VERSION":
+            need["web"] = True
+        elif parts[0] == "addons" and len(parts) > 2:
+            if parts[2] == "agent":
+                need["agent"].add(p)
+            elif parts[2] == "web":
+                need["web"] = True
+            elif parts[2] == "addon.yaml":
+                need["web"] = True
+                need["agent"].add(p)
+            elif (DIR / "addons" / parts[1] / "deploy.sh").is_file() and parts[2] not in ("README.md", "CLAUDE.md"):
+                need["hooks"].add(parts[1])
+    return need
+
+
+def status(**kw):
+    STATUS.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        s = json.loads(STATUS.read_text())
+    except (OSError, ValueError):
+        s = {}
+    s.update(kw, at=int(time.time()))
+    tmp = STATUS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(s))
+    tmp.replace(STATUS)
+
+
+def run(cmd, inp=None, timeout=900):
+    r = subprocess.run(cmd, input=inp, capture_output=True, timeout=timeout, env={**os.environ, "PATH": PATH})
+    return r.returncode, (r.stdout + r.stderr).decode(errors="replace")
+
+
+def busy():
+    return subprocess.run(["systemctl", "is-active", "--quiet", "dash-rebuild"]).returncode == 0
+
+
+def apply_agent(files):
+    for f in files:
+        if f.endswith(".py") and (DIR / f).is_file():
+            try:
+                py_compile.compile(str(DIR / f), doraise=True, cfile=os.devnull)
+            except py_compile.PyCompileError as e:
+                return False, f"agent not restarted, {f} doesn't compile:\n{e.msg}"
+    rc, out = run(["systemctl", "restart", "dash-agent"])
+    return rc == 0, "agent restarted" if rc == 0 else out
+
+
+def apply_web():
+    # the same sources deploy.sh ships, into a fresh copy next to the live one; the live app is touched only on success
+    tar = subprocess.Popen(["tar", "-C", str(DIR), "--exclude=node_modules", "--exclude=.nuxt", "--exclude=.output",
+                            "--exclude=__pycache__", "--exclude=.git", "--exclude=addons/*/agent",
+                            "--exclude=addons/*/deploy.sh", "--exclude=addons/.github",
+                            "--transform", "s,^web/,,;s,^web$,.,", "-cf", "-", "web", "addons", "VERSION"],
+                           stdout=subprocess.PIPE)
+    rc, out = run(["pct", "exec", str(CT), "--", "sh", "-c",
+                   "rm -rf /opt/dash-next && mkdir -p /opt/dash-next && cd /opt/dash-next && tar -xf - "
+                   "&& ln -s /opt/dash/node_modules node_modules && nice npm run build 2>&1 | tail -80; "
+                   "test -f .output/server/index.mjs"], inp=tar.stdout.read())
+    tar.wait()
+    if rc != 0:
+        lines = [l for l in out.splitlines() if l.strip() and not l.lstrip("| ").startswith("at ")]  # no stack frames
+        return False, "build failed, the running app is unchanged:\n" + "\n".join(lines[-15:])
+    rc, out = run(["pct", "exec", str(CT), "--", "sh", "-c",
+                   "cd /opt/dash-next && rm node_modules && for x in * .output; do rm -rf \"/opt/dash/$x\"; "
+                   "mv \"$x\" /opt/dash/; done && cd / && rm -rf /opt/dash-next && systemctl restart dash"])
+    return rc == 0, "app rebuilt and restarted" if rc == 0 else out
+
+
+def apply_full():
+    rc, out = run(["systemd-run", "--unit", "dash-rebuild", "--collect", "--quiet", "--wait", "-p", "RuntimeMaxSec=30min",
+                   "-E", f"PATH={PATH}", str(DIR / "agent/dash-deploy")], timeout=1900)
+    return rc == 0, "full deploy.sh ran" if rc == 0 else "full deploy.sh failed — see Settings → Deploy log"
+
+
+def apply(paths):
+    need = classify(paths)
+    if not (need["full"] or need["web"] or need["agent"] or need["hooks"]):
+        return
+    status(state="applying", files=sorted(paths)[:20])
+    msgs, ok = [], True
+    steps = [("full", apply_full)] if need["full"] else [
+        *([("agent", lambda: apply_agent(need["agent"]))] if need["agent"] else []),
+        *[(f"hook {h}", (lambda h=h: (lambda r: (r[0] == 0, f"{h} hook: " + (r[1][-500:] if r[0] else "ok")))(
+            run([str(DIR / "addons" / h / "deploy.sh")])))) for h in sorted(need["hooks"])],
+        *([("web", apply_web)] if need["web"] else [])]
+    for name, fn in steps:
+        try:
+            good, msg = fn()
+        except Exception as e:  # noqa: BLE001 — a broken step must not stop the watcher
+            good, msg = False, f"{name}: {e}"
+        ok &= good
+        msgs.append(msg)
+        print(f"{name}: {'ok' if good else 'FAILED'} — {msg.splitlines()[0] if msg else ''}", flush=True)
+    status(state="ok" if ok else "failed", msg="\n".join(msgs)[-4000:], files=sorted(paths)[:20])
+
+
+def main():
+    base = snap()
+    status(state="watching")
+    print(f"watching {DIR}", flush=True)
+    while True:
+        time.sleep(1.5)
+        if busy():
+            while busy():
+                time.sleep(3)
+            base = snap()
+            continue
+        cur = snap()
+        if cur == base:
+            continue
+        while True:  # settle: an editor or Claude often writes several files in a row
+            time.sleep(2)
+            nxt = snap()
+            if nxt == cur:
+                break
+            cur = nxt
+        changed = {p for p in set(cur) | set(base) if cur.get(p) != base.get(p)}
+        base = cur
+        apply(changed)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

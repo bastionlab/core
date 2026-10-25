@@ -1,0 +1,6 @@
+[Unit]
+Description=dashboard backup (Settings → Backup schedule; off/daily/weekly in /etc/dash/backup.json)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 -I /root/dashboard/agent/dash-backup create --scheduled

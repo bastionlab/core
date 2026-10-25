@@ -74,6 +74,16 @@ const failSince = ref(0)
 watch(error, e => (failSince.value = e ? (failSince.value || Date.now()) : 0))
 const down = computed(() => failSince.value > 0 && tick.value - failSince.value > 30000)
 const state = computed(() => (down.value ? 'bad' : stale.value ? 'warn' : 'ok'))
+
+// command palette (⌘K, the search buttons), the jobs tray + toasts, pull-to-refresh on phones
+const palette = useState('palette:open', () => false)
+const { restore } = useRuns()
+onMounted(restore)
+// pages that fill the screen and scroll inside themselves: no top bar, no pull
+const FULL = ['/chat', '/habits']
+const full = computed(() => FULL.includes(route.path))
+const pull = usePull(() => full.value || sheet.value || palette.value || route.path === '/dev')
+const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value ? 'stale' : 'live'))
 </script>
 
@@ -81,9 +91,12 @@ const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value
   <div class="shell">
     <aside class="side">
       <NuxtLink to="/" class="brand">
-        <span class="logo">pve</span>
+        <span class="logo">bastion</span>
         <span class="dot" :class="state" :title="stateText" />
       </NuxtLink>
+      <button type="button" class="find" @click="palette = true">
+        <Icon name="search" :size="16" class="i" /><span class="l">Search</span><kbd class="l">{{ mac ? '⌘' : 'Ctrl' }} K</kbd>
+      </button>
       <nav>
         <NuxtLink v-for="n in nav" :key="n.to" :to="n.to" :class="{ on: route.path === n.to }">
           <Icon :name="n.icon" class="i" /><span class="l">{{ n.label }}</span>
@@ -91,6 +104,7 @@ const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value
           <span v-if="mark(n.to)" class="cmark" :class="mark(n.to)" :title="markTitle(mark(n.to))" />
         </NuxtLink>
       </nav>
+      <div class="side-jobs"><JobsButton /></div>
       <div class="foot small faint" :title="updated ? new Date(updated).toLocaleString() : ''">
         {{ o?.cts?.filter((c: any) => c.status === 'running').length ?? '–' }}/{{ o?.cts?.length ?? '–' }} up · {{ stateText }}
       </div>
@@ -115,6 +129,7 @@ const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value
           <div class="sheet-head">
             <span class="dot" :class="state" />
             <span class="small faint">{{ o?.cts?.filter((c: any) => c.status === 'running').length ?? '–' }}/{{ o?.cts?.length ?? '–' }} up · {{ stateText }}</span>
+            <button type="button" class="edit" aria-label="Search" @click="sheet = false; palette = true"><Icon name="search" :size="15" /></button>
             <button type="button" class="edit" :class="{ on: editing }" @click="editing = !editing">{{ editing ? 'Done' : 'Edit tabs' }}</button>
           </div>
           <div v-if="editing" class="hint small faint">Tap to pin up to {{ MAX_PINS }} pages to the bar · {{ pinned.length }}/{{ MAX_PINS }}</div>
@@ -133,7 +148,21 @@ const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value
       </div>
     </Transition>
 
-    <main class="wrap">
+    <div v-if="!full" class="topbar">
+      <NuxtLink to="/" class="brand"><span class="logo">bastion</span><span class="dot" :class="state" /></NuxtLink>
+      <JobsButton />
+      <button type="button" class="btn icon ghost" aria-label="Search" @click="palette = true"><Icon name="search" :size="19" /></button>
+    </div>
+    <div v-if="pull.dist.value" class="ptr" :class="{ ready: pull.ready.value, busy: pull.busy.value }" :style="{ transform: `translate(-50%, ${pull.dist.value}px)` }">
+      <Icon name="refresh" :size="18" :style="{ transform: `rotate(${pull.dist.value * 3}deg)` }" />
+    </div>
+
+    <CommandPalette :nav="nav" />
+    <JobsTray />
+    <ActionConfirm />
+    <Toasts />
+
+    <main class="wrap" :class="{ refreshing: pull.busy.value }">
       <!-- floats over the page so it never shifts content (chat scroll etc.) -->
       <Transition name="pop">
         <div v-if="state !== 'ok'" class="banner small" :class="state" role="status">{{ down ? 'Agent unreachable — data may be old' : 'Data is stale' }}</div>
@@ -166,6 +195,16 @@ nav a:hover .i { color: var(--muted); }
 .cmark.input { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
 @keyframes cpulse { 50% { opacity: .3; transform: scale(.7); } }
 .foot { margin-top: auto; padding: 0 10px; }
+.side-jobs { padding: 0 4px; }
+.side-jobs:empty { display: none; }
+.find {
+  display: flex; align-items: center; gap: 10px; margin: -6px 0 -8px; padding: 7px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--faint); font: inherit; font-size: 13px; cursor: pointer;
+}
+.find:hover { color: var(--text); border-color: var(--line-2); }
+.find kbd { margin-left: auto; font: 11px var(--mono); color: var(--faint); }
+.topbar, .ptr { display: none; }
+main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
 .banner {
   position: fixed; z-index: 60; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); transform: translateX(-50%);
   padding: 6px 14px; border-radius: 999px; white-space: nowrap; pointer-events: none;
@@ -183,6 +222,8 @@ nav a:hover .i { color: var(--muted); }
   .logo { font-size: 15px; }
   nav a { justify-content: center; padding: 10px; }
   .l, .foot { display: none; }
+  .find { justify-content: center; padding: 9px; margin: 0; }
+  .side-jobs :deep(.jt) { padding: 6px 8px; }
   .badge { position: absolute; top: 3px; right: 3px; padding: 0 4px; font-size: 9px; line-height: 13px; }
   .cmark { position: absolute; top: 6px; right: 6px; }
 }
@@ -192,6 +233,23 @@ nav a:hover .i { color: var(--muted); }
 @media (max-width: 640px) {
   .shell { display: block; --tabbar: calc(58px + env(safe-area-inset-bottom)); }
   .side { display: none; }
+  .topbar {
+    display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px 0 14px;
+    max-width: 1320px; margin: 0 auto;
+  }
+  .topbar .brand { padding: 0; margin-right: auto; }
+  .topbar .logo { font-size: 17px; }
+  .topbar ~ .wrap { padding-top: 4px; }
+  .ptr {
+    display: grid; place-items: center; position: fixed; z-index: 65; left: 50%; top: calc(env(safe-area-inset-top, 0px) - 30px);
+    width: 36px; height: 36px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--faint);
+    box-shadow: 0 4px 14px rgb(0 0 0 / .4);
+  }
+  .ptr.ready { color: var(--accent); }
+  .ptr.busy svg { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .sheet-head .edit:first-of-type { margin-left: auto; display: grid; place-items: center; padding: 5px 9px; }
+  .sheet-head .edit + .edit { margin-left: 0; }
   .tabs {
     position: fixed; z-index: 60; bottom: 0; left: 0; right: 0; display: flex;
     padding: 0 4px env(safe-area-inset-bottom); border-top: 1px solid var(--line);

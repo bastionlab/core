@@ -1,5 +1,5 @@
 <script setup lang="ts">
-useHead({ title: 'Metrics · pve' })
+useHead({ title: 'Metrics · Bastion' })
 const { data: o, error, refresh } = useOverview()
 const now = computed(() => o.value?.time ?? Date.now() / 1000)
 const list = computed(() => alerts(o.value))
@@ -19,6 +19,10 @@ const { jobs, run, dismiss } = useActions()
     <JobList :jobs="jobs" @dismiss="dismiss" />
     <div v-if="error && !o" class="bad pad">Could not reach the agent: {{ error.statusMessage || error.message }}</div>
 
+    <template v-if="!o && !error">
+      <Skeleton kind="cards" :n="3" class="sk" />
+      <Skeleton kind="rows" :n="6" />
+    </template>
     <template v-if="o">
       <div class="grid cols-3">
         <HostPanel :host="o.host" :updates="o.updates" :busy="o.backups?.busy" @action="(n, a) => run(n, a, refresh)" />
@@ -49,4 +53,5 @@ const { jobs, run, dismiss } = useActions()
 
 <style scoped>
 .pad { padding: 60px 0; text-align: center; }
+.sk { margin-bottom: 14px; }
 </style>

@@ -10,7 +10,7 @@ On a box whose addons/ is a git checkout of the marketplace repo (the owner's), 
 sparse-checkout add / drop and a pull.
   --no-rebuild              stage only (tests); otherwise deploy.sh runs in its own unit, dash-rebuild
 
-Where things come from: config.json marketplace.index (the pvedash/addons index.json, or the copy in
+Where things come from: config.json marketplace.index (the bastionlab/addons index.json, or the copy in
 addons/index.json when that is unreachable) names each add-on's folder in marketplace.repo, or its own repo.
 Before anything lands, agent/addon_scan.py checks the code (reverse shells, miners, decode-and-run, planted ssh
 keys, binaries, dashboard secrets, …): a blocking finding stops the install or update; the rest goes in the log.
@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import CFG, DASHBOARD, DEVBOX  # noqa: E402
 import addon_scan  # noqa: E402
+import semver  # noqa: E402
 
 ADDONS = Path(os.environ.get("DASH_ADDONS_DIR") or f"{DASHBOARD}/addons")
 OLD = Path(os.environ.get("DASH_ADDONS_OLD") or "/var/lib/dash-addons/old")
@@ -33,7 +34,7 @@ MK = CFG.get("marketplace") or {}
 
 
 def token():
-    """a private marketplace (pvedash/addons while it is private) needs a GitHub token; it is read here, on pve,
+    """a private marketplace (bastionlab/addons while it is private) needs a GitHub token; it is read here, on pve,
     and only ever sent to GitHub — never to the dashboard, never in an argv"""
     f = Path(MK.get("token_file") or DEVBOX / "keys/github_token")
     try:
@@ -98,7 +99,7 @@ def fetch(e, tmp: Path) -> Path:
             sys.exit(f"refusing source {repo!r}: only https://github.com/<owner>/<repo>")
     else:
         # the marketplace repo itself is the owner's setting; DASH_MARKET_REPO lets a test point it at a local repo
-        repo = os.environ.get("DASH_MARKET_REPO") or MK.get("repo") or "https://github.com/pvedash/addons"
+        repo = os.environ.get("DASH_MARKET_REPO") or MK.get("repo") or "https://github.com/bastionlab/addons"
         sub = e.get("path") or e["id"]
         if not PATH_RE.match(sub):
             sys.exit(f"bad folder name {sub!r}")
@@ -117,8 +118,29 @@ def fetch(e, tmp: Path) -> Path:
     return d
 
 
+def core_version():
+    try:
+        return (Path(DASHBOARD) / "VERSION").read_text().strip()
+    except OSError:
+        return ""
+
+
+def core_mismatch(d: Path):
+    """why this add-on folder can't run on this core (its addon.yaml `core:` range), or None"""
+    want, have = manifest(d).get("core"), core_version()
+    if not want or not have:
+        return None
+    try:
+        return None if semver.satisfies(have, want) else f"needs core {want}, this one is {have}: update the core first"
+    except ValueError as e:
+        return f"bad core range {want!r} ({e})"
+
+
 def check(d: Path, aid, old=None):
-    """the safety scan; exits before anything is installed when it finds something blocking"""
+    """the core-version gate and the safety scan; exits before anything is installed when either blocks"""
+    why = core_mismatch(d)
+    if why:
+        sys.exit(f"{aid}: {why}; nothing was installed")
     rep = addon_scan.scan(d, old if old and old.is_dir() else None, aid, MK.get("scan_allow") or [])
     say(addon_scan.summary(rep))
     if not rep["ok"]:
@@ -158,7 +180,8 @@ def preview(aid):
         else:
             d = fetch(e, Path(t))
         rep = addon_scan.scan(d, here if here.is_dir() else None, aid, MK.get("scan_allow") or [])
-    return {**rep, "id": aid, "version": e.get("version")}
+        compat = core_mismatch(d)
+    return {**rep, "id": aid, "version": e.get("version"), "core_block": compat, "ok": rep["ok"] and not compat}
 
 
 def stash(aid):

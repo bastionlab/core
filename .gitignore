@@ -4,6 +4,9 @@ __pycache__/
 agent/pin_hash
 agent/lan_key
 
-# add-ons are their own repo (pvedash/addons), checked out here
+# add-ons are their own repo (bastionlab/addons), checked out here
 /addons/
 agent/*.old
+
+# owner-only notes, never published
+docs/my-setup.md

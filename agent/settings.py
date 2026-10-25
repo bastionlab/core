@@ -144,7 +144,7 @@ def _github():
     except OSError:
         return {"ok": False, "detail": "no token"}
     try:
-        req = urllib.request.Request("https://api.github.com/user", headers={"Authorization": f"token {t}", "User-Agent": "pvedash"})
+        req = urllib.request.Request("https://api.github.com/user", headers={"Authorization": f"token {t}", "User-Agent": "bastion"})
         with urllib.request.urlopen(req, timeout=10) as r:
             user = json.loads(r.read()).get("login")
             scopes = r.headers.get("X-OAuth-Scopes") or "fine-grained"
@@ -274,6 +274,7 @@ def inventory():
             n, u, r = used.get(f.name, (f.name, "dev boxes", None))
             out.append(_file(n, f, u, r))
     out.append(_file("Discord webhooks", Path("/etc/dash/discord.json"), "alerts + add-ons", "discord"))
+    out.append(_file("Push keys", Path("/etc/dash/secrets/push.json"), "phone notifications, CT relay"))
     out.append(_file("Claude login", Path("/root/.claude/.credentials.json"), "Chat, Ask bar, Learn"))
     m = _manifests()
     for aid in sorted(m):

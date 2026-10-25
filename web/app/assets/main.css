@@ -35,6 +35,8 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 
 .wrap { width: 100%; max-width: 1320px; margin: 0 auto; padding: 24px 28px 60px; }
 @media (max-width: 640px) { .wrap { padding: 12px 12px calc(28px + var(--tabbar)); } }
+/* phones: our own pull-to-refresh (layout) instead of the browser's reload */
+@media (pointer: coarse) { html, body { overscroll-behavior-y: contain; } }
 
 .grid { display: grid; gap: 14px; margin-bottom: 14px; }
 .cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }

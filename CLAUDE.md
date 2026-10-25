@@ -1,12 +1,16 @@
 # Working on the dashboard
 
-See README.md for what lives where. This file is how to change it without breaking the look or each other's work.
+See docs/architecture.md for what lives where (README.md is the public overview). This file is how to change it without breaking the look or each other's work.
 
 ## Before you touch anything
 - Other Claude sessions often edit this repo at the same time. Run `git status` and check mtimes of the files you
   plan to edit; never revert or reformat work you didn't do.
-- Deploy with `./deploy.sh` (restarts the agent, rebuilds the app in CT 104). It ships the whole working tree,
-  so don't deploy someone else's half-finished files.
+- No deploy step to see a change: `agent/dash-live` (service `dash-live`) watches the working tree and a few
+  seconds after the last save restarts the agent (`.py`) and/or rebuilds the app in a copy in CT 104 (~15 s, swapped
+  in only if the build is green). Its result: Settings → Deploy, `/var/lib/dash-live/status.json`,
+  `journalctl -u dash-live`. Units, `deploy.sh`, `package.json`, Caddy still trigger the full `./deploy.sh`.
+- **Deploy** = send the work to GitHub (Deploy button → `agent/dash-ship`: commits the whole tree, tags a core
+  release, pushes, publishes changed add-ons). Only when the owner asks; it ships everyone's uncommitted work.
 - Unsure a change compiles? Test-build a scratch copy in CT 104 first (there is no node on pve): copy
   `/opt/dash/node_modules` to `/tmp/x` in CT 104, ship the sources the way deploy.sh does
   (`tar -C . --exclude=node_modules --exclude=.git --exclude='addons/*/agent' --transform 's,^web/,,;s,^web$,.,' -cf - web addons`),

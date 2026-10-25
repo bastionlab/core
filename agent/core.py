@@ -16,7 +16,7 @@ POOL = ThreadPoolExecutor(8)
 FAN = ThreadPoolExecutor(16)
 GH_TOKEN_FILE = DEVBOX / "keys/github_token"
 GH_USER_FILE = DEVBOX / "keys/github_user"
-GH_USER = "MaxJC0"
+GH_USER = ""  # fallback when keys/github_user is missing: no public-repo listing
 
 
 def sh(*args, timeout=20):

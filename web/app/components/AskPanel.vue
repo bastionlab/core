@@ -4,6 +4,8 @@ const props = defineProps<{ scope: string, examples?: string[], placeholder?: st
 const emit = defineEmits<{ refresh: [] }>()
 
 // each page keeps its own conversation while you move around the dashboard
+// the Ask bar needs admin (shared/utils/roles.ts)
+const { role } = useAddons()
 const turns = useState<Turn[]>(`ask:turns:${props.scope}`, () => [])
 const { ask, run, stop, busy, models } = useAsk(props.scope, turns)
 const clear = () => { stop(); turns.value = [] }
@@ -12,7 +14,7 @@ const focused = ref(false)
 </script>
 
 <template>
-  <section id="ask" class="ask" :class="{ active: focused || turns.length }">
+  <section v-if="!role || atLeast(role, 'admin')" id="ask" class="ask" :class="{ active: focused || turns.length }">
     <AskBar :busy="busy" :models="models" :placeholder="placeholder" @submit="ask" @stop="stop" @focus="f => (focused = f)" />
 
     <div v-if="!turns.length && focused && examples?.length" class="examples">

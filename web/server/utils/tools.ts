@@ -71,7 +71,7 @@ async function webSearch(query: string) {
 
 async function fetchPage(url: string) {
   const u = await publicUrl(url)
-  const res = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; pve-dashboard/1.0)' }, redirect: 'follow', signal: AbortSignal.timeout(20_000) })
+  const res = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; bastion/1.0)' }, redirect: 'follow', signal: AbortSignal.timeout(20_000) })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   if (new URL(res.url).hostname !== u.hostname) await publicUrl(res.url) // a redirect must not land inside the network either
   const body = (await res.text()).slice(0, 400_000)

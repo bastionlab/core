@@ -19,7 +19,7 @@ _l = importlib.machinery.SourceFileLoader("addon_get", str(Path(__file__).resolv
 ag = importlib.util.module_from_spec(importlib.util.spec_from_loader("addon_get", _l))
 _l.exec_module(ag)
 
-REPO = (ag.MK.get("repo") or "https://github.com/pvedash/addons").rstrip("/")
+REPO = (ag.MK.get("repo") or "https://github.com/bastionlab/addons").rstrip("/")
 SLUG = REPO.removeprefix("https://github.com/")
 API = f"https://api.github.com/repos/{SLUG}"
 WAIT = 30 * 60
@@ -31,7 +31,7 @@ def gh(path, method="GET", body=None, ok404=False):
     url = path if path.startswith("https://") else f"https://api.github.com{path}"
     req = urllib.request.Request(url, method=method, data=json.dumps(body).encode() if body is not None else None,
                                  headers={"Authorization": f"token {ag.token()}", "Accept": "application/vnd.github+json",
-                                          "User-Agent": "pvedash"})
+                                          "User-Agent": "bastion"})
     try:
         with urllib.request.urlopen(req, timeout=20) as r:
             return json.loads(r.read() or "null")
@@ -162,9 +162,9 @@ def main():
             say(f"  {state}")
             seen = state
         if any(r.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required") for r in runs):
-            com = [c for c in gh(f"/repos/{SLUG}/issues/{n}/comments") or [] if "pvedash-check" in (c.get("body") or "")]
+            com = [c for c in gh(f"/repos/{SLUG}/issues/{n}/comments") or [] if any(m in (c.get("body") or "") for m in ("bastion-check", "pvedash-check"))]
             if com:
-                say(com[-1]["body"].replace("<!-- pvedash-check -->", "").strip())
+                say(com[-1]["body"].replace("<!-- bastion-check -->", "").replace("<!-- pvedash-check -->", "").strip())
             sys.exit(f"❌ not published: fix the problems above and press Publish again ({pr['html_url']})")
         if runs and all(r.get("conclusion") == "success" for r in runs):
             continue  # checks passed, the merge step is on its way

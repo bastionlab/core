@@ -111,17 +111,24 @@ export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void)
   /** nothing runs until the owner clicks Run; then poll the job until it finishes */
   async function run(p: Proposal, after?: () => void) {
     p.state = 'running'
+    // mirrored in the header's jobs tray, so it can be followed from any page
+    const jobs = useRuns()
+    const mirror = jobs.add({ name: p.action, args: p.args, page: 'ask' })
     try {
       p.job = await $fetch('/api/ai/action/run', { method: 'POST', body: { name: p.action, args: p.args } })
+      Object.assign(mirror, { id: p.job.id, desc: p.job.desc })
       for (;;) {
         await new Promise(r => setTimeout(r, 1500))
         p.job = await $fetch('/api/ai/action/status', { query: { id: p.job.id } })
+        mirror.log = p.job.log ?? []
         if (p.job.done) break
       }
       p.state = p.job.rc === 0 ? 'done' : 'failed'
+      jobs.finish(mirror, p.job.rc)
     } catch (e: any) {
       p.job = { log: [e?.statusMessage || e?.message || 'failed'] }
       p.state = 'failed'
+      jobs.finish(mirror, null, p.job.log[0])
     }
     after?.()
     onChange?.()

@@ -23,7 +23,7 @@ if [ -n "$HAVE" ] && pct status "$HAVE" >/dev/null 2>&1; then
 fi
 
 # --- the backend's code ---------------------------------------------------------------------------------------
-BACK=${DASH_BACKENDS:-$(c .paths.backends)}; BACK=${BACK:-/opt/pvedash}   # DASH_BACKENDS: tests
+BACK=${DASH_BACKENDS:-$(c .paths.backends)}; BACK=${BACK:-/opt/bastion}   # DASH_BACKENDS: tests
 NAME=${REPO##*/}; DIR="$BACK/$NAME"
 TOKEN_FILE=$(c .marketplace.token_file); TOKEN_FILE=${TOKEN_FILE:-$(c .paths.devbox)/keys/github_token}
 git_() {  # the GitHub token (private org repos) goes in through the environment, never argv

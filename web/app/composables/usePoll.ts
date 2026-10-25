@@ -1,3 +1,6 @@
+/** what the page on screen polls: pull-to-refresh (layout) runs all of them at once */
+export const pageRefreshers = new Set<() => any>()
+
 /** run fn now and every ms, but only while the tab is visible */
 export function usePoll(fn: () => any, ms: number) {
   let timer: any
@@ -5,8 +8,8 @@ export function usePoll(fn: () => any, ms: number) {
   const start = () => { stop(); timer = setInterval(tick, ms) }
   const stop = () => { clearInterval(timer); timer = null }
   const onVis = () => { if (document.hidden) stop(); else { fn(); start() } }
-  onMounted(() => { fn(); start(); document.addEventListener('visibilitychange', onVis) })
-  onUnmounted(() => { stop(); document.removeEventListener('visibilitychange', onVis) })
+  onMounted(() => { fn(); start(); document.addEventListener('visibilitychange', onVis); pageRefreshers.add(fn) })
+  onUnmounted(() => { stop(); document.removeEventListener('visibilitychange', onVis); pageRefreshers.delete(fn) })
   return { refresh: fn, start, stop }
 }
 

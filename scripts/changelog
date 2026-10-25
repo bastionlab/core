@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+"""changelog [<version>] — the CHANGELOG.md section for the commits since the last vX.Y.Z tag.
+
+Conventional commits (feat:, fix(scope):, perf:, …, `!` = breaking) are grouped by type; everything else — this
+repo's older "area: what changed" subjects — lands under Changes. Prints the section; --write puts it at the top
+of CHANGELOG.md. scripts/release runs both and tags; .github/workflows/release.yml reuses the section as the
+release notes.
+"""
+import re, subprocess, sys, time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CONV = re.compile(r"^(?P<type>feat|fix|perf|refactor|docs|build|ci|chore|test|style|revert)(?:\((?P<scope>[^)]+)\))?(?P<bang>!)?: (?P<msg>.+)$")
+TITLES = [("breaking", "Breaking"), ("feat", "Features"), ("fix", "Fixes"), ("perf", "Performance"), ("other", "Changes")]
+SKIP = ("chore", "ci", "test", "style", "build", "docs", "refactor")
+
+
+def git(*a):
+    return subprocess.run(["git", *a], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+
+
+def last_tag():
+    return git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*") or None
+
+
+def section(version):
+    tag = last_tag()
+    rng = f"{tag}..HEAD" if tag else "HEAD"
+    groups = {k: [] for k, _ in TITLES}
+    for line in git("log", "--no-merges", "--format=%s", rng).splitlines():
+        if line.startswith("release: "):
+            continue
+        m = CONV.match(line)
+        if not m:
+            groups["other"].append(line)
+            continue
+        msg = f"**{m['scope']}**: {m['msg']}" if m["scope"] else m["msg"]
+        if m["bang"]:
+            groups["breaking"].append(msg)
+        elif m["type"] in groups:
+            groups[m["type"]].append(msg)
+        elif m["type"] not in SKIP:
+            groups["other"].append(msg)
+    out = [f"## {version} ({time.strftime('%Y-%m-%d')})", ""]
+    for k, title in TITLES:
+        if groups[k]:
+            out += [f"### {title}", "", *[f"- {x}" for x in groups[k]], ""]
+    if len(out) == 2:
+        out += ["- No user-facing changes.", ""]
+    return "\n".join(out)
+
+
+def main():
+    a = [x for x in sys.argv[1:] if not x.startswith("--")]
+    version = a[0] if a else (ROOT / "VERSION").read_text().strip()
+    s = section(version)
+    if "--write" in sys.argv:
+        f = ROOT / "CHANGELOG.md"
+        old = f.read_text() if f.exists() else "# Changelog\n\n"
+        head, _, rest = old.partition("\n\n")
+        f.write_text(f"{head}\n\n{s}\n{rest}")
+    print(s)
+
+
+if __name__ == "__main__":
+    main()

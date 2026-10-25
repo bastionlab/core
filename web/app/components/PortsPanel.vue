@@ -13,7 +13,7 @@ const hosts = computed(() =>
     listen: v.listen.filter((p: any) => !hidden.has(p.proc) && !(p.port === 25 && p.local) && !(id === 'pve' && ['rpcbind', 'pvedaemon', 'spiceproxy'].includes(p.proc))),
   })),
 )
-const open = useState<Record<string, boolean>>('ports:open', () => ({}))
+const open = useSticky<Record<string, boolean>>('ports:open', {})
 const publicCount = computed(() => hosts.value.reduce((s, h) => s + h.serve.filter((x: any) => x.public).length, 0))
 const sharedCount = computed(() => hosts.value.reduce((s, h) => s + h.serve.length, 0))
 </script>

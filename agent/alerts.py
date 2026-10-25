@@ -68,6 +68,11 @@ def problems(state):
     return out
 
 
+def topic(key):
+    """backups get their own push topic (Settings → Notifications); on Discord both are #alerts"""
+    return "backups" if key.startswith(("task:", "unit:")) or "backup" in key else "alerts"
+
+
 def main():
     try:
         state = json.loads(STATE.read_text())
@@ -79,7 +84,7 @@ def main():
     for k, msg in now_problems.items():
         o = open_.get(k)
         if not o or time.time() - o["sent"] > REMIND:
-            if hooks.send("alerts", msg if not o else f"{msg} *(noch immer)*"):
+            if hooks.send("alerts", msg if not o else f"{msg} *(noch immer)*", topic=topic(k)):
                 open_[k] = {"msg": msg, "sent": time.time()}
             elif k.startswith("task:"):
                 unsent = True  # webhook unset or Discord down: look at these tasks again next run
@@ -90,7 +95,7 @@ def main():
     for k in list(open_):
         # one-off task failures stay closed after their ping; conditions that clear get an all-clear
         if k not in now_problems and not k.startswith("task:"):
-            if hooks.send("alerts", f"✅ Wieder in Ordnung: {open_[k]['msg']}"):
+            if hooks.send("alerts", f"✅ Wieder in Ordnung: {open_[k]['msg']}", topic=topic(k)):
                 del open_[k]
         elif k.startswith("task:") and time.time() - open_[k]["sent"] > 7 * 86400:
             del open_[k]

@@ -14,7 +14,7 @@ function scrub(scan?: string) {
   const m = scan?.match(/with (\d+) errors on (.+)$/)
   if (!m) return scan ?? 'never scrubbed'
   const d = new Date(m[2]!)
-  return `scrub ${m[1] === '0' ? 'clean' : `${m[1]} errors`} · ${isNaN(+d) ? m[2] : d.toLocaleDateString('en-GB')}`
+  return `scrub ${m[1] === '0' ? 'clean' : `${m[1]} errors`} · ${isNaN(+d) ? m[2] : fmtDate(d, { day: '2-digit', month: '2-digit', year: 'numeric' })}`
 }
 const colors = ['var(--accent)', '#b36bdb', '#2fa8a0', '#d9822b', '#c94f7c', '#6b8e23', '#8a7f72']
 </script>

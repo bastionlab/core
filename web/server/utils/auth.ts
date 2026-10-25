@@ -12,7 +12,7 @@ const MAX_AGE = 7 * 86400 // even a browser that never ends its session logs in 
 
 const pinHash = (event: H3Event) => String(useRuntimeConfig(event).pinHash || '')
 const key = (event: H3Event) => createHash('sha256').update(`${useRuntimeConfig(event).agentToken}\n${pinHash(event)}`).digest()
-const sign = (event: H3Event, iat: number) => createHmac('sha256', key(event)).update(String(iat)).digest('hex')
+const sign = (event: H3Event, data: number | string) => createHmac('sha256', key(event)).update(String(data)).digest('hex')
 
 export const pinConfigured = (event: H3Event) => /^scrypt:[0-9a-f]+:[0-9a-f]+$/.test(pinHash(event))
 
@@ -23,19 +23,33 @@ export function checkPin(event: H3Event, pin: string) {
   return timingSafeEqual(got, want)
 }
 
-export function issueCookie(event: H3Event) {
+/**
+ * Cookie: `<iat>.<uid>.<gen>.<mac>` — uid 0 = a PIN unlock before any account exists. The MAC also covers the
+ * user's and the global "sign out everywhere" counters (utils/users.ts), so bumping one ends those sessions.
+ * The old `<iat>.<mac>` PIN cookie stays valid until the first global sign-out.
+ */
+export function issueCookie(event: H3Event, uid = 0) {
   const iat = Math.floor(Date.now() / 1000)
-  setCookie(event, COOKIE, `${iat}.${sign(event, iat)}`, { httpOnly: true, secure: true, sameSite: 'strict', path: '/' })
+  const gen = uid ? (userById(uid)?.gen ?? 0) : 0
+  const body = `${iat}.${uid}.${gen}`
+  setCookie(event, COOKIE, `${body}.${sign(event, `${body}.${globalGen()}`)}`, { httpOnly: true, secure: true, sameSite: 'strict', path: '/' })
 }
 
-export function validCookie(event: H3Event) {
-  if (!pinConfigured(event)) return false
-  const [iat, mac] = String(getCookie(event, COOKIE) ?? '').split('.')
-  const t = Number(iat)
-  if (!t || !mac || Date.now() / 1000 - t > MAX_AGE) return false
-  const want = Buffer.from(sign(event, t)), got = Buffer.from(mac)
-  return got.length === want.length && timingSafeEqual(got, want)
+/** the session in the cookie, or null; uid 0 = PIN unlock without an account */
+export function session(event: H3Event): { uid: number } | null {
+  if (!pinConfigured(event) && !anyUsers()) return null
+  const parts = String(getCookie(event, COOKIE) ?? '').split('.')
+  const t = Number(parts[0])
+  if (!t || Date.now() / 1000 - t > MAX_AGE) return null
+  const eq = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b))
+  if (parts.length === 2) return globalGen() === 0 && eq(parts[1]!, sign(event, parts[0]!)) ? { uid: pinUser()?.id ?? 0 } : null
+  if (parts.length !== 4) return null
+  const uid = Number(parts[1]), gen = Number(parts[2])
+  if (!eq(parts[3]!, sign(event, `${t}.${uid}.${gen}.${globalGen()}`))) return null
+  if (uid && userById(uid)?.gen !== gen) return null
+  return { uid }
 }
+export const validCookie = (event: H3Event) => !!session(event)
 
 /**
  * Commands inside CT 104 itself (`pct exec 104 -- curl 127.0.0.1:3000/api/…`, how Claude reads the notes) skip
@@ -68,7 +82,7 @@ export function ownerLogin(event: H3Event) {
 }
 
 /**
- * The home-network door (lan/Caddyfile): Caddy on the CT's LAN IP answers only 192.168.1.0/24 and stamps each
+ * The home-network door (lan/Caddyfile): Caddy on the CT's LAN IP answers only the LAN subnet (lan.subnet) and stamps each
  * request with NUXT_LAN_KEY. `tailscale serve` passes client headers through, so the key — not the header's
  * presence — is what proves a request took that path.
  */

@@ -4,7 +4,7 @@
   "tailnet": "example-tailnet.ts.net",
   "owner_logins": ["you@example.com"],
   "lan": { "subnet": "192.168.1.0/24", "host_ip": "192.168.1.50" },
-  "paths": { "dashboard": "/root/dashboard", "devbox": "/root/devbox", "backends": "/opt/pvedash" },
+  "paths": { "dashboard": "/root/dashboard", "devbox": "/root/devbox", "backends": "/opt/bastion" },
   "devbox": { "ids": [200, 299], "ips": ["192.168.1.60", "192.168.1.99"] },
   "cts": {
     "immich":      { "id": 101, "ip": "192.168.1.51" },
@@ -20,8 +20,8 @@
     "habits":      { "id": 204, "ip": "192.168.1.63" }
   },
   "marketplace": {
-    "index": "https://raw.githubusercontent.com/pvedash/addons/main/index.json",
-    "repo": "https://github.com/pvedash/addons",
+    "index": "https://raw.githubusercontent.com/bastionlab/addons/main/index.json",
+    "repo": "https://github.com/bastionlab/addons",
     "token_file": "/root/devbox/keys/github_token",
     "counter": "",
     "share_installs": false,

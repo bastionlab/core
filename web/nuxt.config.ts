@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { parseYAML } from 'confbox'
 
 // add-ons (addons/<id>/: addon.yaml + web/ Nuxt layer). In the repo they sit next to web/; deploy.sh copies them
@@ -12,19 +12,38 @@ const addonApps: any[] = []
 const addons = addonDirs.map((d) => {
   const m: any = parseYAML(readFileSync(join(root, d, 'addon.yaml'), 'utf8'))
   for (const a of m.apps ?? []) addonApps.push({ ...a, addon: m.id })
-  return { id: m.id, name: m.name, label: m.label, icon: m.icon, version: String(m.version ?? ''), order: m.order ?? 100, routes: m.routes ?? [], home: !!m.home, connections: m.connections, settingsUi: !!m.settings_ui, author: m.author, desc: m.desc, needs: m.needs ?? [], ct: m.ct, dependsOn: m.depends_on?.length ? m.depends_on : undefined }
+  // its API prefixes (top-level names under web/server/api), so the role check knows whose route a request hits
+  const apiDir = join(root, d, 'web', 'server', 'api')
+  const api = existsSync(apiDir) ? [...new Set(readdirSync(apiDir).map(f => `/api/${f.replace(/(\.(get|post|put|delete|patch))?\.ts$/, '')}`))] : []
+  return { id: m.id, name: m.name, label: m.label, icon: m.icon, version: String(m.version ?? ''), core: m.core ? String(m.core) : undefined, order: m.order ?? 100, routes: m.routes ?? [], home: !!m.home, connections: m.connections, settingsUi: !!m.settings_ui, author: m.author, license: m.license, warning: m.warning, desc: m.desc, needs: m.needs ?? [], ct: m.ct, palette: m.palette?.length ? m.palette : undefined, dependsOn: m.depends_on?.length ? m.depends_on : undefined, roles: m.roles, adminActions: m.admin_actions ?? [], api }
 }).sort((a, b) => a.order - b.order) // order: where its tab sits among the add-on tabs
 // the marketplace index this build ships (addons/index.json, rebuilt by addons/build-index.py): used until the real one is reachable
 const marketplaceLocal = existsSync(join(root, 'index.json')) ? JSON.parse(readFileSync(join(root, 'index.json'), 'utf8')) : { addons: [] }
 
+// i18n: the core's strings in web/i18n/locales/<lang>.json, each add-on's in addons/<id>/web/i18n/locales/<lang>.json
+// (merged after the core's, so an add-on namespaces its keys under its id). English is the fallback for any gap.
+const LANGS = [{ code: 'en', name: 'English' }, { code: 'de', name: 'Deutsch' }]
+const langDir = join(here, 'i18n', 'locales')
+const addonLocales = (code: string) => addonDirs.map(d => join(root, d, 'web', 'i18n', 'locales', `${code}.json`)).filter(existsSync).map(f => relative(langDir, f))
+// the core's release (VERSION at the repo root, or next to the app in CT 104); add-ons can require one (addon.yaml `core:`)
+const coreVersion = [resolve(here, '../VERSION'), join(here, 'VERSION')].filter(existsSync).map(f => readFileSync(f, 'utf8').trim())[0] ?? ''
+
 export default defineNuxtConfig({
+  modules: ['@nuxtjs/i18n'],
+  i18n: {
+    strategy: 'no_prefix',
+    defaultLocale: 'en',
+    detectBrowserLanguage: false,
+    locales: LANGS.map(l => ({ ...l, files: [`${l.code}.json`, ...addonLocales(l.code)] })),
+    vueI18n: './i18n.config.ts',
+  },
   extends: addonDirs.map(d => join(root, d, 'web')).filter(existsSync),
   compatibilityDate: '2026-09-01',
   devtools: { enabled: false },
   ssr: false,
   app: {
     head: {
-      title: 'pve',
+      title: 'Bastion',
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         { name: 'color-scheme', content: 'dark' },
@@ -52,7 +71,7 @@ export default defineNuxtConfig({
     ownerLogins: '', // NUXT_OWNER_LOGINS — Tailscale logins let in (comma-separated)
     marketplaceLocal,
     addonApps,
-    public: { addons }, // add-ons from addons/*/addon.yaml, merged with the built-in list (shared/utils/addons.ts)
+    public: { addons, coreVersion }, // add-ons from addons/*/addon.yaml, merged with the built-in list (shared/utils/addons.ts)
     lanKey: '', // NUXT_LAN_KEY — shared with Caddy (lan/Caddyfile) so LAN requests can be told apart
   },
 })

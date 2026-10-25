@@ -3,6 +3,7 @@ export default defineNuxtPlugin(() => {
   const go = () => {
     if (location.pathname === '/login') return
     useState('auth:ok').value = false
+    useState('auth:role').value = null
     navigateTo({ path: '/login', query: { next: location.pathname + location.search } })
   }
   const orig = window.fetch

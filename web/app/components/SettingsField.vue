@@ -19,10 +19,15 @@ async function save(value = draft.value) {
     editing.value = false; done.value = true; setTimeout(() => (done.value = false), 1500)
     if (props.f.type === 'secret') draft.value = ''
     emit('saved')
-  } catch (e: any) { error.value = e?.data?.statusMessage || e?.statusMessage || e?.message } finally { busy.value = false }
+  } catch (e: any) { error.value = e?.data?.statusMessage || e?.statusMessage || e?.message; throw e } finally { busy.value = false }
 }
-// toggles and selects save as soon as they change
-function quick(v: any) { draft.value = v; save(v) }
+const saveNow = (v?: any) => save(v ?? draft.value).catch(() => {}) // error shows under the field
+// toggles and selects flip at once and save in the background; a refusal flips them back
+function quick(v: any) {
+  const before = draft.value
+  draft.value = v
+  save(v).catch(() => { draft.value = before; useToast().toast(`${props.f.label} not saved: ${error.value}`, { tone: 'bad' }) })
+}
 </script>
 
 <template>
@@ -31,13 +36,13 @@ function quick(v: any) { draft.value = v; save(v) }
     <div class="ctl">
       <template v-if="f.type === 'toggle'">
         <div class="seg">
-          <button type="button" :class="{ on: draft }" :disabled="busy" @click="quick(true)">On</button>
-          <button type="button" :class="{ on: !draft }" :disabled="busy" @click="quick(false)">Off</button>
+          <button type="button" :class="{ on: draft }" @click="quick(true)">On</button>
+          <button type="button" :class="{ on: !draft }" @click="quick(false)">Off</button>
         </div>
       </template>
       <template v-else-if="f.type === 'select'">
         <div class="seg">
-          <button v-for="o in opts" :key="o.value" type="button" :class="{ on: String(draft) === o.value }" :disabled="busy" @click="quick(o.value)">{{ o.label }}</button>
+          <button v-for="o in opts" :key="o.value" type="button" :class="{ on: String(draft) === o.value }" @click="quick(o.value)">{{ o.label }}</button>
         </div>
       </template>
       <template v-else-if="f.type === 'secret'">
@@ -45,14 +50,14 @@ function quick(v: any) { draft.value = v; save(v) }
         <input v-else v-model="draft" type="password" autocomplete="off" :placeholder="f.label">
         <button v-if="!editing" type="button" class="btn sm" @click="editing = true">{{ f.set ? 'Replace' : 'Set' }}</button>
         <template v-else>
-          <button type="button" class="btn primary sm" :disabled="busy || !draft" @click="save()">Save</button>
-          <button v-if="f.set" type="button" class="btn ghost sm" :disabled="busy" @click="save('')">Clear</button>
+          <button type="button" class="btn primary sm" :disabled="busy || !draft" @click="saveNow()">Save</button>
+          <button v-if="f.set" type="button" class="btn ghost sm" :disabled="busy" @click="saveNow('')">Clear</button>
           <button type="button" class="btn ghost sm" @click="editing = false; draft = ''">Cancel</button>
         </template>
       </template>
       <template v-else>
         <input v-model="draft" :type="f.type === 'number' ? 'number' : f.type === 'url' ? 'url' : 'text'" :min="f.min" :max="f.max">
-        <button v-if="dirty" type="button" class="btn primary sm" :disabled="busy" @click="save()">Save</button>
+        <button v-if="dirty" type="button" class="btn primary sm" :disabled="busy" @click="saveNow()">Save</button>
       </template>
       <span v-if="done" class="ok small">Saved</span>
     </div>

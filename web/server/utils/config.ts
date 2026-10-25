@@ -7,7 +7,7 @@ export interface DashConfig {
   paths: { dashboard: string, devbox: string }
   devbox: { ids: [number, number], ips: [string, string] }
   cts: Record<string, { id: number, ip: string }>
-  /** index: URL of the pvedash/addons index.json; counter: the install-count Worker; share_installs: opt-in pings */
+  /** index: URL of the bastionlab/addons index.json; counter: the install-count Worker; share_installs: opt-in pings */
   marketplace?: { index?: string, counter?: string, share_installs?: boolean }
 }
 

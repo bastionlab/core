@@ -1,0 +1,9 @@
+[Unit]
+Description=dashboard backup, nightly before the 23:00 vzdump (dash-backup decides daily / weekly / off)
+
+[Timer]
+OnCalendar=*-*-* 22:30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

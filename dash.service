@@ -1,5 +1,5 @@
 [Unit]
-Description=pve dashboard (Nuxt)
+Description=Bastion (Nuxt)
 After=network-online.target
 Wants=network-online.target
 

@@ -1,5 +1,5 @@
 /**
- * The marketplace: the pvedash/addons index next to what is installed here. The agent fetches it (it holds the
+ * The marketplace: the bastionlab/addons index next to what is installed here. The agent fetches it (it holds the
  * GitHub token a private repo needs); when it can't, it answers with the local addons/index.json, and when the
  * agent itself is unreachable the copy this build ships is used.
  * Install counts come from the counter Worker (marketplace.counter) when one is set.
@@ -7,7 +7,9 @@
 export interface MarketEntry {
   id: string, name: string, icon?: string, version: string, author: string, desc: string
   routes?: string[], needs?: string[], ct?: string, depends_on?: string[]
-  /** folder in pvedash/addons, or … */
+  /** SPDX id; warning: terms-of-service or similar risk, shown before install */
+  license?: string, warning?: string
+  /** folder in bastionlab/addons, or … */
   path?: string
   /** … someone's own repo */
   repo?: string

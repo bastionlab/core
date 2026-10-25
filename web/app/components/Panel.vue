@@ -1,10 +1,11 @@
 <script setup lang="ts">
 /** every panel folds from its header; fold="closed" starts folded, fold="phone" starts folded only on a phone. The viewer's choice sticks per panel (localStorage). */
 const props = withDefaults(defineProps<{ title: string, sub?: string, id?: string, fold?: 'open' | 'closed' | 'phone' }>(), { fold: 'open' })
-const key = `panel:${props.id ?? props.title}`
+const key = props.id ? `panel:${props.id}` : `panel:${useRoute().path}:${props.title}`
+const oldKey = `panel:${props.id ?? props.title}`
 const phone = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches
 const open = ref(props.fold === 'open' || (props.fold === 'phone' && !phone))
-if (props.fold) try { const v = localStorage.getItem(key); if (v) open.value = v === '1' } catch {}
+if (props.fold) try { const v = localStorage.getItem(key) ?? localStorage.getItem(oldKey); if (v) open.value = v === '1' } catch {}
 function toggle() {
   if (!props.fold) return
   open.value = !open.value

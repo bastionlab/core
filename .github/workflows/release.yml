@@ -1,0 +1,36 @@
+# a tag vX.Y.Z (scripts/release makes one) → a GitHub release with bastion-core-X.Y.Z.tar.gz: the core's sources
+# plus web/.output prebuilt, so a box with no add-on pages skips the Nuxt build (add-on pages are compiled into the
+# app, so a box with add-ons still builds). "-" in the version = pre-release (beta channel only).
+name: release
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: version matches the tag
+        run: test "v$(cat VERSION)" = "$GITHUB_REF_NAME"
+      - name: build the app (core only)
+        working-directory: web
+        run: npm install --no-audit --no-fund && npx nuxi build && cp ../VERSION .output/VERSION
+      - name: package
+        run: |
+          V=$(cat VERSION); mkdir -p dist/core
+          git archive HEAD | tar -x -C dist/core
+          cp -a web/.output dist/core/web/.output
+          tar -C dist/core -czf "dist/bastion-core-$V.tar.gz" .
+          # the release notes: this version's CHANGELOG.md section
+          awk -v v="## $V " 'index($0, v) == 1 {on=1; next} /^## / && on {exit} on' CHANGELOG.md > dist/notes.md
+      - name: publish
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          V=$(cat VERSION)
+          gh release create "$GITHUB_REF_NAME" "dist/bastion-core-$V.tar.gz" --title "$GITHUB_REF_NAME" \
+            --notes-file dist/notes.md $([[ "$V" == *-* ]] && echo --prerelease)

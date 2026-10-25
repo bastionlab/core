@@ -31,7 +31,7 @@ export const COMMANDS: Cmd[] = [
   { name: 'status', desc: 'is anything broken on the server right now?', prompt: () => 'Is anything broken or unhealthy on the server right now? Check quickly and keep the answer short.' },
   { name: 'notes', desc: 'list my notes', claude: true, prompt: () => 'Read my notes and list them short: open ones first, grouped by topic.' },
   { name: 'note', arg: 'title', desc: 'build one of my notes', claude: true, prompt: a => `Build my note "${a}". Read it from the Notes tab first.` },
-  { name: 'deploy', desc: 'deploy the dashboard and check it came up', claude: true, prompt: () => 'Deploy the dashboard with ./deploy.sh in /root/dashboard and tell me whether it came up fine.' },
+  { name: 'deploy', desc: 'send the dashboard to GitHub (core release + changed add-ons)', claude: true, prompt: () => 'Deploy the dashboard: run /root/dashboard/agent/dash-ship (it logs to /var/log/dash-rebuild.log) and tell me what was committed, the release and which add-ons were published.' },
 ]
 
 /** "/model opus" → the command (if it is one of ours), its name and the argument */

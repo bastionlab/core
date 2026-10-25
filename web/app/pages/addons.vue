@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** every add-on of this dashboard (who built it, what it needs, on/off) and the marketplace of ones not installed yet */
-useHead({ title: 'Add-ons · pve' })
+useHead({ title: 'Add-ons · Bastion' })
 const { list, off, load, isOn, set } = useAddons()
 const { data: o } = useOverview()
 const { ctId } = useDashConfig()
@@ -20,6 +20,7 @@ onBeforeUnmount(() => clearInterval(poll))
 /** 'new' | 'changed': this box's folder differs from the marketplace's, so it can be published */
 const publishable = (id: string) => market.value?.local?.[id] as string | undefined
 const entry = (id: string) => market.value?.addons?.find((e: any) => e.id === id)
+const coreVersion = useRuntimeConfig().public.coreVersion as string
 const available = computed(() => (market.value?.addons ?? []).filter((e: any) => !e.installed))
 const count = (n: number | null) => (n == null ? '' : `${n} install${n === 1 ? '' : 's'}`)
 
@@ -69,7 +70,10 @@ const busy = ref('')
 const error = ref('')
 async function toggle(id: string) {
   busy.value = id; error.value = ''
-  try { await set(id, !isOn(id)) } catch (e: any) { error.value = e?.data?.statusMessage || e?.statusMessage || e?.message } finally { busy.value = '' }
+  try { await set(id, !isOn(id)) } catch (e: any) {
+    error.value = e?.data?.statusMessage || e?.statusMessage || e?.message
+    useToast().toast(`Not changed: ${error.value}`, { tone: 'bad' })
+  } finally { busy.value = '' }
 }
 const ctState = (key?: string) => {
   const id = key && ctId(key)
@@ -95,6 +99,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
             </span>
             <span class="faint"> ClamAV {{ scan.rep.clamav }}</span>
           </div>
+          <div v-if="scan.rep.core_block" class="bad">{{ scan.rep.core_block }}</div>
           <ul v-if="shown.length" class="finds">
             <li v-for="(f, i) in shown" :key="i">
               <b :class="f.level === 'block' ? 'bad' : 'warn'">{{ f.rule }}</b> <span class="mono">{{ f.file }}{{ f.line ? `:${f.line}` : '' }}</span> {{ f.why }}
@@ -128,6 +133,8 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
         <p class="small muted desc">{{ a.desc }}</p>
         <div class="tags">
           <span v-if="a.version" class="pill">v{{ a.version }}</span>
+          <span v-if="a.license" class="pill">{{ a.license }}</span>
+          <span v-if="a.warning" class="pill warn" :title="a.warning">terms risk</span>
           <button v-if="entry(a.id)?.update" type="button" class="pill accent lnk-pill" @click="ask('addon_update', a.id)">update to v{{ entry(a.id).version }}</button>
           <span v-if="count(entry(a.id)?.installs ?? null)" class="pill">{{ count(entry(a.id).installs) }}</span>
           <span v-if="ctState(a.ct)" class="pill" :class="ctState(a.ct)!.tone">{{ ctState(a.ct)!.text }}</span>
@@ -142,11 +149,13 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
     </div>
     <p class="faint small">Always on: Home, Notes, Chat, Metrics. Turning an add-on off hides it here; its container keeps running.</p>
 
+    <CorePanel class="corep" />
+
     <h2 class="sec mk">
       <span>Marketplace <span v-if="market?.source === 'local'" class="faint small">offline copy</span></span>
       <button type="button" class="btn ghost sm" :disabled="refreshing" @click="refreshMarket()">{{ refreshing ? 'Checking…' : 'Refresh' }}</button>
     </h2>
-    <div v-if="!market" class="faint small">Loading…</div>
+    <Skeleton v-if="!market" kind="rows" :n="4" />
     <div v-else-if="!available.length" class="empty-state">Nothing new yet.</div>
     <div v-else class="grid cols-2 list">
       <div v-for="e in available" :key="e.id" class="card">
@@ -159,11 +168,14 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
           <button type="button" class="btn primary sm" @click="ask('addon_install', e.id)">Install</button>
         </div>
         <p class="small muted desc">{{ e.desc }}</p>
+        <p v-if="e.warning" class="small warn desc">⚠ {{ e.warning }}</p>
         <div class="tags">
           <span class="pill">v{{ e.version }}</span>
+          <span v-if="e.license" class="pill">{{ e.license }}</span>
           <span v-if="count(e.installs)" class="pill">{{ count(e.installs) }}</span>
           <span v-for="n in e.needs" :key="n" class="pill">{{ n }}</span>
           <span v-if="e.depends_on?.length" class="pill accent">needs {{ names(e.depends_on) }}</span>
+          <span v-if="!coreSatisfies(coreVersion, e.core)" class="pill bad">needs core {{ e.core }}</span>
         </div>
       </div>
     </div>
@@ -179,6 +191,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
 .desc { margin: 0; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .tags .rm { margin-left: auto; }
+.corep { margin-top: 14px; }
 .mk { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .lnk-pill { cursor: pointer; font: inherit; font-size: 11.5px; }
 .confirm { border-color: var(--warn); margin-bottom: 14px; }

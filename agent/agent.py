@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pve dashboard agent: the HTTP server the dashboard (CT 104) talks to.
+"""Bastion agent: the HTTP server the dashboard (CT 104) talks to.
 
 Serves JSON to the dashboard CT only (source IP + bearer token). The data and the fixed set of things it can do
 live in the modules imported below; nothing here runs a command the caller wrote.
@@ -10,10 +10,13 @@ from urllib.parse import parse_qs, urlparse
 
 from config import HOST_IP, ip
 import hooks
+import push
 from core import HERE, POOL, cached, invalidate
 from metrics import all_updates, backups, cpu_percent, cts, datasets, gpu, host, pools, ports, smart, tailnet
-from actions import check_action, job_status, marketplace_index, marketplace_local, marketplace_scan, service_uptime, start_action
+from actions import deploy_status, check_action, job_status, marketplace_index, marketplace_local, marketplace_scan, service_uptime, start_action
 from claude import _alive, _cc_turn, claude_send, claude_stop, claude_usage
+import backup
+import release
 import dash_sdk
 import settings
 
@@ -22,6 +25,8 @@ BIND = os.environ.get("AGENT_BIND", HOST_IP)
 PORT = int(os.environ.get("AGENT_PORT", "7070"))
 ALLOW = set(os.environ.get("AGENT_ALLOW", f"{ip('dash')},{HOST_IP}").split(","))
 TOKEN = (HERE / "token").read_text().strip()
+# the CTs whose apps post Discord webhooks may reach /relay/… (push.py) — with the relay key, never the token
+RELAY_FROM = ALLOW | {x for x in (ip("deals"), ip("money")) if x}
 # add-on modules (addons/<id>/agent/*.py) register their routes with dash_sdk
 dash_sdk.load_addons(HERE.parent / "addons")
 
@@ -74,10 +79,22 @@ class H(BaseHTTPRequestHandler):
                 return self._claude_stream(q["turn"], int(q.get("from", 0)))
             if u.path == "/discord":
                 return self._send(200, hooks.view())
+            if u.path == "/push":
+                return self._send(200, push.view())
+            if u.path == "/deploy":
+                return self._send(200, deploy_status())
             if u.path == "/settings":
                 return self._send(200, settings.view())
             if u.path == "/settings/values":
                 return self._send(200, settings.values(q.get("addon", "")))
+            if u.path == "/backup":
+                return self._send(200, backup.view())
+            if u.path == "/core":
+                return self._send(200, release.fresh() if q.get("fresh") == "1" else release.check())
+            if u.path == "/backup/preview":
+                return self._send(200, backup.preview(q))
+            if u.path == "/backup/file":
+                return self._file(backup.path(q))
             if u.path == "/marketplace/index":
                 if q.get("fresh") == "1":
                     invalidate("marketplace_index", "marketplace_local")
@@ -98,10 +115,14 @@ class H(BaseHTTPRequestHandler):
             self._fail(e)
 
     def do_POST(self):
+        u = urlparse(self.path)
+        if u.path.startswith("/relay/"):
+            return self._relay(u)
         if not self._auth():
             return
-        u = urlparse(self.path)
         try:
+            if u.path == "/backup/upload":  # raw bytes, not JSON
+                return self._send(200, backup.upload(self, {k: v[0] for k, v in parse_qs(u.query).items()}))
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or "{}")
             if u.path == "/claude/send":
                 return self._send(200, claude_send(str(body.get("chat")), str(body.get("session")), body.get("prompt"),
@@ -116,6 +137,19 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/discord/test":
                 ch = str(body.get("channel"))
                 return self._send(200, {"sent": ch in hooks.CHANNELS and hooks.send(ch, f"✅ #{ch} ist mit dem Dashboard verbunden.")})
+            if u.path == "/push":
+                op = body.get("op")
+                if op == "subscribe":
+                    return self._send(200, push.subscribe(body.get("sub"), body.get("name"), body.get("topics")))
+                if op == "topics":
+                    return self._send(200, push.set_topics(str(body.get("id")), body.get("topics")))
+                if op == "remove":
+                    return self._send(200, push.remove(str(body.get("id"))))
+                if op == "route":
+                    return self._send(200, push.set_route(str(body.get("topic")), str(body.get("route"))))
+                if op == "test":
+                    return self._send(200, push.test(str(body.get("id"))))
+                raise ValueError("unknown op")
             if u.path == "/action/check":
                 return self._send(200, {"desc": check_action(str(body.get("name")), body.get("args"))})
             if u.path == "/action/run":
@@ -124,6 +158,12 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, settings.set_value(str(body.get("addon", "")), str(body.get("key", "")), body.get("value")))
             if u.path == "/settings/pin":
                 return self._send(200, settings.set_pin(body.get("current"), body.get("new")))
+            if u.path == "/backup/settings":
+                return self._send(200, backup.set_settings(body))
+            if u.path == "/core/channel":
+                return self._send(200, release.set_channel(body))
+            if u.path == "/backup/pass":
+                return self._send(200, backup.set_pass(body))
             if u.path == "/settings/core":
                 return self._send(200, settings.set_core(str(body.get("key", "")), body.get("value")))
             fn, m = dash_sdk.route("POST", u.path)
@@ -133,6 +173,34 @@ class H(BaseHTTPRequestHandler):
         except (ValueError, KeyError, TypeError) as e:
             self._send(400, {"error": str(e)})
         except Exception as e:  # a timeout or OSError deep in a helper: answer instead of dropping the connection
+            self._fail(e)
+
+    def _file(self, path):
+        """a file as a download (Settings → Backup)"""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/gzip")
+        self.send_header("Content-Length", str(path.stat().st_size))
+        self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
+        self.end_headers()
+        with path.open("rb") as f:
+            while chunk := f.read(1 << 20):
+                self.wfile.write(chunk)
+
+    def _relay(self, u):
+        """a Discord webhook post from a CT whose topic is routed to push (push.relay)"""
+        parts = u.path.split("/")
+        if self.client_address[0] not in RELAY_FROM or len(parts) != 4:
+            return self._send(403, {"error": "forbidden"})
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > 200_000:
+                return self._send(413, {"error": "too big"})
+            return self._send(200, push.relay(parts[2], parts[3], json.loads(self.rfile.read(n) or "{}"), u.query))
+        except PermissionError:
+            self._send(403, {"error": "forbidden"})
+        except (ValueError, TypeError) as e:
+            self._send(400, {"error": str(e)})
+        except Exception as e:
             self._fail(e)
 
     def _claude_stream(self, turn, skip):

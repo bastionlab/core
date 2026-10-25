@@ -2,21 +2,23 @@
 // Tailscale) and the LAN IP (needs the home Wi-Fi, lan/Caddyfile). When a page load can't reach this one, this
 // worker answers with a hop to the other, keeping the path. `?sw-hop` marks a hop, so if both are down it stops
 // with a note instead of bouncing back and forth. Only page loads are touched; API calls go straight through.
-const ADDRS = ['https://dash.example-tailnet.ts.net', 'https://192.168.1.50']
-const other = ADDRS.find(a => new URL(a).host !== self.location.host) ?? ADDRS[0]
+// It also shows push notifications (agent/push.py, Settings → Notifications); a tap opens the page they're about.
+// The two addresses come from this install's config: the plugin registers `/sw.js?addrs=<json list>`.
+const ADDRS = (() => { try { return JSON.parse(new URL(self.location.href).searchParams.get('addrs') || '[]') } catch { return [] } })()
+const other = ADDRS.find(a => new URL(a).host !== self.location.host)
 const TIMEOUT = 3000
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()))
 
 const page = body => new Response(`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark light"><title>dash</title>
+<meta name="color-scheme" content="dark light"><title>Bastion</title>
 <body style="font:16px system-ui;display:grid;place-items:center;height:90vh;text-align:center">${body}</body>`,
   { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } })
 
 self.addEventListener('fetch', (e) => {
   const req = e.request
-  if (req.mode !== 'navigate' || req.method !== 'GET') return
+  if (req.mode !== 'navigate' || req.method !== 'GET' || !other) return
   e.respondWith((async () => {
     try {
       const ctl = new AbortController()
@@ -32,5 +34,24 @@ self.addEventListener('fetch', (e) => {
       const to = other + url.pathname + url.search
       return page(`<div>Switching to ${new URL(other).host}…</div><script>location.replace(${JSON.stringify(to)})</script>`)
     }
+  })())
+})
+
+self.addEventListener('push', (e) => {
+  let d = {}
+  try { d = e.data ? e.data.json() : {} } catch { d = { title: e.data ? e.data.text() : 'Bastion' } }
+  e.waitUntil(self.registration.showNotification(d.title || 'Bastion', {
+    body: d.body || '', tag: d.tag, data: { url: d.url || '/' }, renotify: !!d.tag,
+  }))
+})
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close()
+  const url = new URL(e.notification.data?.url || '/', self.location.origin).href
+  e.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    const w = wins.find(c => new URL(c.url).origin === self.location.origin)
+    if (w) { await w.focus(); return w.navigate(url).catch(() => w.postMessage({ go: url })) }
+    return self.clients.openWindow(url)
   })())
 })

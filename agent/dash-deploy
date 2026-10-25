@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# dash-deploy — ./deploy.sh as the Deploy button runs it (action dash_deploy): in its own unit (dash-rebuild) so the
+# agent and app restarting halfway don't kill it. Marks start and end in the log so /deploy can show the last run.
+LOG=/var/log/dash-rebuild.log
+DIR=$(dirname "$(readlink -f "$0")")/..
+echo "=== deploy start $(date +%s) $(date '+%F %T')" >> "$LOG"
+"$DIR/deploy.sh" >> "$LOG" 2>&1
+rc=$?
+echo "=== deploy end $(date +%s) rc=$rc" >> "$LOG"
+exit $rc

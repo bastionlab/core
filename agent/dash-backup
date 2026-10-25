@@ -1,0 +1,430 @@
+#!/usr/bin/env python3
+"""dash-backup — the dashboard's own backup: everything a new host needs to look like this one (Settings → Backup).
+
+  dash-backup create [--scheduled]   write dash-<name>-<time>.tar.gz into the backup dir, keep the last N
+  dash-backup list                   the backups there (JSON)
+  dash-backup preview <name|file>    what a restore would replace (JSON)
+  dash-backup restore <name|file>    put it back, then rebuild the dashboard (in its own unit, dash-rebuild)
+      --no-rebuild                   restore only (install.sh --from-backup, tests)
+      --skip-missing                 leave out items whose CT this host does not have (migration)
+  dash-backup set-pass               the passphrase for secrets, read from stdin (never argv)
+
+What is in one: /etc/dash (config.json, settings, backup.json), /var/lib/dash in the dashboard CT (notes, chats,
+add-on state; SQLite copied with VACUUM INTO so a live database is consistent), each add-on's `backup:` paths
+from its addon.yaml (`- { ct: <cts key>, path: /var/lib/x }` or `- { path: /host/path }`), and — encrypted with
+the owner's passphrase (/etc/dash/backup.key, never in a backup itself) — the secrets: agent token, LAN key, PIN
+hash, Deals/Money tokens, /etc/dash/secrets, Discord webhooks, the dev-box keys. No passphrase → no secrets.
+Restore never deletes: whatever it replaces is moved aside as <path>.pre-restore-<time> first.
+Settings in /etc/dash/backup.json: { schedule: off|daily|weekly, keep: N, storage: "" (= dir) | <vzdump storage id>, dir }.
+"""
+import io, json, os, re, shutil, subprocess, sys, tarfile, tempfile, time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from config import CFG, DASHBOARD, DEVBOX, ct  # noqa: E402
+
+ETC = Path(os.environ.get("DASH_ETC") or "/etc/dash")
+SETTINGS = ETC / "backup.json"
+KEY = ETC / "backup.key"
+DEFAULT_DIR = "/var/lib/dash-backups"
+NAME_RE = re.compile(r"^dash-[a-z0-9-]{1,40}-\d{8}-\d{6}\.tar\.gz$")
+AGENT = Path(DASHBOARD) / "agent"
+BACK = Path((CFG.get("paths") or {}).get("backends") or "/root")
+ENV = {**os.environ, "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"}
+# files under /etc/dash that are secrets (go into the encrypted part) or never leave the host
+ETC_SECRET = ("secrets", "discord.json")
+ETC_NEVER = ("backup.key",)
+
+
+def say(*a):
+    print(*a, flush=True)
+
+
+def settings():
+    try:
+        s = json.loads(SETTINGS.read_text())
+    except (OSError, ValueError):
+        s = {}
+    return {"schedule": s.get("schedule") if s.get("schedule") in ("off", "daily", "weekly") else "off",
+            "keep": max(1, min(int(s.get("keep") or 7), 100)), "storage": str(s.get("storage") or ""),
+            "dir": str(s.get("dir") or DEFAULT_DIR)}
+
+
+def storage_path(sid):
+    r = subprocess.run(["pvesh", "get", f"/storage/{sid}", "--output-format", "json"], capture_output=True, text=True, timeout=20, env=ENV)
+    p = (json.loads(r.stdout or "{}") or {}).get("path") if r.returncode == 0 else None
+    if not p:
+        raise SystemExit(f"storage {sid} has no directory (only dir/NFS/CIFS storages can hold dashboard backups)")
+    return Path(p) / "dash"
+
+
+def backup_dir():
+    s = settings()
+    return storage_path(s["storage"]) if s["storage"] else Path(s["dir"])
+
+
+def find(name):
+    """a name in the backup dir, or (CLI only) a path to a file anywhere"""
+    p = Path(name)
+    if "/" in name:
+        if not p.is_file():
+            raise SystemExit(f"no file {name}")
+        return p
+    if not NAME_RE.match(name):
+        raise SystemExit("bad backup name")
+    p = backup_dir() / name
+    if not p.is_file():
+        raise SystemExit(f"no backup {name}")
+    return p
+
+
+# --- what goes in ----------------------------------------------------------------------------------------------
+def secret_files():
+    out = [AGENT / "token", AGENT / "lan_key", AGENT / "pin_hash"]
+    out += [BACK / b / "token" for b in ("deals", "money")]
+    out += [f for f in sorted((DEVBOX / "keys").glob("*")) if f.is_file()]
+    out += [ETC / "discord.json"] + sorted((ETC / "secrets").glob("*.json"))
+    return [f for f in out if f.is_file()]
+
+
+def addon_items():
+    """each installed add-on's `backup:` list → [{addon, ct key or None, path}]"""
+    import yaml
+    out = []
+    for f in sorted((Path(DASHBOARD) / "addons").glob("*/addon.yaml")):
+        try:
+            m = yaml.safe_load(f.read_text()) or {}
+        except Exception:
+            continue
+        for b in m.get("backup") or []:
+            if isinstance(b, dict) and str(b.get("path", "")).startswith("/") and ".." not in str(b["path"]):
+                out.append({"addon": m.get("id"), "ct": b.get("ct"), "path": str(b["path"]).rstrip("/"), "sqlite": b.get("sqlite", True)})
+    return out
+
+
+# in a CT: copy <path> to a temp dir with every SQLite file copied by VACUUM INTO (node:sqlite or python3), tar it to stdout
+CT_TAR = r'''set -e
+P="$1"; T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
+[ -d "$P" ] || exit 3
+cd "$P"
+tar --exclude='*.db' --exclude='*.db-wal' --exclude='*.db-shm' --exclude='*.sqlite' -cf - . | tar -C "$T" -xf -
+find . \( -name '*.db' -o -name '*.sqlite' \) -type f | while read -r f; do
+  if command -v node >/dev/null; then
+    node --no-warnings -e 'const {DatabaseSync}=require("node:sqlite");new DatabaseSync(process.argv[1],{readOnly:true}).exec("VACUUM INTO \x27"+process.argv[2].replace(/\x27/g,"\x27\x27")+"\x27")' "$f" "$T/$f" 2>/dev/null && continue
+  fi
+  if command -v python3 >/dev/null; then
+    python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1]); d=sqlite3.connect(sys.argv[2]); s.backup(d); d.close()' "$f" "$T/$f" 2>/dev/null && continue
+  fi
+  cp -a "$f" "$T/$f"; for x in wal shm; do [ -f "$f-$x" ] && cp -a "$f-$x" "$T/$f-$x"; done
+done
+find . \( -name '*.db' -o -name '*.sqlite' \) -type f | while read -r f; do chown --reference="$f" "$T/$f" 2>/dev/null || true; done
+tar -C "$T" -czf - .
+'''
+
+
+def ct_tar(vmid, path, out: Path):
+    with out.open("wb") as f:
+        r = subprocess.run(["pct", "exec", str(vmid), "--", "sh", "-c", CT_TAR, "sh", path], stdout=f, stderr=subprocess.PIPE, timeout=1800, env=ENV)
+    if r.returncode == 3:
+        return False
+    if r.returncode:
+        raise RuntimeError(f"CT {vmid} {path}: {r.stderr.decode(errors='replace')[-300:]}")
+    return True
+
+
+def host_tar(path, out: Path):
+    if not Path(path).is_dir():
+        return False
+    with out.open("wb") as f:
+        subprocess.run(["sh", "-c", CT_TAR, "sh", path], stdout=f, check=True, timeout=1800, env=ENV)
+    return True
+
+
+def running(vmid):
+    r = subprocess.run(["pct", "status", str(vmid)], capture_output=True, text=True, env=ENV)
+    return "running" in r.stdout
+
+
+def core_version():
+    try:
+        return (Path(DASHBOARD) / "VERSION").read_text().strip()
+    except OSError:
+        return ""
+
+
+def create(scheduled=False):
+    s = settings()
+    if scheduled:
+        if s["schedule"] == "off" or (s["schedule"] == "weekly" and time.localtime().tm_wday != 0):
+            return say(f"schedule is {s['schedule']}: nothing to do")
+    d = backup_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    os.chmod(d, 0o700)
+    host = re.sub(r"[^a-z0-9-]", "-", str(CFG.get("name") or "pve").lower())[:40] or "pve"
+    name = f"dash-{host}-{time.strftime('%Y%m%d-%H%M%S')}.tar.gz"
+    items, skipped = [], []
+    with tempfile.TemporaryDirectory(prefix="dash-backup-") as tmp:
+        t = Path(tmp)
+        (t / "items").mkdir()
+        # /etc/dash minus secrets and the passphrase
+        etc = t / "items" / "etc.tar.gz"
+        with tarfile.open(etc, "w:gz") as tf:
+            for f in sorted(ETC.iterdir()) if ETC.is_dir() else []:
+                if (f.name in ETC_SECRET or f.name in ETC_NEVER or f.name.startswith(".") or f.name.endswith((".bak", ".old"))
+                        or ".pre-restore-" in f.name):
+                    continue
+                tf.add(f, arcname=f.name)
+        items.append({"id": "etc", "kind": "host", "path": str(ETC), "what": "config.json, settings, backup schedule", "size": etc.stat().st_size})
+        targets = [{"addon": None, "ct": "dash", "path": "/var/lib/dash", "what": "notes, chats, add-on state"}] + addon_items()
+        for i, it in enumerate(targets):
+            iid = f"{it['addon'] or 'core'}-{i}"
+            out = t / "items" / f"{iid}.tar.gz"
+            label = f"{it['path']} in {it['ct']}" if it["ct"] else it["path"]
+            if it["ct"]:
+                vmid = ct(it["ct"])
+                if not vmid or not running(vmid):
+                    skipped.append(f"{label} (CT {'not running' if vmid else 'unknown'})")
+                    continue
+                ok = ct_tar(vmid, it["path"], out)
+            else:
+                ok = host_tar(it["path"], out)
+            if not ok:
+                skipped.append(f"{label} (missing)")
+                continue
+            items.append({"id": iid, "kind": "ct" if it["ct"] else "host", "ct": it["ct"], "path": it["path"], "addon": it["addon"],
+                          "what": it.get("what") or f"{it['addon']} data", "size": out.stat().st_size})
+            say(f"  {label}: {out.stat().st_size // 1024} KB")
+        # secrets, encrypted
+        sec = None
+        if KEY.is_file() and KEY.stat().st_size:
+            files = secret_files()
+            plain = io.BytesIO()
+            with tarfile.open(fileobj=plain, mode="w:gz") as tf:
+                for f in files:
+                    tf.add(f, arcname=str(f).lstrip("/"))
+            r = subprocess.run(["openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-salt", "-pass", f"file:{KEY}",
+                                "-out", str(t / "secrets.enc")], input=plain.getvalue(), capture_output=True, timeout=60)
+            if r.returncode:
+                raise SystemExit(f"encrypting secrets failed: {r.stderr.decode()[-200:]}")
+            sec = {"files": [str(f) for f in files], "size": (t / "secrets.enc").stat().st_size}
+        else:
+            skipped.append("secrets (no passphrase set)")
+        addons = {}
+        for f in sorted((Path(DASHBOARD) / "addons").glob("*/addon.yaml")):
+            import yaml
+            try:
+                m = yaml.safe_load(f.read_text()) or {}
+                addons[m["id"]] = str(m.get("version") or "")
+            except Exception:
+                pass
+        manifest = {"format": 1, "created": int(time.time()), "host": CFG.get("name"), "core": core_version(),
+                    "addons": addons, "items": items, "secrets": sec, "skipped": skipped}
+        (t / "manifest.json").write_text(json.dumps(manifest, indent=2))
+        part = d / f".{name}.part"
+        with tarfile.open(part, "w:gz", compresslevel=1) as tf:  # items are gzipped already
+            tf.add(t / "manifest.json", arcname="manifest.json")
+            for f in sorted((t / "items").iterdir()):
+                tf.add(f, arcname=f"items/{f.name}")
+            if sec:
+                tf.add(t / "secrets.enc", arcname="secrets.enc")
+        os.chmod(part, 0o600)
+        part.replace(d / name)
+    say(f"✅ {d / name} ({(d / name).stat().st_size // 1024} KB)" + (f"; skipped: {', '.join(skipped)}" if skipped else ""))
+    prune(d, s["keep"])
+
+
+def prune(d: Path, keep):
+    have = sorted((f for f in d.iterdir() if NAME_RE.match(f.name)), key=lambda f: f.stat().st_mtime, reverse=True)
+    for f in have[keep:]:
+        f.unlink()
+        say(f"  removed old {f.name} (keep {keep})")
+
+
+def manifest(f: Path):
+    with tarfile.open(f) as tf:
+        return json.loads(tf.extractfile("manifest.json").read())
+
+
+def listing():
+    d = backup_dir()
+    out = []
+    for f in sorted(d.glob("dash-*.tar.gz"), key=lambda f: f.stat().st_mtime, reverse=True) if d.is_dir() else []:
+        if not NAME_RE.match(f.name):
+            continue
+        try:
+            m = manifest(f)
+        except Exception:
+            m = {}
+        out.append({"name": f.name, "size": f.stat().st_size, "created": m.get("created") or int(f.stat().st_mtime),
+                    "host": m.get("host"), "core": m.get("core"), "secrets": bool(m.get("secrets")),
+                    "items": len(m.get("items") or []), "skipped": m.get("skipped") or []})
+    return out
+
+
+# --- restore ----------------------------------------------------------------------------------------------------
+def decrypt(f: Path):
+    """the secrets tar (bytes) with this host's passphrase, or DASH_BACKUP_PASS (install.sh asks for it)"""
+    with tarfile.open(f) as tf:
+        enc = tf.extractfile("secrets.enc").read()
+    pw = ["-pass", "env:DASH_BACKUP_PASS"] if os.environ.get("DASH_BACKUP_PASS") else ["-pass", f"file:{KEY}"] if KEY.is_file() else None
+    if not pw:
+        return None
+    r = subprocess.run(["openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", *pw], input=enc, capture_output=True, timeout=60)
+    return r.stdout if r.returncode == 0 else None
+
+
+def du(vmid, path):
+    cmd = ["sh", "-c", 'du -sb "$(readlink -f "$1")"', "sh", path]
+    cmd = cmd if not vmid else ["pct", "exec", str(vmid), "--", *cmd]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=60, env=ENV)
+    return int(r.stdout.split()[0]) if r.returncode == 0 and r.stdout else None
+
+
+def preview(f: Path):
+    m = manifest(f)
+    rows = []
+    for it in m.get("items") or []:
+        vmid = ct(it["ct"]) if it.get("ct") else None
+        row = {"id": it["id"], "what": it["what"], "where": f"{it['path']} in CT {vmid or '?'} ({it['ct']})" if it.get("ct") else it["path"],
+               "size": it["size"], "now": None, "ok": True, "note": ""}
+        if it.get("ct") and not vmid:
+            row.update(ok=False, note=f"this host has no '{it['ct']}' CT: skipped")
+        elif it.get("ct") and not running(vmid):
+            row.update(ok=False, note=f"CT {vmid} is not running: start it first")
+        else:
+            row["now"] = du(vmid, it["path"])
+        if it["id"] == "etc":
+            try:
+                with tarfile.open(f) as tf, tarfile.open(fileobj=tf.extractfile(f"items/{it['id']}.tar.gz")) as inner:
+                    new = json.loads(inner.extractfile("config.json").read())
+                cur = json.loads((ETC / "config.json").read_text())
+                diff = sorted(k for k in set(new) | set(cur) if new.get(k) != cur.get(k))
+                row["note"] = f"config.json differs in: {', '.join(diff)}" if diff else "config.json unchanged"
+            except Exception:
+                pass
+        rows.append(row)
+    sec = m.get("secrets")
+    if sec:
+        ok = decrypt(f) is not None
+        rows.append({"id": "secrets", "what": f"{len(sec['files'])} secret files (tokens, PIN, keys)", "where": "agent/, /etc/dash/secrets, dev-box keys",
+                     "size": sec["size"], "now": None, "ok": ok,
+                     "note": "" if ok else "this host's passphrase does not open them: they are skipped"})
+    return {"name": f.name, "created": m.get("created"), "host": m.get("host"), "core": m.get("core"), "this_core": core_version(),
+            "addons": m.get("addons") or {}, "items": rows, "skipped": m.get("skipped") or []}
+
+
+# move the real dir (a symlink like /var/lib/dash → private/dash, systemd's DynamicUser, is followed and kept) to
+# <dir>.pre-restore-<stamp>, unpack into a fresh one and give it the old one's owner; nothing is deleted
+RESTORE = r'''set -e
+R=$(readlink -f "$1"); S="$2"
+if [ -e "$R" ]; then mv "$R" "$R.pre-restore-$S"; mkdir -p "$R"; chown --reference="$R.pre-restore-$S" "$R"; chmod --reference="$R.pre-restore-$S" "$R"
+else mkdir -p "$R"; fi
+tar -C "$R" -xzf -
+[ -e "$R.pre-restore-$S" ] && chown -R --reference="$R.pre-restore-$S" "$R"
+echo "$R"
+'''
+
+
+def unpack(vmid, path, stamp, data: bytes):
+    cmd = ["sh", "-c", RESTORE, "sh", path, stamp]
+    r = subprocess.run(cmd if not vmid else ["pct", "exec", str(vmid), "--", *cmd], input=data, capture_output=True, timeout=1800, env=ENV)
+    if r.returncode:
+        raise SystemExit(f"{path}: {r.stderr.decode(errors='replace')[-300:]}")
+    return r.stdout.decode().strip()
+
+
+def restore(f: Path, rebuild=True, skip_missing=False):
+    m = manifest(f)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    say(f"restoring {f.name} (from {m.get('host')}, core {m.get('core') or '?'})")
+    dash = ct("dash")
+    with tarfile.open(f) as tf:
+        for it in m.get("items") or []:
+            data = tf.extractfile(f"items/{it['id']}.tar.gz").read()
+            if it["id"] == "etc":
+                # /etc/dash: the files in the backup replace these ones; each replaced one is kept as <name>.pre-restore-<time>
+                ETC.mkdir(parents=True, exist_ok=True)
+                with tarfile.open(fileobj=io.BytesIO(data)) as inner:
+                    tops = {n.split("/")[0] for n in inner.getnames() if n not in (".", "")}
+                    for top in tops:
+                        if (ETC / top).exists():
+                            (ETC / top).rename(ETC / f"{top}.pre-restore-{stamp}")
+                    inner.extractall(ETC, filter="data")
+                say(f"  /etc/dash: {', '.join(sorted(tops))}")
+                continue
+            vmid = ct(it["ct"]) if it.get("ct") else None
+            if it.get("ct") and (not vmid or not running(vmid)):
+                if skip_missing:
+                    say(f"  skipped {it['path']} ({it['ct']}: no running CT)")
+                    continue
+                raise SystemExit(f"CT for {it['ct']} is missing or stopped; start it or use --skip-missing")
+            stop = it.get("ct") == "dash" and it["path"] == "/var/lib/dash"
+            if stop:
+                subprocess.run(["pct", "exec", str(dash), "--", "systemctl", "stop", "dash"], timeout=120, env=ENV)
+            try:
+                real = unpack(vmid, it["path"], stamp, data)
+            finally:
+                if stop:
+                    subprocess.run(["pct", "exec", str(dash), "--", "systemctl", "start", "dash"], timeout=120, env=ENV)
+            say(f"  {it['path']}" + (f" in CT {vmid}" if vmid else "") + f" (old copy: {real}.pre-restore-{stamp})")
+    if m.get("secrets"):
+        plain = decrypt(f)
+        if plain is None:
+            say("  secrets skipped: the passphrase does not open them")
+        else:
+            with tarfile.open(fileobj=io.BytesIO(plain)) as inner:
+                for mem in inner.getmembers():
+                    if not mem.isfile():
+                        continue
+                    dest = Path("/") / mem.name
+                    if dest.exists():
+                        shutil.copy2(dest, dest.with_name(f"{dest.name}.pre-restore-{stamp}"))
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(inner.extractfile(mem).read())
+                    os.chmod(dest, 0o600)
+            say(f"  {len(m['secrets']['files'])} secret files")
+    if not rebuild:
+        return say("✅ restored (no rebuild)")
+    log = "/var/log/dash-rebuild.log"
+    r = subprocess.run(["systemd-run", "--unit", "dash-rebuild", "--collect", "--quiet", "-p", f"StandardOutput=append:{log}",
+                        "-p", f"StandardError=append:{log}", "-p", "RuntimeMaxSec=30min", "-E", f"PATH={ENV['PATH']}",
+                        f"{DASHBOARD}/deploy.sh"], capture_output=True, text=True, timeout=20)
+    if r.returncode:
+        sys.exit(f"restored, but the rebuild did not start (one already running?): {r.stderr.strip()[:300]}")
+    say(f"✅ restored; rebuild started (dash-rebuild, log {log}), the dashboard is back in a few minutes")
+
+
+def set_pass():
+    pw = sys.stdin.read().strip()
+    if len(pw) < 8:
+        sys.exit("passphrase must be at least 8 characters")
+    ETC.mkdir(parents=True, exist_ok=True)
+    tmp = ETC / ".backup.key.tmp"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as fh:
+        fh.write(pw)
+    if KEY.exists():
+        shutil.copy2(KEY, ETC / "backup.key.old")
+    tmp.replace(KEY)
+    say("passphrase set")
+
+
+def main():
+    a = [x for x in sys.argv[1:] if not x.startswith("--")]
+    flags = {x for x in sys.argv[1:] if x.startswith("--")}
+    cmd = a[0] if a else ""
+    if cmd == "create":
+        return create("--scheduled" in flags)
+    if cmd == "list":
+        return print(json.dumps(listing()))
+    if cmd == "preview" and len(a) == 2:
+        return print(json.dumps(preview(find(a[1]))))
+    if cmd == "restore" and len(a) == 2:
+        return restore(find(a[1]), "--no-rebuild" not in flags, "--skip-missing" in flags)
+    if cmd == "set-pass":
+        return set_pass()
+    sys.exit(__doc__)
+
+
+if __name__ == "__main__":
+    main()

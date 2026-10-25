@@ -14,13 +14,13 @@ const totalPending = computed(() => (props.all ? hostPending.value : 0)
     <template #actions>
       <button
         v-if="all" class="btn" :class="{ primary: totalPending }"
-        :title="`apt update && apt upgrade on the pve host and every running container (${totalPending} package updates pending)`"
+        :title="`apt update && apt upgrade on the host and every running container (${totalPending} package updates pending)`"
         @click="emit('action', 'apt_upgrade_all', {})"
       >
         ⟳ Update all<span v-if="totalPending" class="pill warn">{{ totalPending }}</span>
       </button>
       <button
-        v-if="all" class="btn" :class="{ primary: hostPending }" title="apt upgrade on the pve host itself"
+        v-if="all" class="btn" :class="{ primary: hostPending }" title="apt upgrade on the host itself"
         @click="emit('action', 'apt_upgrade', { target: 'host' })"
       >
         ⟳ Host<span v-if="hostPending" class="pill warn">{{ hostPending }}</span>

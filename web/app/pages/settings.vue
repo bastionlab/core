@@ -4,9 +4,11 @@
  * status, every secret on pve (PIN change, token rotation), this install's config.json, Discord, and a section per add-on built from its addon.yaml `settings:`
  * (+ its own Settings<Id>.global.vue when it has a flow of its own, like Money's bank logins).
  */
-useHead({ title: 'Settings · pve' })
+useHead({ title: 'Settings · Bastion' })
 const { data: s, refresh, error } = useFetch<any>('/api/settings', { server: false })
-const { list, pageOn, load } = useAddons()
+const { list, pageOn, load, role } = useAddons()
+// everything but your own account and language is the owner's (shared/utils/roles.ts)
+const owner = computed(() => !role.value || role.value === 'owner')
 onMounted(load)
 const on = computed(() => list.filter(a => !a.routes[0] || pageOn(a.routes[0])))
 const pascal = (id: string) => id.split('-').map(w => w[0]!.toUpperCase() + w.slice(1)).join('')
@@ -86,10 +88,11 @@ onBeforeUnmount(() => clearTimeout(armTimer))
 <template>
   <div class="settings">
     <h2 class="sec">Settings</h2>
+    <template v-if="owner">
     <div v-if="error && !s" class="errbox">{{ error.statusMessage || error.message }}</div>
 
     <Panel id="connections" title="Connections" :sub="problems ? `${problems} need you` : 'all good'">
-      <div v-if="!s" class="faint small">Loading…</div>
+      <Skeleton v-if="!s" kind="rows" :n="5" />
       <div v-for="c in rows" :key="c.key || c.id" class="conn">
         <span class="dot" :class="tone(c)" />
         <div class="what">
@@ -111,6 +114,11 @@ onBeforeUnmount(() => clearTimeout(armTimer))
       </div>
     </Panel>
 
+    <DeployPanel />
+    </template>
+    <AccountPanel />
+    <template v-if="owner">
+    <UsersPanel />
     <SecretsPanel :list="s?.secrets" @changed="refresh" />
 
     <Panel id="general" title="General" sub="config.json · changes rebuild the dashboard" fold="phone">
@@ -152,11 +160,18 @@ onBeforeUnmount(() => clearTimeout(armTimer))
 
     <div id="discord"><DiscordPanel /></div>
 
+    <BackupPanel />
+    </template>
+    <LocalePanel />
+    <template v-if="owner">
+    <NotificationsPanel />
+
     <template v-for="a in on" :key="a.id">
       <Panel v-if="hasSection(a)" :id="a.id" :title="a.name">
         <SettingsField v-for="f in s?.addons?.[a.id]?.fields ?? []" :key="f.key" :addon="a.id" :f="f" @saved="refresh" />
         <component :is="`Settings${pascal(a.id)}`" v-if="a.settingsUi" />
       </Panel>
+    </template>
     </template>
   </div>
 </template>
