@@ -4,6 +4,8 @@ What changed in each core release (add-ons keep their own). Newest first.
 
 ## Unreleased
 
+## 0.1.2 (2026-10-27)
+
 ### Features
 
 - Chat: with the Voice add-on, the read-aloud button on an answer starts a hands-free loop (read it, listen, send, read the reply); a strip above the composer shows what it heard with Cancel / Send now.
