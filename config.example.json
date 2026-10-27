@@ -4,6 +4,7 @@
   "tailnet": "example-tailnet.ts.net",
   "owner_logins": ["you@example.com"],
   "lan": { "subnet": "192.168.1.0/24", "host_ip": "192.168.1.50" },
+  "ollama_proxy": "",
   "paths": { "dashboard": "/root/dashboard", "devbox": "/root/devbox", "backends": "/opt/bastion" },
   "devbox": { "ids": [200, 299], "ips": ["192.168.1.60", "192.168.1.99"] },
   "cts": {

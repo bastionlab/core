@@ -66,7 +66,7 @@ const palette = useState('palette:open', () => false)
 const { restore } = useRuns()
 onMounted(restore)
 // pages that fill the screen and scroll inside themselves: no top bar, no pull
-const FULL = ['/chat', '/habits']
+const FULL = ['/chat']
 const full = computed(() => FULL.includes(route.path))
 const pull = usePull(() => full.value || sheet.value || palette.value || route.path === '/dev')
 const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -90,7 +90,7 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
         <span class="dot" :class="state" :title="stateText" />
       </NuxtLink>
       <button type="button" class="find" @click="palette = true">
-        <Icon name="search" :size="16" class="i" /><span class="l">Search</span><kbd class="l">{{ mac ? '⌘' : 'Ctrl' }} K</kbd>
+        <Icon name="search" :size="16" class="i" /><span class="l">Search</span><kbd class="l">{{ mac ? 'Cmd' : 'Ctrl' }} K</kbd>
       </button>
       <nav>
         <NuxtLink v-for="n in nav" :key="n.to" :to="n.to" :class="{ on: route.path === n.to }">
@@ -157,6 +157,7 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
     <JobsTray />
     <ActionConfirm />
     <Toasts />
+    <OfflinePill />
 
     <main class="wrap" :class="{ refreshing: pull.busy.value }">
       <!-- floats over the page so it never shifts content (chat scroll etc.) -->
@@ -238,6 +239,8 @@ main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
   .topbar .brand { padding: 0; margin-right: auto; }
   .topbar .logo { font-size: 17px; }
   .topbar ~ .wrap { padding-top: 4px; }
+  /* a page-sized floor: switching tabs no longer shrinks the page, so the browser's bottom bar doesn't jump */
+  .wrap { min-height: calc(100dvh - var(--tabbar)); }
   .ptr {
     display: grid; place-items: center; position: fixed; z-index: 65; left: 50%; top: calc(env(safe-area-inset-top, 0px) - 30px);
     width: 36px; height: 36px; border-radius: 50%; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--faint);
@@ -251,7 +254,8 @@ main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
   .tabs {
     position: fixed; z-index: 60; bottom: 0; left: 0; right: 0; display: flex;
     padding: 0 4px env(safe-area-inset-bottom); border-top: 1px solid var(--line);
-    background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    /* solid, no backdrop-filter: the blur is repainted on every scroll and tab change and made switching lag on Android */
+    background: var(--bg);
   }
   .tabs.lifted { background: var(--panel); }
   .tabs a, .tabs button {

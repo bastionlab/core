@@ -12,14 +12,16 @@ import json, sys, urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from config import ip  # noqa: E402
+from config import CFG, ip  # noqa: E402
+
+OLLAMA_PROXY = (CFG.get("ollama_proxy") or "").rstrip("/")  # optional logging proxy (add-on cost); empty = direct
 
 MAX_IN = 60_000  # characters: ~15k tokens, what a 9B model still reads well; longer input keeps head + tail
 
 
 def call(path, body=None, timeout=300):
-    req = urllib.request.Request(f"http://{ip('ai')}:11434{path}", data=json.dumps(body).encode() if body else None,
-                                 headers={"Content-Type": "application/json"})
+    req = urllib.request.Request(f"{OLLAMA_PROXY or 'http://' + ip('ai') + ':11434'}{path}", data=json.dumps(body).encode() if body else None,
+                                 headers={"Content-Type": "application/json", "X-Job": "local-sum"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 

@@ -31,7 +31,12 @@ tar -C "$DIR" --exclude=node_modules --exclude=.nuxt --exclude=.output --exclude
 
 echo "→ env + service"
 pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_URL=http://%s:7070\nNUXT_OLLAMA_URL=http://%s:11434\nNUXT_DEALS_URL=http://%s:8090\nNUXT_MONEY_URL=http://%s:8090\nNUXT_OWNER_LOGINS=%s\nNUXT_AGENT_TOKEN=%s\nNUXT_DEALS_TOKEN=%s\nNUXT_MONEY_TOKEN=%s\nNUXT_PIN_HASH=%s\nNUXT_LAN_KEY=%s\nHOST=127.0.0.1\nPORT=3000\nNODE_ENV=production\n' '$(c .lan.host_ip)' '$(c .cts.ai.ip)' '$(c .cts.deals.ip)' '$(c .cts.money.ip)' '$(c '.owner_logins | join(",")')' '$(cat "$DIR/agent/token")' '$(cat "$BACK/deals/token" 2>/dev/null)' '$(cat "$BACK/money/token" 2>/dev/null)' '$(cat "$DIR/agent/pin_hash")' '$(cat "$DIR/agent/lan_key")' > /etc/dash.env"
+# the app's user: a fixed one (both instances share /var/lib/dash); uid 65506 is what the state files already belong to
+pct exec $CT -- sh -c 'getent group dash >/dev/null || groupadd -g 65506 dash; getent passwd dash >/dev/null || useradd -u 65506 -g dash -M -d /var/lib/dash -s /usr/sbin/nologin dash'
+# the standby instance: port 3001, no background workers (those run only on the main :3000 instance)
+pct exec $CT -- sh -c "printf 'PORT=3001\nLEARN_WORKER=0\nRESEARCH_WORKER=0\n' > /etc/dash-standby.env; chmod 600 /etc/dash-standby.env"
 pct push $CT "$DIR/dash.service" /etc/systemd/system/dash.service
+pct push $CT "$DIR/dash-b.service" /etc/systemd/system/dash-b.service
 
 echo "→ build"
 # a release tarball brings web/.output prebuilt (core only): used as long as no add-on brings pages of its own
@@ -42,8 +47,9 @@ else
   pct exec $CT -- sh -c 'cd /opt/dash && npm install --no-audit --no-fund --loglevel=error && npm run build 2>&1 | tail -3'
 fi
 
-pct exec $CT -- sh -c 'systemctl daemon-reload && systemctl enable -q dash && systemctl restart dash'
-pct exec $CT -- sh -c 'tailscale serve status --json | jq -e ".TCP[\"443\"]" >/dev/null 2>&1 || tailscale serve --bg --https=443 http://127.0.0.1:3000 >/dev/null'
+pct exec $CT -- sh -c 'systemctl daemon-reload && systemctl enable -q dash dash-b && systemctl restart dash-b && systemctl restart dash'
+# tailnet → the Caddy loopback listener (:8080), which balances over :3000 and :3001
+pct exec $CT -- sh -c 'tailscale serve --bg --https=443 http://127.0.0.1:8080 >/dev/null'
 
 echo "→ home network (Caddy on the LAN IP; waits for / retries until the CT has that address after a boot)"
 pct exec $CT -- sh -c 'command -v caddy >/dev/null || apt-get install -y -q caddy >/dev/null'

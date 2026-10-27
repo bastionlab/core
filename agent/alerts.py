@@ -34,7 +34,7 @@ def problems(state):
     for t in tasks:
         if t.get("endtime") and t["endtime"] > seen and t.get("status") != "OK":
             when = time.strftime("%d.%m. %H:%M", time.localtime(t["endtime"]))
-            out[f"task:{t['upid']}"] = f"💾 Backup fehlgeschlagen ({when}): `{t.get('status')}`" + \
+            out[f"task:{t['upid']}"] = f"Backup fehlgeschlagen ({when}): `{t.get('status')}`" + \
                                         (f" – CT {t['id']}" if t.get("id") else "")
     if tasks:  # committed by main() only once every failed task got its ping
         state["_task_next"] = max([seen] + [t.get("endtime") or 0 for t in tasks])
@@ -42,29 +42,29 @@ def problems(state):
     last_ok = max([t["endtime"] for t in tasks if t.get("status") == "OK" and t.get("endtime")] or [0])
     if any(j.get("enabled", 1) for j in jobs) and time.time() - last_ok > BACKUP_HOUR_SLACK:
         ago = f"seit {(time.time() - last_ok) / 3600:.0f} h" if last_ok else "noch nie"
-        out["backup:stale"] = f"💾 Kein erfolgreiches nächtliches Backup {ago}"
+        out["backup:stale"] = f"Kein erfolgreiches nächtliches Backup {ago}"
     for log in Path("/var/log/vzdump").glob("lxc-*.log"):
         run = vzdump_run(log.stem[4:])
         if run and run["error"] and time.time() - run["time"] < 2 * 86400:
-            out[f"ct-backup:{log.stem}"] = f"💾 Backup von CT {log.stem[4:]} mit Fehler: `{run['error'][:180]}`"
+            out[f"ct-backup:{log.stem}"] = f"Backup von CT {log.stem[4:]} mit Fehler: `{run['error'][:180]}`"
     for u in ("sanoid.service", "syncoid.service"):
         if sh("systemctl", "is-failed", u).strip() == "failed":
-            out[f"unit:{u}"] = f"💾 `{u}` ist fehlgeschlagen (ZFS-Snapshots/Replikation) – `journalctl -u {u}`"
+            out[f"unit:{u}"] = f"`{u}` ist fehlgeschlagen (ZFS-Snapshots/Replikation) – `journalctl -u {u}`"
     # disks: pools, storages, every CT's root disk
     for line in sh("zpool", "list", "-Hp", "-o", "name,health").splitlines():
         name, health = line.split("\t")
         if health != "ONLINE":
-            out[f"pool:{name}"] = f"🛑 ZFS-Pool **{name}** ist {health} – `zpool status {name}`"
+            out[f"pool:{name}"] = f"ZFS-Pool **{name}** ist {health} – `zpool status {name}`"
     for s in js("pvesh", "get", "/nodes/pve/storage", "--output-format", "json") or []:
         if s.get("total") and 100 * s["used"] / s["total"] >= FULL:
-            out[f"storage:{s['storage']}"] = f"🗄️ Speicher **{s['storage']}** ist zu {100 * s['used'] / s['total']:.0f} % voll " \
+            out[f"storage:{s['storage']}"] = f"Speicher **{s['storage']}** ist zu {100 * s['used'] / s['total']:.0f} % voll " \
                                              f"({(s['total'] - s['used']) / 1e9:.0f} GB frei)"
     for c in js("pvesh", "get", "/nodes/pve/lxc", "--output-format", "json") or []:
         if c.get("status") == "running" and c.get("maxdisk") and 100 * c["disk"] / c["maxdisk"] >= FULL:
-            out[f"ct:{c['vmid']}"] = f"🗄️ CT {c['vmid']} **{c.get('name')}**: Disk zu {100 * c['disk'] / c['maxdisk']:.0f} % voll"
+            out[f"ct:{c['vmid']}"] = f"CT {c['vmid']} **{c.get('name')}**: Disk zu {100 * c['disk'] / c['maxdisk']:.0f} % voll"
     df = sh("df", "-P", "/").splitlines()[-1].split()
     if int(df[4].rstrip("%")) >= FULL:
-        out["root"] = f"🗄️ pve `/` ist zu {df[4]} voll"
+        out["root"] = f"pve `/` ist zu {df[4]} voll"
     return out
 
 
@@ -95,7 +95,7 @@ def main():
     for k in list(open_):
         # one-off task failures stay closed after their ping; conditions that clear get an all-clear
         if k not in now_problems and not k.startswith("task:"):
-            if hooks.send("alerts", f"✅ Wieder in Ordnung: {open_[k]['msg']}", topic=topic(k)):
+            if hooks.send("alerts", f"Wieder in Ordnung: {open_[k]['msg']}", topic=topic(k)):
                 del open_[k]
         elif k.startswith("task:") and time.time() - open_[k]["sent"] > 7 * 86400:
             del open_[k]

@@ -1,0 +1,19 @@
+[Unit]
+Description=Bastion (Nuxt), standby instance on :3001 (no background workers)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# the later file wins: PORT=3001 and the worker switches off (dash, on :3000, runs the background jobs)
+EnvironmentFile=/etc/dash.env
+EnvironmentFile=/etc/dash-standby.env
+WorkingDirectory=/opt/dash
+ExecStart=/usr/bin/node .output/server/index.mjs
+Restart=always
+RestartSec=3
+User=dash
+Group=dash
+StateDirectory=dash
+
+[Install]
+WantedBy=multi-user.target

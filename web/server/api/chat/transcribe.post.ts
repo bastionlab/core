@@ -15,7 +15,7 @@ async function tidy(event: any, raw: string) {
   try {
     const model = (await aiModels(event)).find((m: any) => m.warm)?.name
     if (!model) return raw
-    const r: any = await ollama(event, '/api/chat', { method: 'POST', body: {
+    const r: any = await ollama(event, '/api/chat', { method: 'POST', job: 'voice-tidy', body: {
       model, stream: false, think: false, keep_alive: -1, options: { temperature: 0.1 },
       messages: [{ role: 'system', content: CLEAN }, { role: 'user', content: raw }],
     } })

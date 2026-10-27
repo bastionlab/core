@@ -1,7 +1,7 @@
 :root {
   --bg: #0a0c10; --panel: #11141a; --panel-2: #171b23; --line: #1f242e; --line-2: #2b313d;
   --text: #e6e8ed; --muted: #8a92a2; --faint: #596070;
-  --accent: #8ea6ff; --accent-soft: rgba(142, 166, 255, .12);
+  --accent: #7c9cff; --accent-soft: #1d2640;
   --ok: #3ccf8e; --ok-soft: rgba(60, 207, 142, .12);
   --warn: #f0b440; --warn-soft: rgba(240, 180, 64, .12);
   --bad: #f26b6b; --bad-soft: rgba(242, 107, 107, .13);
@@ -75,6 +75,7 @@ input:not([type='checkbox']):not([type='radio']), select, textarea {
 /* inner padding at zero specificity (:where), so a page's or skin's own padding still wins */
 :where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file']), select, textarea) { padding: 7px 10px; }
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); }
+input[type='search'] { -webkit-appearance: none; appearance: none; }
 input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 /* phones zoom into inputs under 16px; !important so a compact scoped size cannot undo it */
 @media (max-width: 640px) { input:not([type='checkbox']):not([type='radio']), select, textarea { font-size: 16px !important; } }

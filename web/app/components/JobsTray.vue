@@ -16,7 +16,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <div class="th">
           <b>Jobs</b>
           <button v-if="done.length" type="button" class="lnk small" @click="clear">Clear finished</button>
-          <button type="button" class="btn ghost sm" aria-label="Close" @click="tray = { open: false }">✕</button>
+          <button type="button" class="btn ghost sm" aria-label="Close" @click="tray = { open: false }"><Icon name="x" :size="16"/></button>
         </div>
         <JobList :jobs="jobs" :focus="tray.focus" @dismiss="dismiss" />
       </div>

@@ -13,7 +13,7 @@ const ok = computed(() => (!props.st.searches || !props.st.last_poll ? null : Da
       {{ !st.searches ? 'no search' : !st.last_poll ? 'first run…' : `${ok ? 'running' : 'stalled'} · ${vor(st.last_poll)}` }}
     </span>
     <slot />
-    <button class="btn ghost ref" :disabled="pending" title="Reload" @click="$emit('reload')">↻</button>
+    <button class="btn ghost ref" :disabled="pending" title="Reload" aria-label="Reload" @click="$emit('reload')"><Icon name="refresh" :size="16"/></button>
   </div>
   <div v-for="e in st.errors ?? []" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>
 </template>
@@ -22,7 +22,7 @@ const ok = computed(() => (!props.st.searches || !props.st.last_poll ? null : Da
 .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; margin: 0 2px 12px; }
 .strip :deep(b) { color: var(--text); font-weight: 600; }
 .strip .ref { margin-left: auto; padding: 2px 8px; }
-/* phone: the stats wrap, ↻ stays top right instead of dropping onto a line of its own */
+/* phone: the stats wrap, the reload button stays top right instead of dropping onto a line of its own */
 @media (max-width: 640px) {
   .strip { position: relative; padding-right: 34px; gap: 4px 12px; }
   .strip .ref { position: absolute; top: -3px; right: 0; }

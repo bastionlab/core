@@ -7,8 +7,9 @@ async function save(patch: Partial<typeof localePrefs>) {
   err.value = ''
   try {
     const p = await $fetch<any>('/api/locale', { method: 'POST', body: { ...localePrefs, ...patch } })
-    rememberPrefs(p)
-    await setLocale(p.lang)
+    const queued = p?.queued // offline: the worker keeps the save, apply it here meanwhile
+    rememberPrefs(queued ? patch : p)
+    await setLocale(queued ? (patch.lang ?? localePrefs.lang) : p.lang)
   } catch (e: any) { err.value = errText(e) }
 }
 </script>

@@ -1,8 +1,87 @@
 """host, storage, backups, containers, ports, updates and the tailnet: the read-only half of /overview"""
-import os, re, subprocess, time
+import os, re, subprocess, threading, time, urllib.request
+from collections import deque
 from pathlib import Path
 
 from core import FAN, JOBS, JOBS_LOCK, TSKEY, TSKEY_DAYS, cached, js, sh
+
+
+# --- network throughput -----------------------------------------------------
+_net = deque(maxlen=120)  # (t, rx_bytes, tx_bytes), one per 5 s
+_net_if = None
+_speed = None
+_NIC_SKIP = ("lo", "veth", "tap", "fwbr", "fwpr", "fwln", "tailscale", "vmbr", "docker", "br-")
+
+
+def _net_counters():
+    out = {}
+    for line in Path("/proc/net/dev").read_text().splitlines()[2:]:
+        name, _, rest = line.partition(":")
+        f = rest.split()
+        if len(f) >= 9:
+            out[name.strip()] = (int(f[0]), int(f[8]))
+    return out
+
+
+def _net_iface(cur):
+    """the physical NIC: a bridge port of the default route's bridge (vmbr0 itself misses container traffic)"""
+    try:
+        dev = re.search(r"default .*?dev (\S+)", sh("ip", "-4", "route", "show", "default") or "")
+        for n in sorted(os.listdir(f"/sys/class/net/{dev.group(1)}/brif")) if dev else []:
+            if n in cur and not n.startswith(_NIC_SKIP):
+                return n
+    except OSError:
+        pass
+    if "nic0" in cur:
+        return "nic0"
+    c = [n for n in cur if not n.startswith(_NIC_SKIP)]
+    return max(c, key=lambda n: sum(cur[n]), default=None)
+
+
+def net_sample():
+    global _net_if
+    cur = _net_counters()
+    if _net_if not in cur:
+        _net_if = _net_iface(cur)
+        _net.clear()
+    if _net_if:
+        _net.append((time.time(), *cur[_net_if]))
+
+
+def net_loop():
+    while True:
+        try:
+            net_sample()
+        except Exception:
+            pass
+        time.sleep(5)
+
+
+def net_start():
+    threading.Thread(target=net_loop, daemon=True).start()
+
+
+def net():
+    s = list(_net)
+    rates = []
+    for a, b in zip(s, s[1:]):
+        dt = b[0] - a[0]
+        rates.append([round(max(0, b[1] - a[1]) / dt) if dt > 0 else 0, round(max(0, b[2] - a[2]) / dt) if dt > 0 else 0])
+    last = rates[-1] if rates else [0, 0]
+    return {"down": last[0], "up": last[1], "iface": _net_if, "history": rates, "speedtest": _speed}
+
+
+def speedtest():
+    """on-demand download measurement (reads only; nothing on the box changes)"""
+    global _speed
+    n, t0 = 0, time.time()
+    req = urllib.request.Request("https://speed.cloudflare.com/__down?bytes=25000000", headers={"User-Agent": "Bastion-speedtest/1.0"})
+    with urllib.request.urlopen(req, timeout=40) as r:
+        while (b := r.read(262144)):
+            n += len(b)
+    secs = max(time.time() - t0, 0.001)
+    _speed = {"mbit": round(n * 8 / secs / 1e6, 1), "bytes": n, "secs": round(secs, 2), "at": int(time.time())}
+    return _speed
 
 
 # --- host -------------------------------------------------------------------

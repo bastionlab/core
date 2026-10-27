@@ -10,6 +10,10 @@ export interface Turn {
   answered?: Record<number, string[]> | null
   /** a /clear divider: nothing before it is sent to the model again */
   clear?: boolean
+  /** Claude turns: TodoWrite steps done/total and an ETA from the average finished-tool time (null = unknown) */
+  progress?: { done: number, total: number, etaSeconds: number | null }
+  /** Claude turns: background shells / tasks it started (the turn stays busy until they finish) */
+  bg?: { id: string, desc: string, kind?: string, status: string, tuid?: string, out?: string }[]
   /** Claude turns: the session it ran in and its last answer's message id (an edit or branch forks there),
    *  how full the context was after it, and a compaction that happened in it */
   sid?: string, uuid?: string, ctx?: { used: number, max?: number }, compacted?: { pre: number, post: number }
@@ -17,8 +21,25 @@ export interface Turn {
   usage?: Record<string, { tok: number, usd: number }>, team?: boolean, plan?: boolean, executed?: boolean
   /** a compare turn: the same question to several models (panes A, B, C…), names hidden until `vote` */
   cmp?: (Turn & { key: string, engine: 'claude' | 'local', label: string })[], vote?: string
+  /** web pages the answer used (web search / page fetches), shown as chips under it */
+  sources?: { title: string, url: string }[]
   /** when the stream last showed a sign of life (live only, not stored) */
   last?: number
+  /** facts the local model suggests remembering ("Remember this?" chips); [] once handled */
+  mem?: string[]
+}
+
+/** merge web pages into a turn's sources: http(s) only, one per url, at most 10 */
+export function addSources(t: Turn, list: any) {
+  if (!Array.isArray(list)) return
+  const have = t.sources ?? []
+  for (const s of list) {
+    const url = String(s?.url ?? '')
+    if (have.length >= 10) break
+    if (!/^https?:\/\//i.test(url) || have.some(x => x.url === url)) continue
+    have.push({ title: String(s?.title || '').slice(0, 200), url })
+  }
+  if (have.length) t.sources = have
 }
 
 /** the turns since the last /clear, i.e. what the model should still remember */
@@ -66,7 +87,7 @@ export function useAskSettings() {
 // one running answer per scope, kept outside the component: leave the page mid-answer, come back, Stop still works
 const controllers: Record<string, AbortController | null> = {}
 
-export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void) {
+export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void, incognito?: () => boolean) {
   const { model, think, web, models, refreshModels } = useAskSettings()
   const busy = computed(() => turns.value.some(t => t.busy))
 
@@ -81,7 +102,7 @@ export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void)
     try {
       const res = await fetch('/api/ai/ask', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctl.signal,
-        body: JSON.stringify({ q: text, model: model.value, think: think.value, web: web.value, scope, history }),
+        body: JSON.stringify({ q: text, model: model.value, think: think.value, web: web.value, scope, history, ...(incognito?.() ? { incognito: true } : {}) }),
       })
       if (!res.ok || !res.body) throw new Error((await res.json().catch(() => null))?.statusMessage || `HTTP ${res.status}`)
       const reader = res.body.getReader(), dec = new TextDecoder()
@@ -101,6 +122,7 @@ export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void)
           if (j.proposal) t.proposals!.push({ ...j.proposal, state: 'idle' })
           if (j.tool) t.tools!.push({ name: j.tool, args: j.args })
           if (j.toolDone) { const x = t.tools!.findLast(v => v.name === j.toolDone && !v.done); if (x) { x.done = true; x.error = j.error } }
+          if (j.sources) addSources(t, j.sources)
           if (j.error) t.error = j.error
           if (j.done) { t.model = j.model; t.tps = j.tps }
         }

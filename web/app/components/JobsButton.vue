@@ -7,7 +7,7 @@ const failed = computed(() => jobs.value.filter(j => j.state === 'failed' && (j.
 <template>
   <button v-if="jobs.length" type="button" class="jt" :class="{ on: tray.open }" :aria-expanded="tray.open" @click="tray = { open: !tray.open }">
     <span v-if="running.length" class="spin" />
-    <span v-else class="mark" :class="failed ? 'bad' : 'ok'">{{ failed ? '✗' : '✓' }}</span>
+    <span v-else class="mark" :class="failed ? 'bad' : 'ok'"><Icon :name="failed ? 'x' : 'check'" :size="14"/></span>
     <span class="l">{{ running.length ? `${running.length} running` : 'Jobs' }}</span>
   </button>
 </template>

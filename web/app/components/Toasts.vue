@@ -8,7 +8,7 @@ const { toasts, close } = useToast()
       <div v-for="t in toasts" :key="t.id" class="toast" :class="t.tone">
         <span class="txt">{{ t.text }}</span>
         <button v-if="t.action" type="button" class="lnk" @click="t.action.fn(); close(t.id)">{{ t.action.label }}</button>
-        <button type="button" class="btn ghost sm" aria-label="Close" @click="close(t.id)">✕</button>
+        <button type="button" class="btn ghost sm" aria-label="Close" @click="close(t.id)"><Icon name="x" :size="16"/></button>
       </div>
     </TransitionGroup>
   </div>

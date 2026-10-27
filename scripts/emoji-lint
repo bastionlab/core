@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""emoji-lint — flags emoji and decorative symbols in .vue templates and locale strings (core web/ and each
+add-on's web/), so UI chrome keeps using <Icon name="…"> instead. Skin add-ons (addons/skin-*) are skipped.
+
+Compares against a baseline (web/i18n/emoji-baseline.json: file → count): a file with more hits than its
+baseline, or a new file with any, fails. --update rewrites the baseline (run it after removing emoji, so the
+count can only go down). --list prints every hit. Emoji stay fine as *content* (user text, ad titles); if a
+file legitimately holds some, leave it in the baseline.
+"""
+import json, re, sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+BASE = ROOT / "web/i18n/emoji-baseline.json"
+# arrows, misc technical, enclosed/dingbats, supplemental arrows, misc symbols+arrows, emoji planes, VS16, ZWJ
+SYM = re.compile("[←-⇿⌀-⏿①-➿⤀-⥿⬀-⯿\U0001F000-\U0001FAFF️‍]")
+# plain typographic marks that are fine in text
+OK = set("•…·—–→")  # • … · — – →
+
+
+def files():
+    roots = [ROOT / "web/app", ROOT / "web/i18n/locales"] + sorted(
+        p for d in (ROOT / "addons").glob("*/web") if not d.parent.name.startswith("skin-") for p in (d / "app", d / "i18n")
+    )
+    for r in roots:
+        if r.is_dir():
+            for f in sorted(r.rglob("*")):
+                if f.suffix in (".vue", ".json") and f.is_file() and "node_modules" not in f.parts:
+                    yield f
+
+
+def text(f: Path):
+    s = f.read_text(errors="ignore")
+    if f.suffix == ".vue":
+        m = re.search(r"<template>(.*)</template>", s, re.S)
+        s = re.sub(r"<!--.*?-->", "", m.group(1), flags=re.S) if m else ""
+    return s
+
+
+def hits(f: Path):
+    return [c for c in SYM.findall(text(f)) if c not in OK and c not in "️‍"]
+
+
+def main():
+    found = {str(f.relative_to(ROOT)): h for f in files() if (h := hits(f))}
+    if "--list" in sys.argv:
+        for k, v in found.items():
+            print(len(v), k, "".join(v))
+        return 0
+    counts = {k: len(v) for k, v in found.items()}
+    if "--update" in sys.argv:
+        BASE.write_text(json.dumps(counts, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
+        print(f"baseline written: {sum(counts.values())} in {len(counts)} files")
+        return 0
+    base = json.loads(BASE.read_text()) if BASE.exists() else {}
+    bad = {k: (n, base.get(k, 0)) for k, n in counts.items() if n > base.get(k, 0)}
+    for k, (n, b) in sorted(bad.items()):
+        print(f"emoji-lint: {k}: {n} emoji/symbols (baseline {b}) — use <Icon name=\"…\"> or words")
+    print(f"emoji-lint: {sum(counts.values())} left in {len(counts)} files" + (" — FAIL" if bad else " — ok"))
+    return 1 if bad else 0
+
+
+sys.exit(main())

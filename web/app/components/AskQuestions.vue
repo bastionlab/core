@@ -54,7 +54,7 @@ function submit() {
         v-for="(q, i) in qs" :key="i" type="button" role="tab" class="tab" :class="{ on: cur === i, ok: has(i) }"
         :aria-selected="cur === i" @click="cur = i"
       >
-        <span class="mark">{{ has(i) ? '✓' : '○' }}</span>{{ q.header || `Question ${i + 1}` }}
+        <span class="mark"><Icon :name="has(i) ? 'circle-check' : 'minus'" :size="14"/></span>{{ q.header || `Question ${i + 1}` }}
       </button>
       <button type="button" role="tab" class="tab" :class="{ on: cur === qs.length, ok: ready || done }" :aria-selected="cur === qs.length" @click="cur = qs.length">
         {{ done ? 'Answers' : 'Submit' }}
@@ -83,7 +83,7 @@ function submit() {
         </div>
       </div>
       <div v-if="tabs && !done" class="nav">
-        <button v-if="i > 0" type="button" class="btn ghost" @click="cur = i - 1">← Back</button>
+        <button v-if="i > 0" type="button" class="btn ghost" @click="cur = i - 1"><Icon name="chevron-left" :size="16"/> Back</button>
         <button type="button" class="btn" :class="{ primary: has(i) }" @click="has(i) ? advance() : (cur = i + 1)">
           {{ has(i) ? 'Next →' : 'Skip for now →' }}
         </button>

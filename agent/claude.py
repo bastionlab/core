@@ -31,7 +31,7 @@ RO_ALLOW = [
     f"Bash(pct exec {ct('dash')} -- curl -s http://127.0.0.1:3000/api/*)",
     f"Bash({DASHBOARD}/agent/local-sum *)", f"Bash({DASHBOARD}/agent/local-sum)",
 ]
-CC_SYSTEM = """You are answering in the Chat tab of the owner's homelab dashboard (__DASH_URL__), as root on the Proxmox host pve, cwd /root. The owner is often on a phone: keep answers short, use markdown, and avoid wide tables and long code dumps unless they are asked for.
+CC_SYSTEM = """You are answering in the Chat tab of the owner's homelab dashboard (__DASH_URL__), as root on the Proxmox host pve, cwd /root. The owner is often on a phone: keep answers short, use markdown, and avoid wide tables and long code dumps unless they are asked for. Never use emoji, emoji in headings or decorative symbols.
 Dashboard source: __DASHBOARD__ (agent/agent.py runs on pve, web/ is Nuxt in CT __DASH_CT__). Edits go live on this box by themselves (agent/dash-live: agent restart and/or a ~15 s app rebuild a few seconds after the last save; a build error keeps the old app running, see Settings → Deploy), so never run ./deploy.sh just to apply a change. Deploy means sending the work to GitHub for everyone else (the Deploy button, agent/dash-ship): do it only when the owner asks. This conversation survives the agent and app restarting because it runs in its own systemd unit. Another Claude session may be editing the dashboard at the same time, so check `git status` and file mtimes before touching a file, and never revert work you didn't do.
 The Notes tab's notes are JSON at `pct exec __DASH_CT__ -- curl -s http://127.0.0.1:3000/api/notes`. When the owner says "build my note about X", read it there first.
 QUESTIONS: you have no AskUserQuestion tool here. When the owner should decide something (which approach, which option, missing details), end your answer with ONE fenced block and stop, without guessing ahead:
@@ -43,6 +43,7 @@ LINKS: link to dashboard pages with relative paths, they open inside the app: [M
 1-4 questions, 2-4 options each, a header of at most 12 characters, the recommended option first and marked "(Recommended)". "multi": true lets several be picked. The dashboard renders this as tap-to-answer buttons with a free-text "Other", and the answers arrive as the next message. Keep the prose above the block short.
 """.replace("__DASH_URL__", DASH_URL).replace("__DASHBOARD__", DASHBOARD).replace("__DASH_CT__", str(ct("dash")))
 CC_RO = """MODE: READ-ONLY. You can read files and run read-only commands, and anything that would change state is denied automatically. Don't work around a denial. When a fix needs a change, say exactly what you would change and tell the owner to switch on **Auto** in the chat header and ask again."""
+CC_PLAN_AUTO = """MODE: READ-ONLY THIS TURN, PLAN FIRST. The owner's chat has Auto on, so write access is available: this turn is plan-only only because the router chose a plan first. Never tell the owner to switch on Auto; it already is. Investigate, then give the plan as asked below, and the owner's Execute button runs it with write access."""
 CC_AUTO = """MODE: AUTO. The owner switched on write access for this message. You may edit files, run commands, deploy and restart services. Nobody approves individual steps, so prefer reversible changes, don't delete data, and keep the scope to what was asked. Finish with a short list of what you changed and how to undo it."""
 # --- team mode (2026-10-26, like /ship on the dev boxes): the chosen model leads and hands the reading and the typing
 # to cheaper subagents, so the expensive context stays small. The lead decides by task size; a quick question it
@@ -107,19 +108,18 @@ def _cc_cleanup():
 # on a small model at low effort and big jobs get a strong lead with a team. Anything the owner picked (/model,
 # /effort, /team, plan) is left alone; any failure falls back to the old behaviour (Claude Code's defaults).
 CC_ROUTER = """You route messages for a homelab assistant. Reply with ONE line of JSON, nothing else:
-{"model": "haiku|sonnet|opus", "effort": "low|medium|high", "team": true|false, "plan": true|false}
+{"model": "haiku|sonnet|opus", "effort": "low|medium|high", "team": true|false}
 Keep it as small as the task allows, tokens cost money but the answer must still be good.
 - greeting, one fact, a status check, a short explanation: haiku, low, team false
 - reading a few files or logs, a small edit, debugging one service: sonnet, medium, team false
 - investigating several containers/services or a big tree, a multi-file change: sonnet (high effort at most) or opus (medium effort at most), team true
-- risky, hard-to-reverse or architectural work (deletes, restores, migrations, security, big refactors): opus, medium, team true, plan true
-Opus never gets high effort; the strongest allowed is opus + medium.
-plan is only for work that changes things and could hurt; never plan a pure question."""
+- risky, hard-to-reverse or architectural work (deletes, restores, migrations, security, big refactors): opus, medium, team true
+Opus never gets high effort; the strongest allowed is opus + medium."""
 
 
 def _route(prompt, auto, want_model, want_effort, want_team, want_plan):
     """-> dict with the keys the owner left open (model/effort/team/plan), {} when nothing was open or routing failed"""
-    if want_model and want_effort and want_team and want_plan:
+    if want_model and want_effort and want_team:
         return {}
     try:
         r = subprocess.run([CLAUDE, "-p", "--model", "haiku", "--effort", "low", "--no-session-persistence", "--tools", "",
@@ -139,12 +139,12 @@ def _route(prompt, auto, want_model, want_effort, want_team, want_plan):
         out["effort"] = "medium"  # owner's cap: opus + medium is the strongest the router may pick
     if not want_team and isinstance(d.get("team"), bool):
         out["team"] = d["team"]
-    if not want_plan and auto and d.get("plan") is True:
-        out["plan"] = True
+    # no plan from the router (2026-10-27): it flipped Auto turns into read-only plan turns ("finish the open stuff",
+    # "build my note"), so Bash got denied in a chat the owner had on Auto. Plan first is only ever the owner's pick.
     return out
 
 
-def claude_send(chat, session, prompt, auto, model=None, effort=None, images=None, fork=None, team=False, plan=False, quiet=False, notify=True):
+def claude_send(chat, session, prompt, auto, model=None, effort=None, images=None, fork=None, team=False, plan=False, quiet=False, notify=True, memory=None):
     unit = _cc_unit(chat)
     if not CC_UUID.fullmatch(session or ""):
         raise ValueError("bad session id")
@@ -193,11 +193,20 @@ def claude_send(chat, session, prompt, auto, model=None, effort=None, images=Non
                   " first (Read handles images, PDFs and text; use Bash for archives or binaries): " + ", ".join(paths) + "]"
     # the prompt goes in on stdin: as one argv entry a long paste hits the kernel's 128 KiB per-argument limit, and
     # a message starting with "-" would be read as an option
-    (CC_DIR / f"{turn}.prompt").write_text(prompt)
+    # the mode of this very message goes in front of it too: a resumed chat still holds earlier "read-only" replies, and
+    # Claude was copying those over the system prompt
+    if auto and not plan:
+        mode = "[Mode for this message: AUTO. Write access is on. Earlier replies in this chat that say read-only are out of date.]"
+    elif auto:
+        mode = "[Mode for this message: PLAN FIRST. Auto is on, so write access exists; this turn only plans.]"
+    else:
+        mode = "[Mode for this message: READ-ONLY. Auto is off.]"
+    (CC_DIR / f"{turn}.prompt").write_text(f"{mode}\n\n{prompt}")
     cmd = [CLAUDE, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
            *(["--resume", fork["from"], "--resume-session-at", fork["at"], "--fork-session", "--session-id", session] if fork
              else ["--resume" if known else "--session-id", session]), "--permission-prompts", "none",
-           "--append-system-prompt", CC_SYSTEM + (CC_AUTO if auto and not plan else CC_RO) + (CC_TEAM if team else "") + (CC_PLAN if plan else ""),
+           "--append-system-prompt", CC_SYSTEM + (CC_AUTO if auto and not plan else CC_PLAN_AUTO if auto else CC_RO) +(CC_TEAM if team else "") + (CC_PLAN if plan else "")
+           + (("\n\n" + memory.strip()[:2000]) if isinstance(memory, str) and memory.strip() else ""),
            "--disallowedTools", "AskUserQuestion"]
     if team:
         agents = {k: v for k, v in TEAM.items() if auto and not plan or k != "builder"}
@@ -339,8 +348,22 @@ def claude_watch():
                     continue
                 failed = res.get("is_error") or res.get("subtype") != "success"
                 asks = "```questions" in text
-                title = "❓ Claude needs your answer" if asks else "⚠️ Claude stopped" if failed else "✳ Claude is done"
+                title = "Claude needs your answer" if asks else "Claude stopped" if failed else "Claude is done"
                 body = _plain(text)[:180] or ("no answer" if failed else "")
                 push.notify("chat", title, body, url=f"/chat?c={meta['chat']}")
             except Exception:  # noqa: BLE001 — one bad file must not stop the loop
                 continue
+
+
+def claude_task_tail(path: str, n: int = 16000) -> dict:
+    """tail of a background shell's output file (Claude Code writes them to /tmp/claude-*/…/tasks/<id>.output)"""
+    real = os.path.realpath(path)
+    if not re.fullmatch(r"/tmp/claude-[^/]+/.+/tasks/[\w.-]+\.output", real):
+        raise ValueError("not a task output file")
+    try:
+        with open(real, "rb") as f:
+            size = f.seek(0, 2)
+            f.seek(max(0, size - n))
+            return {"text": f.read().decode("utf-8", "replace"), "size": size}
+    except FileNotFoundError:
+        return {"text": "", "size": 0}

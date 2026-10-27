@@ -11,8 +11,9 @@ export default defineEventHandler(async (event) => {
   const models = (await aiModels(event)).filter((m: any) => !m.uncensored)
   const model = (models.find((m: any) => m.warm) ?? models.find((m: any) => m.loaded) ?? models.at(-1))?.name
   if (!model) throw createError({ statusCode: 503, statusMessage: 'no local model' })
-  const stream = await upstream<ReadableStream<Uint8Array>>('ollama', useRuntimeConfig(event).ollamaUrl, null, '/api/chat', 90_000, {
+  const stream = await upstream<ReadableStream<Uint8Array>>('ollama', ollamaBase(event), null, '/api/chat', 90_000, {
     method: 'POST',
+    headers: { 'X-Job': 'read-aloud' },
     responseType: 'stream',
     body: {
       model, stream: true, think: false, keep_alive: -1, options: { temperature: 0.3 },

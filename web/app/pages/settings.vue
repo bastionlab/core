@@ -190,7 +190,8 @@ const hits = computed(() => {
 <style scoped>
 .top { display: flex; justify-content: flex-end; margin-bottom: 10px; }
 .find { position: relative; display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 10px; flex: 0 1 280px; min-width: 0; }
-.find input { flex: 1; border: 0; background: none; padding: 7px 0; min-width: 0; outline: none; }
+.find:focus-within { border-color: var(--accent); }
+.find input { flex: 1; border: 0; background: none; padding: 7px 0; min-width: 0; border-radius: 0; box-shadow: none; outline: none; -webkit-appearance: none; appearance: none; }
 .hits { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 4px; box-shadow: 0 8px 24px rgb(0 0 0 / .3); max-height: 60vh; overflow-y: auto; }
 .hit { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: var(--radius-sm); }
 .hit:hover { background: var(--panel-2); }

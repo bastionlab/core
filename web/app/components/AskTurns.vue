@@ -4,7 +4,7 @@ import type { Proposal, Turn } from '~/composables/useAsk'
 // canEdit / canFork: whether turn i's question can be edited and sent again / the chat branched after turn i
 // extras: read aloud + save as note (the chat page) · a compare turn (t.cmp) is drawn by the page's #compare slot
 const props = defineProps<{ turns: Turn[], retry?: boolean, dock?: boolean, canEdit?: (i: number) => boolean, canFork?: (i: number) => boolean, extras?: boolean }>()
-const emit = defineEmits<{ run: [Proposal], answer: [string], retry: [], edit: [number], fork: [number], stop: [], nudge: [], note: [number], execute: [number] }>()
+const emit = defineEmits<{ run: [Proposal], answer: [string], retry: [], edit: [number], fork: [number], stop: [], nudge: [], note: [number], execute: [number], remember: [number, string], skipMem: [number, string], speak: [string, string, boolean] }>()
 const { t: tr } = useI18n()
 const { speak, speaking, loading: speakLoading, error: speakError } = useSpeak()
 
@@ -21,8 +21,8 @@ function acts(t: Turn, i: number): Act[] {
     !!props.retry && i === props.turns.length - 1 && { key: 'retry', label: tr('ask.retry'), icon: 'refresh', run: () => emit('retry') },
     !!props.canEdit?.(i) && { key: 'edit', label: tr('ask.edit'), icon: 'edit', title: tr('ask.editHint'), run: () => emit('edit', i) },
     !!props.canFork?.(i) && { key: 'branch', label: tr('ask.branch'), icon: 'branch', title: tr('ask.branchHint'), run: () => emit('fork', i) },
-    !!props.extras && !!t.a && { key: 'speak', label: speaking.value === k ? tr('ask.stopSpeak') : tr('ask.speak'), icon: speaking.value === k ? 'stop' : 'play', run: () => speak(k, view(t).text) },
-    !!props.extras && !!t.a && t.a.length > 450 && speaking.value !== k && { key: 'speakAll', label: tr('ask.speakAll'), icon: 'play', run: () => speak(k, view(t).text, true) },
+    !!props.extras && !!t.a && { key: 'speak', label: speaking.value === k ? tr('ask.stopSpeak') : tr('ask.speak'), icon: speaking.value === k ? 'stop' : 'play', run: () => emit('speak', k, view(t).text, false) },
+    !!props.extras && !!t.a && t.a.length > 450 && speaking.value !== k && { key: 'speakAll', label: tr('ask.speakAll'), icon: 'play', run: () => emit('speak', k, view(t).text, true) },
     !!props.extras && !!t.a && { key: 'note', label: tr('ask.note'), icon: 'note', run: () => emit('note', i) },
   ]
   return (all.filter(Boolean) as Act[]).sort((a, b) => (uses.value[b.key] ?? 0) - (uses.value[a.key] ?? 0) || ORDER.indexOf(a.key) - ORDER.indexOf(b.key))
@@ -47,6 +47,11 @@ const picked = (t: Turn) => {
 // Claude can make dozens of tool calls in one answer: show the latest few, the rest behind a click
 const SHOW = 6
 const expanded = ref(new Set<number>())
+// web pages the answer used: first 3 as chips, the rest behind "+N"
+const SRC = 3
+const srcOpen = ref(new Set<number>())
+const srcShown = (t: Turn, i: number) => (srcOpen.value.has(i) ? t.sources! : t.sources!.slice(0, SRC))
+const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u } }
 const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tools!.slice(-SHOW))
 
 // code blocks get a copy button; clicks are caught once on the list instead of per block
@@ -75,7 +80,7 @@ function onClick(e: MouseEvent) {
   const pre = b?.nextElementSibling as HTMLElement | null
   if (!b || !pre) return
   copy(pre.innerText, '')
-  b.textContent = 'copied ✓'
+  b.textContent = 'copied'
   setTimeout(() => (b.textContent = 'copy'), 1500)
 }
 
@@ -95,11 +100,42 @@ const elapsed = (t: Turn) => clock(Math.max(0, Math.round((now.value - (t.at ?? 
 function quiet(t: Turn) {
   if (!t.busy || !t.ct) return 0
   const s = Math.round((now.value - (t.last ?? t.at ?? now.value)) / 1000)
-  return s >= (t.tools?.some(x => !x.done) ? 300 : 120) ? s : 0
+  return s >= (t.tools?.some(x => !x.done) || running(t) ? 300 : 120) ? s : 0
 }
+// long jobs: step count (from the todo list) and an ETA, only after 2 minutes and only when known
+function eta(t: Turn) {
+  const p = t.progress
+  if (!t.busy || !p?.total || (now.value - (t.at ?? now.value)) < 120000) return ''
+  const m = p.etaSeconds == null ? '' : p.etaSeconds < 60 ? ' · <1 min left' : ` · ~${Math.ceil(p.etaSeconds / 60)} min left`
+  return `step ${Math.min(p.done + 1, p.total)}/${p.total}${m}`
+}
+// background shells the turn started (it stays open while they run): count + tap-to-open live output
+const running = (t: Turn) => (t.bg ?? []).filter(b => b.status === 'running').length
+const openBg = ref<string | null>(null), bgText = ref('')
+const bgOf = (t: Turn, id: string | null) => (t.bg ?? []).find(b => b.id === id)
+// the command the shell runs: the Bash call that started it (its tool_use input)
+const bgCmd = (t: Turn, id: string | null) => {
+  const b = bgOf(t, id), tl = t.tools?.find(x => x.id === b?.tuid)
+  return tl?.args?.command || b?.desc || id || ''
+}
+const bgOut = (t: Turn) => bgOf(t, openBg.value)?.out
+let bgTimer: any
+async function pollBg(b: { out?: string }) {
+  if (!b.out) { bgText.value = ''; return }
+  try { bgText.value = (await $fetch<{ text: string }>('/api/claude/task', { query: { file: b.out } })).text } catch { bgText.value = '(output not readable)' }
+}
+function toggleBg(b: { id: string, out?: string, status: string }) {
+  clearInterval(bgTimer)
+  if (openBg.value === b.id) { openBg.value = null; return }
+  openBg.value = b.id
+  pollBg(b)
+  bgTimer = setInterval(() => { if (b.status === 'running') pollBg(b) }, 3000)
+}
+onUnmounted(() => clearInterval(bgTimer))
 function activity(t: Turn) {
   const tl = t.tools?.findLast(x => !x.done)
   if (tl) return tl.label || tl.name
+  if (running(t) && !t.fin) return 'waiting for background shells'
   if (t.a) return 'writing'
   if (t.r) return 'thinking'
   return t.ct ? 'starting' : 'loading the model'
@@ -131,9 +167,24 @@ function activity(t: Turn) {
       </div>
       <details v-if="t.r" class="reason small muted"><summary>reasoning{{ t.busy && !t.a ? '…' : '' }}</summary><div class="pre">{{ t.r }}</div></details>
       <div v-if="t.a" class="a" v-html="html(t)" />
+      <div v-if="t.sources?.length && !t.busy" class="sources small">
+        <span class="faint">{{ $t('ask.sources') }}</span>
+        <a v-for="s in srcShown(t, i)" :key="s.url" :href="s.url" target="_blank" rel="noopener noreferrer" class="pill src">
+          <span class="st">{{ s.title || host(s.url) }}</span><span class="faint">{{ host(s.url) }}</span>
+        </a>
+        <button v-if="t.sources.length > SRC && !srcOpen.has(i)" type="button" class="pill more" @click="srcOpen.add(i)">+{{ t.sources.length - SRC }}</button>
+      </div>
+      <div v-if="t.mem?.length && !t.busy" class="memq small">
+        <span class="faint">{{ $t('memory.ask') }}</span>
+        <span v-for="f in t.mem" :key="f" class="pill memchip">
+          <span class="mt">{{ f }}</span>
+          <button type="button" class="mb ok" :title="$t('memory.save')" @click="emit('remember', i, f)" :aria-label="$t('memory.save')"><Icon name="check" :size="16"/></button>
+          <button type="button" class="mb" :title="$t('memory.dismiss')" @click="emit('skipMem', i, f)" :aria-label="$t('memory.dismiss')"><Icon name="x" :size="16"/></button>
+        </span>
+      </div>
       <template v-if="dock && !t.busy && view(t).qs">
-        <div v-if="t.answered" class="picked small"><span class="ok">✓</span> <span class="muted">Picked:</span> {{ picked(t) }}</div>
-        <div v-else-if="i === turns.length - 1 && !t.error" class="picked small warn">❓ waiting for your answer below</div>
+        <div v-if="t.answered" class="picked small"><span class="ok"><Icon name="check" :size="14"/></span> <span class="muted">Picked:</span> {{ picked(t) }}</div>
+        <div v-else-if="i === turns.length - 1 && !t.error" class="picked small warn"><Icon name="circle-help" :size="14"/> waiting for your answer below</div>
       </template>
       <AskQuestions
         v-else-if="!t.busy && view(t).qs" :qs="view(t).qs!" :answered="t.answered"
@@ -142,7 +193,16 @@ function activity(t: Turn) {
       />
       <div v-if="t.compacted && t.q !== '/compact'" class="cleared small faint">{{ $t('ask.compacted', { pre: kt(t.compacted.pre), post: kt(t.compacted.post) }) }}</div>
       <div v-if="t.busy" class="live small muted">
-        <span class="spin" /><span class="what">{{ activity(t) }}</span><span class="faint">· {{ elapsed(t) }}</span>
+        <span class="spin" /><span class="what">{{ activity(t) }}</span><span v-if="running(t)" class="faint">· {{ running(t) }} background</span><span class="faint">· {{ elapsed(t) }}</span><span v-if="eta(t)" class="faint eta">· {{ eta(t) }}</span>
+      </div>
+      <div v-if="t.bg?.length" class="bgs small">
+        <button v-for="b in t.bg" :key="b.id" type="button" class="pill" :class="{ warn: b.status === 'running' && t.busy }" @click="toggleBg(b)">
+          <span class="dot" :class="b.status === 'running' && t.busy ? 'warn' : b.status === 'completed' ? 'ok' : 'bad'" />{{ b.desc }}
+        </button>
+        <div v-if="t.bg.some(b => b.id === openBg)" class="bgout small">
+          <div class="mono cmd">$ {{ bgCmd(t, openBg) }}</div>
+          <pre class="mono">{{ bgText || (bgOut(t) ? 'no output yet' : 'output file not reported yet') }}</pre>
+        </div>
       </div>
       <div v-if="quiet(t)" class="stall small">
         <span>{{ $t('ask.quiet', { time: clock(quiet(t)) }) }}</span>
@@ -170,7 +230,7 @@ function activity(t: Turn) {
       </div>
       <div v-if="t.error" class="small bad">{{ t.error }}</div>
       <div v-if="t.plan && !t.busy && !t.error && i === turns.length - 1 && !t.executed" class="plan">
-        <button type="button" class="btn primary sm" @click="emit('execute', i)">⚡ {{ $t('ask.execute') }}</button>
+        <button type="button" class="btn primary sm" @click="emit('execute', i)"><Icon name="zap" :size="16"/> {{ $t('ask.execute') }}</button>
         <span class="small muted">{{ $t('ask.executeHint') }}</span>
       </div>
       <div v-if="!t.busy && (t.model || t.a || t.error)" class="meta faint small">
@@ -180,7 +240,7 @@ function activity(t: Turn) {
           ><Icon v-if="a.icon" :name="a.icon" :size="13" /> {{ a.label }}</button>
           <button v-if="!more.has(i) && acts(t, i).length > SHOWN" type="button" class="act" :title="$t('ask.more')" @click="more.add(i)">···</button>
         </span>
-        {{ t.model }}<template v-if="t.tps"> · {{ t.tps.toFixed(1) }} tok/s</template><template v-if="t.effort"> · {{ t.effort }}</template><template v-if="t.secs"> · {{ t.secs }} s</template><span v-if="t.ct" :class="t.auto ? 'autotag' : ''"> · {{ t.auto ? '⚡ auto' : 'read-only' }}</span><template v-if="t.team"> · 👥</template><template v-if="t.plan"> · {{ $t('ask.planTag') }}</template>
+        {{ t.model }}<template v-if="t.tps"> · {{ t.tps.toFixed(1) }} tok/s</template><template v-if="t.effort"> · {{ t.effort }}</template><template v-if="t.secs"> · {{ t.secs }} s</template><span v-if="t.ct" :class="t.auto ? 'autotag' : ''"> · <Icon v-if="t.auto" name="zap" :size="12"/>{{ t.auto ? ' auto' : 'read-only' }}</span><template v-if="t.team"> · <Icon name="users" :size="12"/></template><template v-if="t.plan"> · {{ $t('ask.planTag') }}</template>
         <div v-if="t.usage && Object.keys(t.usage).length" class="usage" :title="$t('ask.usageHint', { usd: usd(t).toFixed(2) })">{{ usageLine(t) }}</div>
       </div>
       <div v-if="speakError && speaking === '' && i === turns.length - 1" class="small bad">{{ speakError }}</div>
@@ -193,6 +253,11 @@ function activity(t: Turn) {
 .plan { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--warn-soft); border-radius: var(--radius-sm); padding: 8px 10px; }
 .usage { flex-basis: 100%; font-variant-numeric: tabular-nums; }
 .stall { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; border: 1px solid var(--warn-soft); background: var(--warn-soft); color: var(--warn); border-radius: var(--radius-sm); padding: 5px 8px 5px 10px; }
+.bgs { display: flex; flex-wrap: wrap; gap: 6px; }
+.bgs .pill { cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bgout { flex-basis: 100%; max-height: 260px; overflow: auto; background: var(--term-bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 8px; }
+.bgout .cmd { white-space: pre-wrap; word-break: break-all; color: var(--text); margin-bottom: 6px; }
+.bgout pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
 .stall .btn { font-size: 12px; padding: 3px 9px; }
 .act.ic { display: inline-flex; align-items: center; gap: 4px; }
 .a :deep(.sec) { filter: blur(5px); cursor: pointer; user-select: none; transition: filter .15s; }
@@ -216,7 +281,19 @@ function activity(t: Turn) {
 .tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .tools .pill { gap: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tools .more { cursor: pointer; font: inherit; }
+.sources { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sources .src { gap: 6px; max-width: 100%; min-width: 0; text-decoration: none; color: var(--text); }
+.sources .st { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+.sources .more { cursor: pointer; font: inherit; }
+@media (pointer: coarse) { .sources .pill { min-height: 32px; } }
 .denied { border: 1px solid var(--warn-soft); background: var(--warn-soft); color: var(--warn); border-radius: var(--radius-sm); padding: 6px 10px; overflow-wrap: anywhere; }
+.memq { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+.memchip { display: flex; align-items: flex-start; gap: 4px; max-width: 100%; white-space: normal; border-radius: var(--radius-sm); padding: 4px 4px 4px 10px; font-size: 12.5px; color: var(--text); }
+.memchip .mt { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.45; padding-top: 3px; }
+.memchip .mb { flex-shrink: 0; }
+.memchip .mb { border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; padding: 2px 6px; }
+.memchip .mb.ok { color: var(--ok); }
+@media (pointer: coarse) { .memchip .mb { min-width: 32px; min-height: 32px; } }
 .autotag { color: var(--warn); }
 .proposal { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius-sm); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); }
 .proposal.done { border-left-color: var(--ok); }

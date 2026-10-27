@@ -43,7 +43,7 @@ const colors = ['var(--accent)', '#b36bdb', '#2fa8a0', '#d9822b', '#c94f7c', '#6
         <span class="dot" :class="diskTone(d)" /> {{ d.dev }} {{ bytes(d.size, 0) }}<template v-if="d.temp"> · {{ d.temp }}°C</template><template v-if="d.wear != null"> · {{ d.wear }}% worn</template>
       </span>
     </div>
-    <div v-for="d in smart.filter(d => d.warn?.length)" :key="d.dev" class="bad small">⚠ {{ d.dev }}: {{ d.warn.join(', ') }}</div>
+    <div v-for="d in smart.filter(d => d.warn?.length)" :key="d.dev" class="bad small"><Icon name="triangle-alert" :size="14"/> {{ d.dev }}: {{ d.warn.join(', ') }}</div>
     <div class="faint small scan">
       <span v-for="p in pools" :key="p.name" :title="p.scan" :class="scrubTone(p)">{{ p.name }}: {{ scrub(p.scan) }}<template v-if="p.scrubbed"> ({{ ago(p.scrubbed, now) }})</template></span>
     </div>

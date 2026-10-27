@@ -1,6 +1,8 @@
 <script setup lang="ts">
 /** a handful of line icons (lucide shapes), so the chrome does not depend on emoji fonts */
+import { lucide } from './icon-paths'
 defineProps<{ name: string, size?: number }>()
+const alias: Record<string, string> = { bolt: 'zap' }
 const paths: Record<string, string> = {
   home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/>',
   media: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m10 9 5 3-5 3z"/>',
@@ -48,9 +50,9 @@ const paths: Record<string, string> = {
 </script>
 
 <template>
-  <svg class="icon" :width="size ?? 18" :height="size ?? 18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" v-html="paths[name] ?? ''" />
+  <svg class="icon" :width="size ?? 18" :height="size ?? 18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" v-html="paths[name] ?? lucide[alias[name] ?? name] ?? ''" />
 </template>
 
 <style scoped>
-.icon { flex: none; display: block; }
+.icon { flex: none; display: inline-block; vertical-align: -0.2em; }
 </style>

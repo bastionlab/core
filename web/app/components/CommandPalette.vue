@@ -190,7 +190,8 @@ const idx = (it: Item) => flat.value.indexOf(it)
 .pal { width: min(620px, 100%); max-height: 70vh; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--radius); box-shadow: 0 20px 50px rgb(0 0 0 / .55); overflow: hidden; }
 .search { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; border-bottom: 1px solid var(--line); }
 .si { color: var(--faint); }
-.search input { flex: 1; min-width: 0; background: transparent !important; border: 0 !important; padding: 8px 0; font-size: 15px; }
+.search input { flex: 1; min-width: 0; background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; outline: none !important; appearance: none; -webkit-appearance: none; padding: 8px 0; font-size: 15px; }
+.search input:focus, .search input:focus-visible { border: 0 !important; box-shadow: none !important; outline: none !important; }
 .search input::-webkit-search-cancel-button { display: none; }
 .list { overflow-y: auto; padding: 4px 6px 8px; overscroll-behavior: contain; }
 .gh { padding: 10px 8px 4px; }

@@ -1,8 +1,12 @@
 import type { H3Event } from 'h3'
 
-/** call the Ollama API in CT 105 (ai) */
-export function ollama<T = any>(event: H3Event, path: string, opts: UpstreamOpts = {}) {
-  return upstream<T>('ollama', useRuntimeConfig(event).ollamaUrl, null, path, 10_000, opts)
+/** where Ollama is: the logging proxy when config.json sets `ollama_proxy`, else the CT 105 URL from the env */
+export const ollamaBase = (event?: H3Event) => cfg().ollama_proxy || useRuntimeConfig(event).ollamaUrl
+
+/** call the Ollama API in CT 105 (ai); `job` goes out as X-Job so the proxy can tell the callers apart */
+export function ollama<T = any>(event: H3Event, path: string, opts: UpstreamOpts & { job?: string } = {}) {
+  const { job, ...rest } = opts
+  return upstream<T>('ollama', ollamaBase(event), null, path, 10_000, { ...rest, headers: { 'X-Job': job ?? 'dash' } } as any)
 }
 
 // abliterated/uncensored models are for Open WebUI only — never offered or defaulted to on the dashboard

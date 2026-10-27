@@ -4,7 +4,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
   const ok = useState('auth:ok', () => false)
   const role = useState<string | null>('auth:role', () => null)
   if (ok.value && role.value) return
-  const s = await $fetch<{ ok: boolean, role: string | null }>('/api/auth/status').catch(() => ({ ok: false, role: null }))
+  const s: any = await $fetch<{ ok: boolean, role: string | null }>('/api/auth/status').catch(e => (e?.data?.offline ? 'offline' : { ok: false, role: null }))
+  if (s === 'offline') return // no connection and no cached answer: open the app, the state is checked again once online
   if (!s.ok) return navigateTo({ path: '/login', query: to.fullPath !== '/' ? { next: to.fullPath } : {} })
   ok.value = true
   role.value = s.role ?? 'owner'

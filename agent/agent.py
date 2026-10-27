@@ -12,9 +12,9 @@ from config import HOST_IP, ip
 import hooks
 import push
 from core import HERE, POOL, cached, invalidate
-from metrics import all_updates, backups, cpu_percent, cts, datasets, gpu, host, pools, ports, smart, tailnet
+from metrics import all_updates, backups, cpu_percent, cts, datasets, gpu, host, net, net_start, pools, ports, smart, speedtest, tailnet
 from actions import deploy_status, check_action, job_status, marketplace_index, marketplace_local, marketplace_scan, service_uptime, start_action
-from claude import _alive, _cc_turn, claude_send, claude_stop, claude_usage, claude_watch
+from claude import claude_task_tail, _alive, _cc_turn, claude_send, claude_stop, claude_usage, claude_watch
 import backup
 import release
 import dash_sdk
@@ -38,7 +38,7 @@ def overview():
     parts = {"host": POOL.submit(host), "gpu": POOL.submit(gpu), "pools": POOL.submit(pools),
              "datasets": POOL.submit(datasets), "backups": POOL.submit(backups, c), "tailnet": POOL.submit(tailnet),
              "ports": POOL.submit(ports, c), "smart": POOL.submit(smart), "updates": POOL.submit(all_updates, c),
-             "uptime": POOL.submit(service_uptime)}
+             "uptime": POOL.submit(service_uptime), "net": POOL.submit(net)}
     return {"time": int(time.time()), "cts": c, **{k: f.result() for k, f in parts.items()}}
 
 
@@ -75,6 +75,8 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, job_status(q["id"]))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage())
+            if u.path == "/claude/task":
+                return self._send(200, claude_task_tail(q["file"]))
             if u.path == "/claude/stream":
                 return self._claude_stream(q["turn"], int(q.get("from", 0)))
             if u.path == "/discord":
@@ -129,16 +131,18 @@ class H(BaseHTTPRequestHandler):
                                                    body.get("auto") is True, body.get("model"), body.get("effort"),
                                                    [i for i in body.get("images") or [] if isinstance(i, dict)], body.get("fork"),
                                                    body.get("team") is True, body.get("plan") is True, body.get("quiet") is True,
-                                                   body.get("push") is not False))
+                                                   body.get("push") is not False, body.get("memory")))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage(refresh=True))
+            if u.path == "/net/speedtest":
+                return self._send(200, speedtest())
             if u.path == "/claude/stop":
                 return self._send(200, claude_stop(str(body.get("chat"))))
             if u.path == "/discord":
                 return self._send(200, hooks.set_hook(str(body.get("channel")), str(body.get("url") or "")))
             if u.path == "/discord/test":
                 ch = str(body.get("channel"))
-                return self._send(200, {"sent": ch in hooks.CHANNELS and hooks.send(ch, f"✅ #{ch} ist mit dem Dashboard verbunden.")})
+                return self._send(200, {"sent": ch in hooks.CHANNELS and hooks.send(ch, f"#{ch} ist mit dem Dashboard verbunden.")})
             if u.path == "/push":
                 op = body.get("op")
                 if op == "subscribe":
@@ -250,6 +254,7 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     cpu_percent()
+    net_start()
     threading.Thread(target=claude_watch, daemon=True).start()
     for fn in dash_sdk.STARTUP:  # add-ons' background loops
         threading.Thread(target=fn, daemon=True).start()

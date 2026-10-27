@@ -24,7 +24,7 @@ const tone = (u: number) => (u >= 0.9 ? 'bad' : u >= 0.7 ? 'warn' : 'ok')
       <span class="muted">Claude plan</span>
       <span v-if="usage?.limited" class="pill bad">limit reached</span>
       <button class="btn ghost ico" :disabled="refreshing" title="check now (one tiny Haiku call)" @click="refresh">
-        <span :class="{ spin: refreshing }">↻</span>
+        <span :class="{ spin: refreshing }"><Icon name="refresh" :size="16"/></span>
       </button>
     </div>
     <template v-if="usage?.windows && Object.keys(usage.windows).length">
@@ -35,7 +35,7 @@ const tone = (u: number) => (u >= 0.9 ? 'bad' : u >= 0.7 ? 'warn' : 'ok')
       </div>
       <div class="faint" :title="new Date(usage.at! * 1000).toLocaleString()">as of {{ ago(usage.at!) }}</div>
     </template>
-    <div v-else class="faint">no numbers yet — press ↻</div>
+    <div v-else class="faint">no numbers yet — press refresh</div>
     <div v-if="error" class="bad">{{ error }}</div>
   </div>
 </template>

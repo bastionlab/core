@@ -57,7 +57,7 @@ function thinkSplitter() {
  * {r} reasoning, {c} answer text, {tool} tool activity, {done, tokens, tps} at the end, {error} on failure.
  */
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ q?: string, model?: string, think?: boolean, web?: boolean, history?: Msg[], scope?: Scope }>(event)
+  const body = await readBody<{ q?: string, model?: string, think?: boolean, web?: boolean, history?: Msg[], scope?: Scope, incognito?: boolean }>(event)
   const q = String(body?.q ?? '').trim().slice(0, 4000)
   if (!q) throw createError({ statusCode: 400, statusMessage: 'empty question' })
 
@@ -79,14 +79,16 @@ export default defineEventHandler(async (event) => {
     {
       role: 'system',
       content: SYSTEM + SCOPE_HINT[scope] + '\n'
+        + 'Never use emoji, emoji in headings or decorative symbols in your answers.\n'
         + (scope === 'metrics' || scope === 'chat' || scope === 'home' ? AI_CATALOG : '')
-        + (web ? WEB_HINT : '') + (scope === 'notes' ? '' : ACTION_HINT) + '\nLive data:\n' + context,
+        + (web ? WEB_HINT : '') + (scope === 'notes' ? '' : ACTION_HINT) + '\nLive data:\n' + context
+        + (body.incognito === true ? '' : memoryPrompt() ? '\n\n' + memoryPrompt() : ''),
     },
     ...history,
     { role: 'user', content: q },
   ]
 
-  const { ollamaUrl } = useRuntimeConfig(event)
+  const ollamaUrl = ollamaBase(event)
   setResponseHeaders(event, { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Model': model })
   const enc = new TextEncoder()
 
@@ -100,7 +102,7 @@ export default defineEventHandler(async (event) => {
         for (let round = 0; round < MAX_ROUNDS; round++) {
           const res = await fetch(`${ollamaUrl}/api/chat`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-Job': 'ask' },
             body: JSON.stringify({
               model, stream: true, think: !!body.think, messages,
               ...(round < MAX_ROUNDS - 1 ? { tools: [...(web ? TOOLS : []), ...(scope === 'notes' ? [] : [actionTool(scope)])] } : {}),
@@ -166,6 +168,10 @@ export default defineEventHandler(async (event) => {
             send({ tool: name, args })
             const result = await runTool(name, args)
             send({ toolDone: name, error: (result as any)?.error })
+            const r: any = result
+            const src = name === 'web_search' && Array.isArray(r) ? r : name === 'web_search' && Array.isArray(r?.results) ? r.results : name === 'fetch_page' && r?.url ? [r] : []
+            const pages = src.filter((x: any) => /^https?:\/\//i.test(x?.url ?? '')).slice(0, 8).map((x: any) => ({ title: x.title || '', url: x.url }))
+            if (pages.length) send({ sources: pages })
             messages.push({ role: 'tool', tool_name: name, content: JSON.stringify(result).slice(0, 20_000) })
           }
         }

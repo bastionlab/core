@@ -9,7 +9,7 @@ defineProps<{ services: any[], list?: boolean }>()
       v-for="s in services" :key="s.name" :href="s.url" target="_blank" class="svc"
       :title="`${s.note ?? ''}${s.ct ? ` · CT ${s.ct}` : ''}${s.up ? ` · ${s.ms} ms` : ' · down'}`"
     >
-      <span class="icon">{{ s.icon }}</span>
+      <span class="icon"><AppLogo :name="s.name" /></span>
       <span class="body">
         <span class="name">{{ s.name }}</span>
         <span class="note">{{ s.up ? s.note : 'down' }}</span>
@@ -33,6 +33,7 @@ defineProps<{ services: any[], list?: boolean }>()
 .services.list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 10px; margin: 0; }
 .list .svc { padding: 7px 8px; border: 0; background: none; border-radius: var(--radius-sm); }
 .list .svc:hover { background: var(--panel-2); }
+.icon :deep(img) { width: 62%; height: 62%; }
 .list .icon { width: 32px; height: 32px; font-size: 16px; }
 @media (max-width: 640px) { .services { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .svc { padding: 10px; gap: 10px; } }
 @media (max-width: 640px) { .services.list { grid-template-columns: minmax(0, 1fr); } }

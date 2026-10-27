@@ -18,8 +18,13 @@ Use these; don't write page-local copies.
 - Loading = `<Skeleton kind="lines|rows|tiles|cards|band">` shaped like the content, not "Loading…" text; keep old
   data on screen while refreshing. Quick toggles are optimistic: flip at once, roll back with `useToast()` on failure
   (`optimistic(apply, undo, save)`). Actions run via `useActions().run` (jobs tray + finish toast for free).
-- Icons: `<Icon name="…">` (lucide paths in `components/Icon.vue`). Don't rely on rare unicode symbols (⏻ ⟲ ⛶)
-  for meaning; Android fonts lack many. Common emoji are fine.
+- Icons: `<Icon name="…">` (lucide line icons: custom paths in `components/Icon.vue`, the rest generated into
+  `components/icon-paths.ts` by `scripts/gen-icons`; add a name to its ICONS list and re-run). One style: stroke
+  1.75, round caps, 16 px in rows, 18 px in headers, colour from tokens.
+- **No emoji or decorative symbols (✓ ✕ ⚠ ✎ ✦ …) in UI chrome**: buttons, menus, headers, tabs, toasts, empty
+  states. Use an Icon, or plain words. Status = a `.dot` or a `.pill` with words. Emoji stay only as *content*
+  (user text, notes, chat messages, ad titles). `scripts/emoji-lint` fails on new ones (baseline
+  `web/i18n/emoji-baseline.json`). Also tell AI prompts not to write emoji; push/Discord titles are plain text.
 
 ## Phone rules
 - Inputs are forced to 16px on phones (no focus zoom); don't fight it.

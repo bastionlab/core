@@ -8,6 +8,8 @@ export interface DashConfig {
   devbox: { ids: [number, number], ips: [string, string] }
   cts: Record<string, { id: number, ip: string }>
   /** index: URL of the bastionlab/addons index.json; counter: the install-count Worker; share_installs: opt-in pings */
+  /** optional: http://<host>:11435, the Ollama logging proxy (add-on cost); unset = callers use Ollama directly */
+  ollama_proxy?: string
   marketplace?: { index?: string, counter?: string, share_installs?: boolean }
 }
 

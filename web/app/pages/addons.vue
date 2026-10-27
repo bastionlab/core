@@ -188,7 +188,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
           <button type="button" class="btn primary sm" @click="ask('addon_install', e.id)">Install</button>
         </div>
         <p class="small muted desc">{{ e.desc }}</p>
-        <p v-if="e.warning" class="small warn desc">⚠ {{ e.warning }}</p>
+        <p v-if="e.warning" class="small warn desc"><Icon name="triangle-alert" :size="14"/> {{ e.warning }}</p>
         <div class="tags">
           <span class="pill">v{{ e.version }}</span>
           <span v-if="e.license" class="pill">{{ e.license }}</span>

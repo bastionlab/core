@@ -39,7 +39,7 @@ function restart(u: any) {
           class="btn sm" :class="armed === u.name ? 'danger' : 'ghost'" :disabled="u.state === 'ct-stopped'"
           :title="`restart ${u.name} in CT ${u.ct}`" @click="restart(u)"
         >
-          {{ armed === u.name ? 'Restart?' : '↻' }}
+          <template v-if="armed === u.name">Restart?</template><Icon v-else name="refresh" :size="16"/>
         </button>
       </div>
     </div>

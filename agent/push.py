@@ -211,7 +211,7 @@ def notify(topic, title, body="", url=None, only=None):
 
 
 def test(sid):
-    return {"sent": notify("test", "✅ Push works", "Notifications from the dashboard reach this device.", only=sid)}
+    return {"sent": notify("test", "Push works", "Notifications from the dashboard reach this device.", only=sid)}
 
 
 # --- Discord messages → a notification ------------------------------------------------------------------------

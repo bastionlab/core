@@ -114,7 +114,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', key))
       <button type="button" :class="{ on: mode === 'account' }" @click="mode = 'account'; err = ''">{{ $t('auth.account') }}</button>
     </div>
     <form v-if="mode === 'invite'" class="card acct" @submit.prevent="join">
-      <div class="icon">🛡️</div>
+      <div class="icon"><Icon name="shield" :size="34"/></div>
       <b>{{ $t('auth.title') }}</b>
       <span v-if="inv.gone" class="err small">{{ $t('auth.inviteGone') }}</span>
       <template v-else-if="inv.role">
@@ -127,7 +127,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', key))
       </template>
     </form>
     <form v-else-if="mode === 'account'" class="card acct" @submit.prevent="signIn">
-      <div class="icon">🛡️</div>
+      <div class="icon"><Icon name="shield" :size="34"/></div>
       <b>{{ $t('auth.title') }}</b>
       <template v-if="!acct.needCode">
         <input v-model="acct.name" class="inp" autocomplete="username" autocapitalize="none" spellcheck="false" :placeholder="$t('auth.name')">
@@ -145,7 +145,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', key))
       </template>
     </form>
     <form v-else class="card" @submit.prevent="submit">
-      <div class="icon">🛡️</div>
+      <div class="icon"><Icon name="shield" :size="34"/></div>
       <b>{{ $t('auth.title') }}</b>
       <div class="dots" :class="{ shake: err }" role="status" :aria-label="`${pin.length} digits entered`">
         <span v-for="i in Math.max(4, pin.length)" :key="i" :class="{ on: i <= pin.length }" />
@@ -153,9 +153,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', key))
       <div class="err small">{{ err || ' ' }}</div>
       <div class="pad">
         <button v-for="d in ['1', '2', '3', '4', '5', '6', '7', '8', '9']" :key="d" type="button" @click="press(d)">{{ d }}</button>
-        <button type="button" class="fn" :disabled="!pin" title="delete" @click="back">⌫</button>
+        <button type="button" class="fn" :disabled="!pin" title="delete" @click="back" aria-label="delete"><Icon name="x" :size="18"/></button>
         <button type="button" @click="press('0')">0</button>
-        <button type="submit" class="fn go" :disabled="!pin || busy" title="unlock">→</button>
+        <button type="submit" class="fn go" :disabled="!pin || busy" title="unlock" aria-label="unlock"><Icon name="arrow" :size="18"/></button>
       </div>
     </form>
   </div>

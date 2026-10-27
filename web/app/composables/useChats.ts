@@ -4,9 +4,13 @@ export interface Chat {
   engine?: 'local' | 'claude', session?: string, auto?: boolean, model?: string, effort?: string
   /** the next Claude message starts the session as a copy of another one, up to that message (edit / branch) */
   fork?: { from: string, at: string } | null
-  pinned?: boolean, archived?: boolean
+  pinned?: boolean
+  /** sidebar folder (free text, ≤24 chars) · task: the scheduled task that made this chat */
+  folder?: string, task?: string
   /** Claude may hand work to cheaper subagents (default on) · incognito: never stored or synced */
   team?: boolean, incognito?: boolean
+  /** AI title: when it was last set (ms) · titleManual is set when the user names a chat by hand (never overwritten) */
+  titledAt?: number, titleManual?: boolean
   /** when this device last changed it (ms); the newer copy wins between devices */
   upd?: number
 }
@@ -19,8 +23,8 @@ const compact = (c: Chat) => {
   const { upd, ...rest } = c
   return {
     ...rest,
-    turns: c.turns.map(({ q, a, r, model, tps, error, at, tools, ct, auto, secs, denied, fin, effort, answered, clear, imgs, sid, uuid, ctx, compacted, usage, team, plan, executed, cmp, vote }) => ({
-      q, a, r: r?.slice(0, 4000) ?? '', model, tps, error, at, ct, auto, secs, denied, fin, effort, answered, clear, imgs, sid, uuid, ctx, compacted, usage, team, plan, executed, vote,
+    turns: c.turns.map(({ q, a, r, model, tps, error, at, tools, ct, auto, secs, denied, fin, effort, answered, clear, imgs, sid, uuid, ctx, compacted, usage, team, plan, executed, cmp, vote, sources }) => ({
+      q, a, r: r?.slice(0, 4000) ?? '', model, tps, error, at, ct, auto, secs, denied, fin, effort, answered, clear, imgs, sid, uuid, ctx, compacted, usage, team, plan, executed, vote, sources,
       cmp: cmp?.map(({ key, engine, label, q, a, error, ct, fin, model, secs, tps, usage }) => ({ key, engine, label, q, a, r: '', error, ct, fin, model, secs, tps, usage })),
       tools: tools?.slice(-40).map(({ name, label, done, error }) => ({ name, label, done, error, args: null })),
     })),
@@ -155,6 +159,29 @@ export function useChats() {
     if (c.turns.length && (c.title === 'New chat' || !c.title)) c.title = c.turns[0]!.q.slice(0, 60)
     c.at = Date.now()
     save()
+    nameChat(c).catch(() => {})
+  }
+
+  /** local model titles the chat after the first answer, and again when the title is over an hour old */
+  const naming = new Set<string>()
+  async function nameChat(c: Chat) {
+    if (c.incognito || c.titleManual || naming.has(c.id)) return
+    const done = c.turns.filter(t => !t.busy && !t.clear && !t.error && (t.fin || t.answered || t.a) && t.a?.trim())
+    const last = done.at(-1)
+    if (!last || c.turns.some(t => t.busy)) return
+    if (c.titledAt !== undefined && Date.now() - c.titledAt <= 3600_000) return
+    const first = c.titledAt === undefined
+    if (first && c.title !== 'New chat' && c.title !== c.turns[0]?.q.slice(0, 60)) return // title already set some other way
+    const q = first ? done[0]!.q : c.turns.filter(t => t.q && !t.clear).slice(-3).map(t => t.q).join('\n')
+    naming.add(c.id)
+    try {
+      const r: any = await $fetch('/api/chats/title', { method: 'POST', body: { q, a: last.a, ...(first ? {} : { prior: c.title }) } })
+      if (r?.title && !c.titleManual && chats.value.some(x => x.id === c.id)) {
+        c.title = r.title
+        c.titledAt = Date.now()
+        save()
+      }
+    } catch { /* model busy or unreachable: keep the current title */ } finally { naming.delete(c.id) }
   }
 
   /** busy: an answer is still coming · input: the last answer ends in questions nobody has answered yet */
@@ -170,5 +197,5 @@ export function useChats() {
     return all.includes('input') ? 'input' : all.includes('busy') ? 'busy' : ''
   })
 
-  return { chats, current, currentId, create, remove, load, save, touch, status, overall }
+  return { chats, current, currentId, create, remove, load, save, touch, nameChat, status, overall }
 }

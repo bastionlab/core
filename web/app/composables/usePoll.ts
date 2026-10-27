@@ -8,8 +8,8 @@ export function usePoll(fn: () => any, ms: number) {
   const start = () => { stop(); timer = setInterval(tick, ms) }
   const stop = () => { clearInterval(timer); timer = null }
   const onVis = () => { if (document.hidden) stop(); else { fn(); start() } }
-  onMounted(() => { fn(); start(); document.addEventListener('visibilitychange', onVis); pageRefreshers.add(fn) })
-  onUnmounted(() => { stop(); document.removeEventListener('visibilitychange', onVis); pageRefreshers.delete(fn) })
+  onMounted(() => { fn(); start(); document.addEventListener('visibilitychange', onVis); window.addEventListener('bastion:synced', fn); pageRefreshers.add(fn) })
+  onUnmounted(() => { stop(); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('bastion:synced', fn); pageRefreshers.delete(fn) })
   return { refresh: fn, start, stop }
 }
 

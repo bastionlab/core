@@ -233,7 +233,7 @@ def _addon(args, cmd):
             if e.get("license"):
                 desc += f" — license {e['license']}"
             if e.get("warning"):
-                desc += f" — ⚠ {e['warning']}"
+                desc += f" — warning: {e['warning']}"
         else:
             if not (here / "addon.yaml").exists():
                 raise ValueError(f"{aid} is not installed")

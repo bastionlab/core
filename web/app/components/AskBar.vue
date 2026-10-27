@@ -54,7 +54,7 @@ const fit = () => { const el = box.value; if (!el) return; el.style.height = 'au
 watch(q, () => nextTick(fit))
 
 // typing / opens the command list, like Claude Code; after "/model " it offers the choices
-interface Item { cmd: Cmd, choice?: string }
+interface Item { cmd: Cmd, choice?: string, verb?: string }
 const sel = ref(0)
 const shut = ref(false) // Esc closes it until the text changes
 const items = computed<Item[]>(() => {
@@ -66,8 +66,15 @@ const items = computed<Item[]>(() => {
     return props.commands.filter(c => c.name.startsWith(w)).map(cmd => ({ cmd }))
   }
   const cmd = props.commands.find(c => c.name === v.slice(1, sp).toLowerCase())
-  const w = v.slice(sp + 1).trim().toLowerCase()
-  return (cmd?.choices ?? []).filter(x => x.toLowerCase().includes(w)).slice(0, 8).map(choice => ({ cmd: cmd!, choice }))
+  const arg = v.slice(sp + 1).trimStart()
+  // "/note " → the verbs first (inform, build…); once a verb and a space are typed, the choices come
+  if (cmd?.verbs && !/\s/.test(arg)) return cmd.verbs.filter(x => x.startsWith(arg.toLowerCase())).map(verb => ({ cmd, verb }))
+  let w = arg
+  const vm = cmd?.verbs ? /^(\S+)\s+/.exec(arg) : null
+  if (vm && cmd!.verbs!.includes(vm[1]!.toLowerCase())) w = arg.slice(vm[0].length)
+  w = w.trim().toLowerCase()
+  if (w.includes('|')) return [] // adjust: the change text is typed by hand
+  return (cmd?.choices ?? []).filter(x => x.toLowerCase().includes(w)).map(choice => ({ cmd: cmd!, choice }))
 })
 watch(q, () => { shut.value = false; sel.value = 0 })
 const list = ref<HTMLElement>()
@@ -76,7 +83,12 @@ watch(sel, i => nextTick(() => list.value?.children[i]?.scrollIntoView({ block: 
 function pick(it: Item, run = true) {
   const c = it.cmd
   box.value?.focus()
-  if (it.choice != null) q.value = `/${c.name} ${it.choice}`
+  if (it.verb != null) return void (q.value = `/${c.name} ${it.verb} `) // a verb: the title comes next, nothing is sent
+  if (it.choice != null) {
+    const vm = c.verbs ? /^\/\S+\s+(\S+)\s/.exec(q.value) : null // keep the verb typed before the title
+    const verb = vm && c.verbs!.includes(vm[1]!.toLowerCase()) ? `${vm[1]!.toLowerCase()} ` : ''
+    q.value = `/${c.name} ${verb}${it.choice}`
+  }
   else if (c.name === 'help') return void (q.value = '/')
   else if (c.arg) return void (q.value = `/${c.name} `)
   else q.value = `/${c.name}`
@@ -165,10 +177,11 @@ defineExpose({ setText: (v: string) => { q.value = v; nextTick(() => { box.value
   <form class="askbar" @submit.prevent="send" @dragover.prevent @drop.prevent="onDrop">
     <div v-if="items.length" ref="list" class="cmds" role="listbox">
       <button
-        v-for="(it, i) in items" :key="it.cmd.name + (it.choice ?? '')" type="button" role="option" class="cmd" :class="{ on: i === sel }"
+        v-for="(it, i) in items" :key="it.cmd.name + (it.choice ?? '') + (it.verb ?? '')" type="button" role="option" class="cmd" :class="{ on: i === sel }"
         :aria-selected="i === sel" @mousedown.prevent @mouseenter="sel = i" @click="pick(it)"
       >
-        <template v-if="it.choice != null"><span class="mono faint">/{{ it.cmd.name }}</span> <b>{{ it.choice }}</b></template>
+        <template v-if="it.verb != null"><span class="mono faint">/{{ it.cmd.name }}</span> <b>{{ it.verb }}</b></template>
+        <template v-else-if="it.choice != null"><span class="mono faint">/{{ it.cmd.name }}</span> <b>{{ it.choice }}</b></template>
         <template v-else>
           <span class="mono nm">/{{ it.cmd.name }}<span v-if="it.cmd.arg" class="faint"> &lt;{{ it.cmd.arg }}&gt;</span></span>
           <span class="muted small ds">{{ it.cmd.desc }}</span>
@@ -181,7 +194,7 @@ defineExpose({ setText: (v: string) => { q.value = v; nextTick(() => { box.value
       <span v-for="(n, i) in imgs" :key="n" class="th">
         <img v-if="isImg(n)" :src="`/api/chat/img/${n}`" alt="screenshot">
         <span v-else class="fchip small" :title="fileLabel(n)"><Icon name="clip" :size="13" /> {{ fileLabel(n) }}</span>
-        <button type="button" title="remove" @click="imgs.splice(i, 1)">✕</button>
+        <button type="button" title="remove" @click="imgs.splice(i, 1)"><Icon name="x" :size="12"/></button>
       </span>
       <span v-if="uploading" class="small faint">uploading…</span>
       <span v-if="imgErr" class="small bad">{{ imgErr }}</span>
@@ -253,6 +266,12 @@ defineExpose({ setText: (v: string) => { q.value = v; nextTick(() => { box.value
 .spark { color: var(--accent); margin: 0 4px 0 2px; }
 .askbar textarea.q { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; line-height: 20px; padding: 7px 0; outline: none; resize: none; max-height: 200px; overflow-y: auto; }
 .askbar textarea.q::placeholder { color: var(--faint); }
+/* phone: the text gets the whole width, the buttons drop to their own row below it */
+@media (max-width: 640px) {
+  .line { flex-wrap: wrap; align-items: center; row-gap: 2px; }
+  .askbar textarea.q { order: -1; flex: 1 1 100%; max-height: 40dvh; }
+  .line > .spark { margin-right: auto; }
+}
 .ico { padding: 0; width: 34px; height: 34px; border-radius: var(--radius-sm); }
 .pick { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
 .vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }

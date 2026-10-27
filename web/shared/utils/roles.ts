@@ -24,6 +24,7 @@ export function addonRoles(r: any): AddonRoles {
 export const CORE_API: [string, Role, Role][] = [
   ['/api/account', 'viewer', 'viewer'],
   ['/api/overview', 'viewer', 'owner'],
+  ['/api/net', 'viewer', 'admin'],
   ['/api/config', 'viewer', 'owner'],
   ['/api/locale', 'viewer', 'viewer'],
   ['/api/addons', 'viewer', 'owner'],

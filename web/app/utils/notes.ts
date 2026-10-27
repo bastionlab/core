@@ -1,11 +1,12 @@
 export const NOTE_KINDS = [
-  { id: 'idea', label: 'Ideas', icon: '💡' },
-  { id: 'todo', label: 'Todos', icon: '☑️' },
-  { id: 'note', label: 'Notes', icon: '📝' },
-  { id: 'link', label: 'Links', icon: '🔗' },
-  { id: 'journal', label: 'Journal', icon: '📔' },
+  { id: 'idea', label: 'Ideas', icon: 'lightbulb' },
+  { id: 'todo', label: 'Todos', icon: 'list-checks' },
+  { id: 'note', label: 'Notes', icon: 'note' },
+  { id: 'link', label: 'Links', icon: 'link' },
+  { id: 'journal', label: 'Journal', icon: 'book' },
 ] as const
-export const kindIcon = (k: string) => NOTE_KINDS.find(x => x.id === k)?.icon ?? '📝'
+/** <Icon> name for a note kind */
+export const kindIcon = (k: string) => NOTE_KINDS.find(x => x.id === k)?.icon ?? 'note'
 
 export const noteImg = (name: string) => `/api/notes/img/${name}`
 

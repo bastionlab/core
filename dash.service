@@ -9,7 +9,9 @@ WorkingDirectory=/opt/dash
 ExecStart=/usr/bin/node .output/server/index.mjs
 Restart=always
 RestartSec=3
-DynamicUser=yes
+# a fixed user (not DynamicUser) so dash and dash-b read and write the same /var/lib/dash files
+User=dash
+Group=dash
 # notes.db + pasted images (/var/lib/dash) — inside the CT, so the nightly vzdump keeps them
 StateDirectory=dash
 

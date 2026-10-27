@@ -20,14 +20,14 @@ const last = (j: Job) => [...j.log].reverse().find(l => l.trim())?.trim() ?? (j.
     <div v-for="j in jobs" :key="j.id ?? j.started" class="job" :class="[j.state, { open: open.has(j) }]">
       <button type="button" class="head" :aria-expanded="open.has(j)" @click="toggle(j)">
         <span v-if="j.state === 'running' || j.state === 'checking'" class="spin" />
-        <span v-else class="mark">{{ j.state === 'done' ? '✓' : '✗' }}</span>
+        <span v-else class="mark"><Icon :name="j.state === 'done' ? 'check' : 'x'" :size="14"/></span>
         <span class="what">
           <b>{{ j.desc ?? j.name }}</b>
           <span class="line mono">{{ j.state === 'failed' && j.rc != null ? `exit ${j.rc} · ` : '' }}{{ last(j) }}</span>
         </span>
         <span class="time mono">{{ elapsed(j) }}</span>
       </button>
-      <button type="button" class="btn ghost sm x" aria-label="Dismiss" @click="emit('dismiss', j)">✕</button>
+      <button type="button" class="btn ghost sm x" aria-label="Dismiss" @click="emit('dismiss', j)"><Icon name="x" :size="14"/></button>
       <pre v-if="open.has(j) && j.log.length" class="log small">{{ j.log.slice(-200).join('\n') }}</pre>
     </div>
   </div>

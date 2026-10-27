@@ -10,9 +10,10 @@ const what: Record<string, string> = {
 }
 const urls = reactive<Record<string, string>>({})
 const msg = reactive<Record<string, string>>({})
+const good = reactive<Record<string, boolean>>({})
 const busy = ref('')
 async function call(channel: string, body: any) {
-  busy.value = channel; msg[channel] = ''
+  busy.value = channel; msg[channel] = ''; good[channel] = false
   try { return await $fetch<any>('/api/discord', { method: 'POST', body: { channel, ...body } }) }
   catch (e: any) { msg[channel] = e?.data?.statusMessage || e?.message } finally { busy.value = '' }
 }
@@ -21,10 +22,11 @@ async function save(ch: string, url: string) {
   if (!r) return
   urls[ch] = ''
   const off = Object.entries(r.pushed || {}).filter(([, ok]) => !ok).map(([ct]) => ct)
-  msg[ch] = (url ? '✓ saved' : '✓ removed') + (off.length ? ` – CT ${off.join(', ')} not reached` : '')
+  good[ch] = true
+  msg[ch] = (url ? 'saved' : 'removed') + (off.length ? ` – CT ${off.join(', ')} not reached` : '')
   refresh()
 }
-async function test(ch: string) { const r = await call(ch, { action: 'test' }); if (r) msg[ch] = r.sent ? '✓ Test message sent' : 'Send failed' }
+async function test(ch: string) { const r = await call(ch, { action: 'test' }); if (r) { good[ch] = !!r.sent; msg[ch] = r.sent ? 'Test message sent' : 'Send failed' } }
 const count = computed(() => (data.value?.channels || []).filter((c: any) => c.set).length)
 </script>
 
@@ -35,7 +37,7 @@ const count = computed(() => (data.value?.channels || []).filter((c: any) => c.s
       <div class="head">
         <b>#{{ c.key }}</b>
         <span class="small faint">{{ what[c.key] }}</span>
-        <span class="small" :class="c.set ? 'ok' : 'muted'">{{ c.set ? `✓ ${c.name || 'connected'}` : 'not set' }}</span>
+        <span class="small" :class="c.set ? 'ok' : 'muted'">{{ c.set ? `${c.name || 'connected'}` : 'not set' }}</span>
       </div>
       <div class="row">
         <input v-model="urls[c.key]" placeholder="Webhook URL" autocomplete="off" spellcheck="false">
@@ -43,7 +45,7 @@ const count = computed(() => (data.value?.channels || []).filter((c: any) => c.s
         <button v-if="c.set" class="btn" :disabled="!!busy" @click="test(c.key)">Test</button>
         <button v-if="c.set" class="btn" :disabled="!!busy" @click="save(c.key, '')">Remove</button>
       </div>
-      <p v-if="msg[c.key]" class="small" :class="msg[c.key].startsWith('✓') ? 'ok' : 'bad'">{{ msg[c.key] }}</p>
+      <p v-if="msg[c.key]" class="small" :class="good[c.key] ? 'ok' : 'bad'">{{ msg[c.key] }}</p>
     </div>
   </Panel>
 </template>

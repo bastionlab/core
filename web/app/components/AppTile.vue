@@ -12,7 +12,7 @@ const host = (u: string) => { try { return new URL(u).host } catch { return '' }
     class="app" :class="{ down: !s.up }" :style="{ '--h': s.hue ?? 220 }"
     :title="s.up ? `${s.ms} ms${s.ct ? ` · CT ${s.ct}` : ''}` : `down${s.error ? `: ${s.error}` : ''}`"
   >
-    <span class="icon">{{ s.icon }}</span>
+    <span class="icon"><AppLogo :name="s.name" /></span>
     <span class="body">
       <span class="name">{{ s.name }}</span>
       <span class="note">{{ s.up ? s.note : 'down' }}</span>
@@ -42,6 +42,7 @@ const host = (u: string) => { try { return new URL(u).host } catch { return '' }
   font-size: 21px; width: 42px; height: 42px; display: grid; place-items: center; flex: none;
   border-radius: var(--radius-sm); background: hsl(var(--h) 70% 60% / .14);
 }
+.icon :deep(img) { width: 62%; height: 62%; }
 .body { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .note { font-size: 12px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

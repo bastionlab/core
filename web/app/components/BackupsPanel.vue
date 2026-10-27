@@ -15,7 +15,7 @@ const nights = computed(() => [...(props.b.history ?? [])].reverse())
         :title="b.busy?.length ? b.busy.join('\n') : 'vzdump every container now, snapshot mode — nothing is stopped'"
         @click="emit('action', 'backup_all', {})"
       >
-        ⤓ Back up all<span v-if="b.busy?.length" class="pill warn">busy</span>
+        <Icon name="download" :size="16"/> Back up all<span v-if="b.busy?.length" class="pill warn">busy</span>
       </button>
     </template>
     <div v-if="nights.length" class="nights small faint" title="last vzdump runs, oldest → newest">
@@ -31,7 +31,7 @@ const nights = computed(() => [...(props.b.history ?? [])].reverse())
           <td v-else class="nw" :class="age(v.time) === 'ok' ? '' : age(v.time)">{{ v.time ? ago(v.time, now) : 'never' }}</td>
           <td class="num muted">{{ bytes(v.size) }}</td>
           <td class="num muted kept">{{ v.count }}</td>
-          <td class="num"><button class="btn ghost small" :disabled="b.busy?.length" title="vzdump this container now" @click="emit('action', 'backup_ct', { vmid: v.vmid })">⤓</button></td>
+          <td class="num"><button class="btn ghost small" :disabled="b.busy?.length" title="vzdump this container now" @click="emit('action', 'backup_ct', { vmid: v.vmid })" aria-label="Back up"><Icon name="download" :size="16"/></button></td>
         </tr>
       </tbody>
     </table>

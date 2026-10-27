@@ -4,10 +4,10 @@
 
 Polls the repo every 1.5 s; once nothing has changed for 2 s it applies only what the changed files need:
   agent/*.py, addons/*/agent/**          → compile check, restart dash-agent (a syntax error keeps the old one running)
-  web/**, addons/*/web/**, addon.yaml    → build a copy in the dashboard CT (/opt/dash-next, ~15 s); green = swap it
-                                           into /opt/dash + restart the app, red = the running app stays as it was
+  web/**, addons/*/web/**, addon.yaml    → build a copy in the dashboard CT (/opt/dash-next, ~15 s); green = agent/dash-swap
+                                           puts it in /opt/dash and restarts standby, then main, red = the running app stays as it was
   an add-on's other files                → its deploy.sh hook, if it has one
-  deploy.sh, units, dash.service, Caddy, package.json → the full ./deploy.sh (dash-deploy, in dash-rebuild)
+  deploy.sh, units, dash.service, dash-b.service, Caddy, package.json → the full ./deploy.sh (dash-deploy, in dash-rebuild)
 While dash-rebuild runs (full deploy, add-on install, config change) it waits and treats that run as the baseline.
 Status for Settings → Deploy: /var/lib/dash-live/status.json.
 """
@@ -18,7 +18,7 @@ DIR = Path(__file__).resolve().parent.parent
 STATUS = Path("/var/lib/dash-live/status.json")
 SKIP_DIRS = {"node_modules", ".nuxt", ".output", ".git", "__pycache__", ".cache", "dist"}
 SKIP_FILES = {"agent/token", "agent/pin_hash", "agent/lan_key"}
-FULL = {"deploy.sh", "dash.service", "lan/Caddyfile", "web/package.json", "web/package-lock.json"}
+FULL = {"deploy.sh", "dash.service", "dash-b.service", "lan/Caddyfile", "web/package.json", "web/package-lock.json"}
 CT = json.load(open("/etc/dash/config.json"))["cts"]["dash"]["id"]
 PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
@@ -114,10 +114,9 @@ def apply_web():
     if rc != 0:
         lines = [l for l in out.splitlines() if l.strip() and not l.lstrip("| ").startswith("at ")]  # no stack frames
         return False, "build failed, the running app is unchanged:\n" + "\n".join(lines[-15:])
-    rc, out = run(["pct", "exec", str(CT), "--", "sh", "-c",
-                   "cd /opt/dash-next && rm node_modules && for x in * .output; do rm -rf \"/opt/dash/$x\"; "
-                   "mv \"$x\" /opt/dash/; done && cd / && rm -rf /opt/dash-next && systemctl restart dash"])
-    return rc == 0, "app rebuilt and restarted" if rc == 0 else out
+    # agent/dash-swap: whole-tree swap, then the standby (:3001) and the main instance (:3000) restart one at a time
+    rc, out = run(["pct", "exec", str(CT), "--", "sh", "-s"], inp=(DIR / "agent/dash-swap").read_bytes())
+    return rc == 0, "app rebuilt; standby and main restarted" if rc == 0 else "swap or restart failed, back on the previous build:\n" + out
 
 
 def apply_full():

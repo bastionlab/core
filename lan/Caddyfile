@@ -2,6 +2,8 @@
 # Only the LAN gets an answer; the app still asks for the PIN. /etc/caddy/lan.env (written by deploy.sh from
 # /etc/dash/config.json) holds DASH_IP, LAN_SUBNET and LAN_KEY; LAN_KEY proves to the app that a request came through
 # here — tailnet clients can't forge it.
+# Two app instances: dash (:3000, runs the background jobs) and dash-b (:3001, standby). Traffic goes to the first one
+# that answers its health check, so a restart of one never shows the browser a closed port.
 {
 	default_bind {$DASH_IP}
 	auto_https disable_redirects
@@ -12,8 +14,27 @@ https://{$DASH_IP}, https://dash.lan {
 	tls internal
 	@away not remote_ip {$LAN_SUBNET}
 	abort @away
-	reverse_proxy 127.0.0.1:3000 {
+	reverse_proxy 127.0.0.1:3000 127.0.0.1:3001 {
+		lb_policy first
+		lb_try_duration 5s
+		lb_try_interval 250ms
+		health_uri /api/auth/status
+		health_interval 2s
+		health_timeout 1s
 		header_up X-Dash-Lan {env.LAN_KEY}
+	}
+}
+
+# the tailnet: tailscale serve sends https://dash.<tailnet> here. No X-Dash-Lan header, so it is not LAN.
+http://:8080 {
+	bind 127.0.0.1
+	reverse_proxy 127.0.0.1:3000 127.0.0.1:3001 {
+		lb_policy first
+		lb_try_duration 5s
+		lb_try_interval 250ms
+		health_uri /api/auth/status
+		health_interval 2s
+		health_timeout 1s
 	}
 }
 

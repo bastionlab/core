@@ -148,6 +148,7 @@ function sweepImages() {
 // tuned on qwen3.5:9b against real messy notes (DE + EN). The worked example is English on purpose but the model
 // still drifts into the example's language, so the note's language is detected here and stated outright.
 const RULES = `You turn a quick, messy note into a clean one. The owner typed it in a hurry; you are their careful secretary.
+- Never use emoji, emoji in headings or decorative symbols (unless the owner wrote them); titles are plain text.
 - Keep the owner's meaning exactly. Keep every idea, fact, name, number and link. Do not reinterpret, generalise or invent anything, and add no advice. If something is unclear, keep their wording.
 - Keep the owner's certainty: "glaube ich", "maybe", "??" stay as a hedge ("wohl", "probably", "?"), never become a fact.
 - Fix spelling and grammar, expand obvious shorthand (tmrw → tomorrow, vlt → vielleicht), write proper names correctly (BVG, GitHub, Kubernetes, KI).
@@ -183,21 +184,21 @@ const SCHEMA = {
   required: ['title', 'body', 'topic', 'kind'],
 }
 
-async function pickModel() {
-  const { ollamaUrl } = useRuntimeConfig()
-  const ps: any = await $fetch('/api/ps', { baseURL: ollamaUrl, timeout: 10_000 }).catch(() => null)
+export async function pickModel() {
+  const ps: any = await $fetch('/api/ps', { baseURL: ollamaBase(), headers: { 'X-Job': 'notes-tidy' }, timeout: 10_000 }).catch(() => null)
   const warm = (ps?.models ?? []).find((m: any) => Date.parse(m.expires_at) - Date.now() > 24 * 3600_000 && !/abliterated|uncensored|heretic/i.test(m.name))
   return warm?.name ?? 'qwen3.5:9b'
 }
 
 async function chat(messages: any[], format?: any) {
-  const { ollamaUrl } = useRuntimeConfig()
   const r: any = await $fetch('/api/chat', {
-    baseURL: ollamaUrl, method: 'POST', timeout: 300_000,
+    baseURL: ollamaBase(), headers: { 'X-Job': 'notes-tidy' }, method: 'POST', timeout: 300_000,
     body: { model: await pickModel(), stream: false, think: false, messages, options: { temperature: 0.2 }, ...(format ? { format } : {}) },
   })
   return String(r?.message?.content ?? '')
 }
+
+export { chat as ollamaChat } // chat sorting (addons/chat) uses the same local-model call
 
 const b64 = (names: string[]) => names.filter(imgOk).slice(-4).map((n) => {
   try { return readFileSync(join(IMG_DIR, n)).toString('base64') } catch { return null }
@@ -216,6 +217,7 @@ async function work(id: number) {
   if (job.type === 'expand') {
     const extra = await chat([
       { role: 'system', content: `The owner wrote down an idea. Make it actionable. Write in ${lang(n.body)}.
+Never use emoji or decorative symbols.
 Return only markdown to append below the note, nothing else:
 ## Next steps
 3 to 6 concrete "- [ ] " items, the first one doable in under an hour.
