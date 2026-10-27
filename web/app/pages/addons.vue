@@ -80,12 +80,27 @@ const ctState = (key?: string) => {
   const c = id && o.value?.cts?.find((x: any) => x.vmid === id)
   return c ? { text: `CT ${id} ${c.status}`, tone: c.status === 'running' ? 'ok' : 'warn' } : null
 }
+// sections as top tabs; old #anchors (#marketplace, #core) still land on theirs
+const { t } = useI18n()
+const route = useRoute()
+const tab = usePageTab('installed')
+const updates = computed(() => list.filter(a => entry(a.id)?.update).length)
+const tabs = computed(() => [
+  { key: 'installed', label: `${t('tabs.installed')} ${list.length - (off.value?.length ?? 0)}/${list.length}`, icon: 'grid', badge: updates.value || undefined, tone: 'warn' as const },
+  { key: 'market', label: t('tabs.marketplace'), icon: 'download' },
+  { key: 'core', label: t('tabs.core'), icon: 'layers' },
+])
+const HASH: Record<string, string> = { installed: 'installed', marketplace: 'market', market: 'market', core: 'core' }
+function follow(hash: string) {
+  const key = HASH[hash.slice(1)]
+  if (key) navigateTo({ query: { ...route.query, s: key === 'installed' ? undefined : key }, hash: '' }, { replace: true })
+}
+watch(() => route.hash, h => h && follow(h), { immediate: true })
 const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i)?.name ?? i).join(', ')
 </script>
 
 <template>
   <div>
-    <h2 class="sec">Add-ons <span class="faint small">{{ list.length - (off?.length ?? 0) }} of {{ list.length }} on</span></h2>
     <div v-if="error" class="errbox">{{ error }}</div>
     <div v-if="pending" class="card confirm">
       <p class="small">{{ pending.desc }}</p>
@@ -118,6 +133,8 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
     </div>
     <JobList :jobs="jobs" @dismiss="dismiss" />
     <div v-if="rebuilding" class="small warn">Rebuilding: the dashboard is back in a few minutes; reload then.</div>
+    <PageTabs v-model="tab" :tabs="tabs" />
+    <template v-if="tab === 'installed'">
     <div class="grid cols-2 list">
       <div v-for="a in list" :key="a.id" class="card" :class="{ dim: !isOn(a.id) }">
         <div class="top">
@@ -149,8 +166,11 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
     </div>
     <p class="faint small">Always on: Home, Notes, Chat, Metrics. Turning an add-on off hides it here; its container keeps running.</p>
 
-    <CorePanel class="corep" />
+    </template>
 
+    <CorePanel v-else-if="tab === 'core'" />
+
+    <template v-else>
     <h2 class="sec mk">
       <span>Marketplace <span v-if="market?.source === 'local'" class="faint small">offline copy</span></span>
       <button type="button" class="btn ghost sm" :disabled="refreshing" @click="refreshMarket()">{{ refreshing ? 'Checking…' : 'Refresh' }}</button>
@@ -179,6 +199,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
@@ -191,7 +212,6 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
 .desc { margin: 0; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .tags .rm { margin-left: auto; }
-.corep { margin-top: 14px; }
 .mk { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .lnk-pill { cursor: pointer; font: inherit; font-size: 11.5px; }
 .confirm { border-color: var(--warn); margin-bottom: 14px; }

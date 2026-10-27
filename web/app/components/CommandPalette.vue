@@ -50,7 +50,7 @@ const items = computed<Item[]>(() => {
     if (a.routes[0] && !pageOn(a.routes[0])) continue
     const entries: any[] = Array.isArray(a.palette) ? a.palette : []
     entries.forEach((e, i) => {
-      const base = { key: `e:${a.id}:${i}`, label: e.label, icon: e.icon ?? a.icon, sub: a.label || a.name, words: e.keywords }
+      const base = { key: `e:${a.id}:${i}`, label: e.label, icon: e.icon ?? a.icon, sub: a.label || a.name, words: [e.keywords ?? []].flat().join(' ') }
       if (e.action) out.push({ ...base, icon: e.icon ?? actionIcon(e.action, e.args), group: 'Actions', action: { name: e.action, args: e.args ?? {} } })
       else if (e.to) out.push({ ...base, group: 'Pages', to: e.to })
     })

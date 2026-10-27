@@ -35,29 +35,15 @@ watch(() => chats.value.flatMap(c => c.turns.filter(t => t.ct && !t.fin && !t.bu
 const mark = (to: string) => (to === '/chat' ? overall.value : '')
 const markTitle = (m: string) => (m === 'input' ? 'a chat is waiting for your answer' : 'a chat is working')
 
-// phone: four pinned tabs + "More" (a sheet with every page). Which four is the viewer's choice, kept in localStorage.
-const MAX_PINS = 4
-const PIN_KEY = 'nav:pinned'
-const pinned = ref<string[]>(['/', '/media', '/dev', '/deals'])
-try {
-  const v = JSON.parse(localStorage.getItem(PIN_KEY) || 'null')
-  if (Array.isArray(v)) { const ok = v.filter(x => NAV.some(n => n.to === x)).slice(0, MAX_PINS); if (ok.length) pinned.value = ok }
-} catch {}
-const tabs = computed(() => pinned.value.map(to => nav.value.find(n => n.to === to)!).filter(Boolean))
+// phone: four pinned tabs + "More" (a sheet with every page). Which four is the viewer's choice (useNavPins, shared with skins).
+const { keys: pinned, pinned: tabs, toggle: togglePin, editing, max: MAX_PINS } = useNavPins(() => nav.value)
 const here = computed(() => nav.value.find(n => n.to === route.path))
 const offTab = computed(() => (here.value && !pinned.value.includes(here.value.to) ? here.value : null))
 const moreBadge = computed(() => nav.value.filter(n => !pinned.value.includes(n.to)).reduce((s, n) => s + badge(n.to), 0))
 const moreMark = computed(() => (pinned.value.includes('/chat') ? '' : overall.value))
 
 const sheet = ref(false)
-const editing = ref(false)
 function openSheet() { editing.value = false; sheet.value = !sheet.value }
-function togglePin(to: string) {
-  const p = pinned.value
-  if (p.includes(to)) { if (p.length > 1) pinned.value = p.filter(x => x !== to) }
-  else if (p.length < MAX_PINS) pinned.value = NAV.map(n => n.to).filter(x => x === to || p.includes(x))
-  try { localStorage.setItem(PIN_KEY, JSON.stringify(pinned.value)) } catch {}
-}
 function pick(to: string) { if (editing.value) togglePin(to); else { sheet.value = false; navigateTo(to) } }
 watch(() => route.path, () => (sheet.value = false))
 const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') sheet.value = false }
@@ -85,10 +71,19 @@ const full = computed(() => FULL.includes(route.path))
 const pull = usePull(() => full.value || sheet.value || palette.value || route.path === '/dev')
 const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value ? 'stale' : 'live'))
+// a skin (Designs add-on) may bring its own navigation; it gets the same pages, badges and live state
+const SkinNav = useSkinned('Nav')
+// …and may paint a full-page backdrop behind everything, and frame each page (title, chrome, layout)
+const SkinBackdrop = useSkinned('Backdrop')
+const SkinFrame = useSkinned('Frame')
+const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === 'running').length ?? '–'}/${o.value?.cts?.length ?? '–'} up`)
 </script>
 
 <template>
-  <div class="shell">
+  <div class="shell" :class="{ skinned: SkinNav }">
+    <component :is="SkinBackdrop" v-if="SkinBackdrop" :path="route.path" />
+    <component :is="SkinNav" v-if="SkinNav" :nav="nav" :path="route.path" :badge="badge" :mark="mark" :state="state" :state-text="stateText" :up="upText" :full="full" @search="palette = true" />
+    <template v-else>
     <aside class="side">
       <NuxtLink to="/" class="brand">
         <span class="logo">bastion</span>
@@ -153,6 +148,7 @@ const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value
       <JobsButton />
       <button type="button" class="btn icon ghost" aria-label="Search" @click="palette = true"><Icon name="search" :size="19" /></button>
     </div>
+    </template>
     <div v-if="pull.dist.value" class="ptr" :class="{ ready: pull.ready.value, busy: pull.busy.value }" :style="{ transform: `translate(-50%, ${pull.dist.value}px)` }">
       <Icon name="refresh" :size="18" :style="{ transform: `rotate(${pull.dist.value * 3}deg)` }" />
     </div>
@@ -167,13 +163,15 @@ const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value
       <Transition name="pop">
         <div v-if="state !== 'ok'" class="banner small" :class="state" role="status">{{ down ? 'Agent unreachable — data may be old' : 'Data is stale' }}</div>
       </Transition>
-      <slot />
+      <component :is="SkinFrame" v-if="SkinFrame" :path="route.path" :title="here?.label ?? ''" :icon="here?.icon ?? ''"><slot /></component>
+      <slot v-else />
     </main>
   </div>
 </template>
 
 <style scoped>
 .shell { display: grid; grid-template-columns: 200px minmax(0, 1fr); min-height: 100vh; min-height: 100dvh; }
+.shell.skinned { display: block; }
 .side {
   position: sticky; top: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column; gap: 18px;
   padding: 22px 12px 16px; border-right: 1px solid var(--line); background: var(--bg);

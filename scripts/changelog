@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""changelog [<version>] — the CHANGELOG.md section for the commits since the last vX.Y.Z tag.
+"""changelog [<version>] — the CHANGELOG.md section for the next release.
 
-Conventional commits (feat:, fix(scope):, perf:, …, `!` = breaking) are grouped by type; everything else — this
-repo's older "area: what changed" subjects — lands under Changes. Prints the section; --write puts it at the top
+The "## Unreleased" notes at the top of CHANGELOG.md are the section when there are any (written by hand / by Claude
+as work lands, see CLAUDE.md); --write turns them into "## <version> (<date>)" and leaves an empty Unreleased above.
+Without notes it falls back to the commits since the last vX.Y.Z tag: conventional commits (feat:, fix(scope):, perf:, …, `!` = breaking) are grouped by type; everything else — this
+repo's older "area: what changed" subjects — lands under Changes; the Deploy button's generated "deploy: <files>"
+subjects say nothing to a reader and are left out. Prints the section; --write puts it at the top
 of CHANGELOG.md. scripts/release runs both and tags; .github/workflows/release.yml reuses the section as the
 release notes.
 """
@@ -10,6 +13,9 @@ import re, subprocess, sys, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+FILE = ROOT / "CHANGELOG.md"
+HEAD = "# Changelog\n\nWhat changed in each core release (add-ons keep their own). Newest first.\n\n## Unreleased\n\n"
+UNRELEASED = re.compile(r"^## Unreleased[ \t]*\n(?P<body>.*?)(?=^## |\Z)", re.M | re.S)
 CONV = re.compile(r"^(?P<type>feat|fix|perf|refactor|docs|build|ci|chore|test|style|revert)(?:\((?P<scope>[^)]+)\))?(?P<bang>!)?: (?P<msg>.+)$")
 TITLES = [("breaking", "Breaking"), ("feat", "Features"), ("fix", "Fixes"), ("perf", "Performance"), ("other", "Changes")]
 SKIP = ("chore", "ci", "test", "style", "build", "docs", "refactor")
@@ -23,12 +29,21 @@ def last_tag():
     return git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*") or None
 
 
+def unreleased():
+    m = UNRELEASED.search(FILE.read_text()) if FILE.exists() else None
+    return m["body"].strip() if m else ""
+
+
 def section(version):
+    title = f"## {version} ({time.strftime('%Y-%m-%d')})"
+    notes = unreleased()
+    if notes:
+        return f"{title}\n\n{notes}\n"
     tag = last_tag()
     rng = f"{tag}..HEAD" if tag else "HEAD"
     groups = {k: [] for k, _ in TITLES}
     for line in git("log", "--no-merges", "--format=%s", rng).splitlines():
-        if line.startswith("release: "):
+        if line.startswith(("release: ", "deploy: ")):
             continue
         m = CONV.match(line)
         if not m:
@@ -41,12 +56,12 @@ def section(version):
             groups[m["type"]].append(msg)
         elif m["type"] not in SKIP:
             groups["other"].append(msg)
-    out = [f"## {version} ({time.strftime('%Y-%m-%d')})", ""]
+    out = [title, ""]
     for k, title in TITLES:
         if groups[k]:
             out += [f"### {title}", "", *[f"- {x}" for x in groups[k]], ""]
     if len(out) == 2:
-        out += ["- No user-facing changes.", ""]
+        out += ["- Maintenance and small fixes.", ""]
     return "\n".join(out)
 
 
@@ -55,10 +70,11 @@ def main():
     version = a[0] if a else (ROOT / "VERSION").read_text().strip()
     s = section(version)
     if "--write" in sys.argv:
-        f = ROOT / "CHANGELOG.md"
-        old = f.read_text() if f.exists() else "# Changelog\n\n"
-        head, _, rest = old.partition("\n\n")
-        f.write_text(f"{head}\n\n{s}\n{rest}")
+        old = FILE.read_text() if FILE.exists() else HEAD
+        if not UNRELEASED.search(old):  # no Unreleased heading: put one above the first release
+            i = old.find("\n## ")
+            old = (old.rstrip() + "\n\n" if i < 0 else old[:i + 1]) + "## Unreleased\n\n" + ("" if i < 0 else old[i + 1:])
+        FILE.write_text(UNRELEASED.sub(lambda _: f"## Unreleased\n\n{s}\n", old, count=1))
     print(s)
 
 

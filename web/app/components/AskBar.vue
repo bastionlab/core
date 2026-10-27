@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { parseCommand, type Cmd } from '~/utils/commands'
-const props = defineProps<{ busy: boolean, models: any[], placeholder?: string, commands?: Cmd[], draftKey?: string, images?: boolean }>()
+// history: earlier questions for ↑ recall · voice: mic button (Whisper) · queue: a message may be sent while busy
+const props = defineProps<{ busy: boolean, models: any[], placeholder?: string, commands?: Cmd[], draftKey?: string, images?: boolean, history?: string[], voice?: boolean, queue?: boolean }>()
 const emit = defineEmits<{ submit: [string, string[]], stop: [], focus: [boolean] }>()
 const { model, think, web } = useAskSettings()
 const q = ref('')
@@ -82,7 +83,23 @@ function pick(it: Item, run = true) {
   if (run) send()
 }
 
+// ↑ in an empty box brings back earlier questions (↓ goes forward again), like a shell; idea from Odysseus
+let hist = -1, recalled = ''
+watch(q, v => { if (v !== recalled) hist = -1 })
+function recall(e: KeyboardEvent) {
+  const h = props.history ?? [], el = box.value
+  if (!h.length || !el || e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return false
+  if (e.key === 'ArrowUp' && (!q.value || (hist >= 0 && el.selectionStart === 0))) hist = hist < 0 ? h.length - 1 : Math.max(0, hist - 1)
+  else if (e.key === 'ArrowDown' && hist >= 0 && el.selectionEnd === q.value.length) hist = hist + 1 < h.length ? hist + 1 : -1
+  else return false
+  e.preventDefault()
+  q.value = recalled = hist < 0 ? '' : h[hist]!
+  if (hist < 0) recalled = ''
+  return true
+}
+
 function key(e: KeyboardEvent) {
+  if (!items.value.length && recall(e)) return
   if (items.value.length) {
     const n = items.value.length
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel.value = (sel.value + (e.key === 'ArrowDown' ? 1 : n - 1)) % n; return }
@@ -97,11 +114,51 @@ function send() {
   if (c?.cmd?.name === 'help') return void (q.value = '/')
   if (c?.cmd?.arg && !c.arg) return void (q.value = `/${c.name} `)
   const att = props.images ? imgs.value : []
-  if ((!text && !att.length) || uploading.value || (props.busy && !c?.cmd?.busy)) return
+  if ((!text && !att.length) || uploading.value || (props.busy && !c?.cmd?.busy && !props.queue)) return
   q.value = ''
   imgs.value = props.images ? [] : imgs.value
   emit('submit', text, att)
 }
+
+// voice: record in the browser, Whisper on the 3060 writes it down (/api/chat/transcribe), the text lands in the box
+const { t } = useI18n()
+const rec = ref<'' | 'rec' | 'busy'>('')
+const recSecs = ref(0)
+const voiceErr = ref('')
+let mr: MediaRecorder | null = null, recT: any
+async function mic() {
+  if (rec.value === 'rec') return mr?.stop()
+  if (rec.value) return
+  voiceErr.value = ''
+  let stream: MediaStream
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }) } catch { voiceErr.value = t('ask.micDenied'); return }
+  const type = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find(x => MediaRecorder.isTypeSupported?.(x))
+  const r = mr = new MediaRecorder(stream, type ? { mimeType: type } : undefined)
+  const chunks: Blob[] = []
+  r.ondataavailable = e => { if (e.data.size) chunks.push(e.data) }
+  r.onstop = async () => {
+    stream.getTracks().forEach(x => x.stop())
+    clearInterval(recT)
+    if (recSecs.value < 1) { rec.value = ''; return } // a tap by mistake
+    rec.value = 'busy'
+    try {
+      const fd = new FormData()
+      fd.append('audio', new Blob(chunks, { type: r.mimeType || 'audio/webm' }), 'voice')
+      const { text } = await $fetch<{ text: string }>('/api/chat/transcribe', { method: 'POST', body: fd })
+      if (text) q.value = q.value.trim() ? `${q.value.trimEnd()} ${text}` : text
+      else voiceErr.value = t('ask.heardNothing')
+      nextTick(() => box.value?.focus())
+    } catch (e: any) { voiceErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message || 'failed' } finally { rec.value = '' }
+  }
+  r.start()
+  rec.value = 'rec'
+  recSecs.value = 0
+  recT = setInterval(() => { if (++recSecs.value >= 300) r.stop() }, 1000) // 5 min at most
+}
+onBeforeUnmount(() => { if (mr?.state === 'recording') { recSecs.value = 0; mr.stop() } })
+const mmss = (n: number) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`
+
+defineExpose({ setText: (v: string) => { q.value = v; nextTick(() => { box.value?.focus(); fit() }) } })
 </script>
 
 <template>
@@ -119,6 +176,7 @@ function send() {
         </template>
       </button>
     </div>
+    <div v-if="voiceErr" class="att"><span class="small bad">{{ voiceErr }}</span></div>
     <div v-if="images && (imgs.length || uploading || imgErr)" class="att">
       <span v-for="(n, i) in imgs" :key="n" class="th">
         <img v-if="isImg(n)" :src="`/api/chat/img/${n}`" alt="screenshot">
@@ -141,9 +199,18 @@ function send() {
           <Icon name="clip" :size="16" />
         </label>
       </template>
+      <button
+        v-if="voice" type="button" class="btn ghost ico mic" :class="{ rec: rec === 'rec' }" :disabled="rec === 'busy'"
+        :title="rec === 'rec' ? $t('ask.micStop') : $t('ask.mic')" @click="mic"
+      >
+        <span v-if="rec === 'busy'" class="mspin" />
+        <span v-else-if="rec === 'rec'" class="mono small">{{ mmss(recSecs) }}</span>
+        <Icon v-else name="mic" :size="16" />
+      </button>
       <button type="button" class="btn ghost ico" :class="{ on: opts }" title="model and tools" @click="opts = !opts">
         <Icon name="settings" :size="16" />
       </button>
+      <button v-if="busy && queue && (q.trim() || (images && imgs.length))" class="btn primary ico" :title="$t('ask.queue')" :disabled="!!uploading"><Icon name="send" :size="16" /></button>
       <button v-if="busy" type="button" class="btn ico" title="stop" @click="emit('stop')"><Icon name="stop" :size="15" /></button>
       <button v-else class="btn primary ico" title="ask" :disabled="(!q.trim() && !(images && imgs.length)) || !!uploading || !models.length"><Icon name="send" :size="16" /></button>
     </div>
@@ -189,6 +256,10 @@ function send() {
 .ico { padding: 0; width: 34px; height: 34px; border-radius: var(--radius-sm); }
 .pick { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; position: relative; }
 .vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
+.mic.rec { width: auto; padding: 0 8px; color: var(--bad); background: var(--bad-soft); animation: mpulse 1.2s ease-in-out infinite; }
+@keyframes mpulse { 50% { opacity: .65 } }
+.mspin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: mrot .8s linear infinite; }
+@keyframes mrot { to { transform: rotate(360deg) } }
 .ghost.on { color: var(--accent); background: var(--accent-soft); }
 .opts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 0 2px 31px; color: var(--muted); }
 .opts select { padding: 5px 8px; font-size: 12px; max-width: 220px; }

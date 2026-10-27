@@ -1,9 +1,44 @@
 <script setup lang="ts">
 import type { Proposal, Turn } from '~/composables/useAsk'
 // dock: open questions are shown by the page above its input instead of in the answer; here only what was picked
-const props = defineProps<{ turns: Turn[], retry?: boolean, dock?: boolean }>()
-const emit = defineEmits<{ run: [Proposal], answer: [string], retry: [] }>()
-const view = (t: Turn) => splitQuestions(t.a, t.busy)
+// canEdit / canFork: whether turn i's question can be edited and sent again / the chat branched after turn i
+// extras: read aloud + save as note (the chat page) · a compare turn (t.cmp) is drawn by the page's #compare slot
+const props = defineProps<{ turns: Turn[], retry?: boolean, dock?: boolean, canEdit?: (i: number) => boolean, canFork?: (i: number) => boolean, extras?: boolean }>()
+const emit = defineEmits<{ run: [Proposal], answer: [string], retry: [], edit: [number], fork: [number], stop: [], nudge: [], note: [number], execute: [number] }>()
+const { t: tr } = useI18n()
+const { speak, speaking, loading: speakLoading, error: speakError } = useSpeak()
+
+// the answer's actions: the three used most on this device up front, the rest behind ··· (idea from Odysseus)
+interface Act { key: string, label: string, icon?: string, title?: string, run: () => void }
+const USE = 'chat.acts'
+const uses = ref<Record<string, number>>({})
+onMounted(() => { try { uses.value = JSON.parse(localStorage.getItem(USE) || '{}') } catch {} })
+const ORDER = ['copy', 'retry', 'edit', 'branch', 'speak', 'note', 'speakAll']
+function acts(t: Turn, i: number): Act[] {
+  const k = 't' + i
+  const all: (Act | false)[] = [
+    !!t.a && { key: 'copy', label: copied.value === 'a' + i ? tr('ask.copied') : tr('ask.copy'), icon: 'copy', run: () => copy(view(t).text, 'a' + i) },
+    !!props.retry && i === props.turns.length - 1 && { key: 'retry', label: tr('ask.retry'), icon: 'refresh', run: () => emit('retry') },
+    !!props.canEdit?.(i) && { key: 'edit', label: tr('ask.edit'), icon: 'edit', title: tr('ask.editHint'), run: () => emit('edit', i) },
+    !!props.canFork?.(i) && { key: 'branch', label: tr('ask.branch'), icon: 'branch', title: tr('ask.branchHint'), run: () => emit('fork', i) },
+    !!props.extras && !!t.a && { key: 'speak', label: speaking.value === k ? tr('ask.stopSpeak') : tr('ask.speak'), icon: speaking.value === k ? 'stop' : 'play', run: () => speak(k, view(t).text) },
+    !!props.extras && !!t.a && t.a.length > 450 && speaking.value !== k && { key: 'speakAll', label: tr('ask.speakAll'), icon: 'play', run: () => speak(k, view(t).text, true) },
+    !!props.extras && !!t.a && { key: 'note', label: tr('ask.note'), icon: 'note', run: () => emit('note', i) },
+  ]
+  return (all.filter(Boolean) as Act[]).sort((a, b) => (uses.value[b.key] ?? 0) - (uses.value[a.key] ?? 0) || ORDER.indexOf(a.key) - ORDER.indexOf(b.key))
+}
+function use(a: Act) {
+  a.run()
+  uses.value[a.key] = (uses.value[a.key] ?? 0) + 1
+  try { localStorage.setItem(USE, JSON.stringify(uses.value)) } catch {}
+}
+const more = ref(new Set<number>())
+const SHOWN = 3
+const kt2 = (n: number) => (n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
+const usageLine = (t: Turn) => Object.entries(t.usage ?? {}).sort((a, b) => b[1].tok - a[1].tok).map(([m, u]) => `${m} ${kt2(u.tok)}`).join(' · ')
+const usd = (t: Turn) => Object.values(t.usage ?? {}).reduce((s, u) => s + u.usd, 0)
+// a plan's closing marker is for the page (Execute button), not for reading
+const view = (t: Turn) => splitQuestions(t.plan ? t.a.replace(/\n*PLAN READY\s*$/, '') : t.a, t.busy)
 const picked = (t: Turn) => {
   const qs = view(t).qs ?? []
   const a = (j: number) => t.answered?.[j]?.join(', ') || '—'
@@ -15,7 +50,11 @@ const expanded = ref(new Set<number>())
 const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tools!.slice(-SHOW))
 
 // code blocks get a copy button; clicks are caught once on the list instead of per block
-const html = (t: Turn) => md(view(t).text).replace(/<pre>/g, '<div class="code"><button type="button" class="cp">copy</button><pre>').replace(/<\/pre>/g, '</pre></div>')
+// keys, tokens and passwords in it are blurred until tapped (utils/secrets.ts)
+const html = (t: Turn) => {
+  const { text, found } = hideSecrets(view(t).text)
+  return showSecrets(md(text), found).replace(/<pre>/g, '<div class="code"><button type="button" class="cp">copy</button><pre>').replace(/<\/pre>/g, '</pre></div>')
+}
 const copied = ref('')
 async function copy(text: string, key: string) {
   try { await navigator.clipboard.writeText(text) } catch {
@@ -26,7 +65,13 @@ async function copy(text: string, key: string) {
   setTimeout(() => copied.value === key && (copied.value = ''), 1500)
 }
 function onClick(e: MouseEvent) {
-  const b = (e.target as HTMLElement).closest('button.cp') as HTMLElement | null
+  const el = e.target as HTMLElement
+  const sec = el.closest('.a .sec')
+  if (sec) return sec.classList.toggle('shown')
+  // a link to a dashboard page (/notes?n=4) opens inside the app instead of reloading it
+  const href = el.closest('.a a')?.getAttribute('href') ?? ''
+  if (/^\/(?!\/|api\/)/.test(href)) { e.preventDefault(); return void navigateTo(href) }
+  const b = el.closest('button.cp') as HTMLElement | null
   const pre = b?.nextElementSibling as HTMLElement | null
   if (!b || !pre) return
   copy(pre.innerText, '')
@@ -43,8 +88,15 @@ watchEffect(() => {
   else if (!running && timer) { clearInterval(timer); timer = null }
 })
 onUnmounted(() => clearInterval(timer))
+const kt = (n: number) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(n))
 const clock = (s: number) => (s < 60 ? `${s} s` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`)
 const elapsed = (t: Turn) => clock(Math.max(0, Math.round((now.value - (t.at ?? now.value)) / 1000)))
+// no sign of life for a while (longer while a command runs): maybe it hangs, offer Stop / a nudge (idea from Odysseus)
+function quiet(t: Turn) {
+  if (!t.busy || !t.ct) return 0
+  const s = Math.round((now.value - (t.last ?? t.at ?? now.value)) / 1000)
+  return s >= (t.tools?.some(x => !x.done) ? 300 : 120) ? s : 0
+}
 function activity(t: Turn) {
   const tl = t.tools?.findLast(x => !x.done)
   if (tl) return tl.label || tl.name
@@ -58,6 +110,10 @@ function activity(t: Turn) {
   <div class="turns" @click="onClick">
     <template v-for="(t, i) in turns" :key="i">
     <div v-if="t.clear" class="cleared small faint">context cleared</div>
+    <div v-else-if="t.q === '/compact' && !t.busy && !t.error" class="cleared small faint">
+      {{ t.compacted ? $t('ask.compacted', { pre: kt(t.compacted.pre), post: kt(t.compacted.post) }) : $t('ask.compactedShort') }}
+    </div>
+    <div v-else-if="t.cmp" class="turn"><slot name="compare" :turn="t" :index="i" /></div>
     <div v-else class="turn">
       <div v-if="t.imgs?.length" class="qimgs">
         <a v-for="n in t.imgs" :key="n" :href="`/api/chat/img/${n}`" target="_blank">
@@ -84,8 +140,14 @@ function activity(t: Turn) {
         :disabled="i !== turns.length - 1 || turns.some(x => x.busy)"
         @answer="(text, picked) => { t.answered = picked; emit('answer', text) }"
       />
+      <div v-if="t.compacted && t.q !== '/compact'" class="cleared small faint">{{ $t('ask.compacted', { pre: kt(t.compacted.pre), post: kt(t.compacted.post) }) }}</div>
       <div v-if="t.busy" class="live small muted">
         <span class="spin" /><span class="what">{{ activity(t) }}</span><span class="faint">· {{ elapsed(t) }}</span>
+      </div>
+      <div v-if="quiet(t)" class="stall small">
+        <span>{{ $t('ask.quiet', { time: clock(quiet(t)) }) }}</span>
+        <button type="button" class="btn ghost sm" @click="emit('nudge')">{{ $t('ask.nudge') }}</button>
+        <button type="button" class="btn ghost sm" @click="emit('stop')">{{ $t('ask.stop') }}</button>
       </div>
       <div v-for="(p, j) in t.proposals" :key="'p' + j" class="proposal" :class="[p.state, { danger: p.desc?.startsWith('FORCE:') }]">
         <div class="head">
@@ -107,19 +169,34 @@ function activity(t: Turn) {
         Read-only blocked {{ t.denied.length === 1 ? 'a change' : `${t.denied.length} changes` }}: <span class="mono">{{ t.denied.slice(0, 3).join(' · ') }}</span>. Switch on <b>Auto</b> to allow it.
       </div>
       <div v-if="t.error" class="small bad">{{ t.error }}</div>
+      <div v-if="t.plan && !t.busy && !t.error && i === turns.length - 1 && !t.executed" class="plan">
+        <button type="button" class="btn primary sm" @click="emit('execute', i)">⚡ {{ $t('ask.execute') }}</button>
+        <span class="small muted">{{ $t('ask.executeHint') }}</span>
+      </div>
       <div v-if="!t.busy && (t.model || t.a || t.error)" class="meta faint small">
         <span class="acts">
-          <button v-if="t.a" type="button" class="act" title="copy the answer" @click="copy(view(t).text, 'a' + i)">{{ copied === 'a' + i ? '✓ copied' : 'copy' }}</button>
-          <button v-if="retry && i === turns.length - 1" type="button" class="act" title="ask the same question again" @click="emit('retry')">↻ retry</button>
+          <button
+            v-for="a in (more.has(i) ? acts(t, i) : acts(t, i).slice(0, SHOWN))" :key="a.key" type="button" class="act ic" :title="a.title" @click="use(a)"
+          ><Icon v-if="a.icon" :name="a.icon" :size="13" /> {{ a.label }}</button>
+          <button v-if="!more.has(i) && acts(t, i).length > SHOWN" type="button" class="act" :title="$t('ask.more')" @click="more.add(i)">···</button>
         </span>
-        {{ t.model }}<template v-if="t.tps"> · {{ t.tps.toFixed(1) }} tok/s</template><template v-if="t.effort"> · {{ t.effort }}</template><template v-if="t.secs"> · {{ t.secs }} s</template><span v-if="t.ct" :class="t.auto ? 'autotag' : ''"> · {{ t.auto ? '⚡ auto' : 'read-only' }}</span>
+        {{ t.model }}<template v-if="t.tps"> · {{ t.tps.toFixed(1) }} tok/s</template><template v-if="t.effort"> · {{ t.effort }}</template><template v-if="t.secs"> · {{ t.secs }} s</template><span v-if="t.ct" :class="t.auto ? 'autotag' : ''"> · {{ t.auto ? '⚡ auto' : 'read-only' }}</span><template v-if="t.team"> · 👥</template><template v-if="t.plan"> · {{ $t('ask.planTag') }}</template>
+        <div v-if="t.usage && Object.keys(t.usage).length" class="usage" :title="$t('ask.usageHint', { usd: usd(t).toFixed(2) })">{{ usageLine(t) }}</div>
       </div>
+      <div v-if="speakError && speaking === '' && i === turns.length - 1" class="small bad">{{ speakError }}</div>
     </div>
     </template>
   </div>
 </template>
 
 <style scoped>
+.plan { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--warn-soft); border-radius: var(--radius-sm); padding: 8px 10px; }
+.usage { flex-basis: 100%; font-variant-numeric: tabular-nums; }
+.stall { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; border: 1px solid var(--warn-soft); background: var(--warn-soft); color: var(--warn); border-radius: var(--radius-sm); padding: 5px 8px 5px 10px; }
+.stall .btn { font-size: 12px; padding: 3px 9px; }
+.act.ic { display: inline-flex; align-items: center; gap: 4px; }
+.a :deep(.sec) { filter: blur(5px); cursor: pointer; user-select: none; transition: filter .15s; }
+.a :deep(.sec.shown) { filter: none; user-select: text; }
 .cleared { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
 .cleared::before, .cleared::after { content: ''; flex: 1; border-top: 1px dashed var(--line-2); }
 .turn { padding: 12px 0; display: flex; flex-direction: column; gap: 8px; }

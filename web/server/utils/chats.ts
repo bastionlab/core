@@ -48,3 +48,9 @@ export function dropChat(id: string) {
 
 /** every live chat's JSON in one string: lets the attachment sweep keep files an old chat still shows */
 export const liveChatsText = () => (db.prepare('SELECT data FROM chats WHERE gone = 0').all() as any[]).map(r => r.data).join('\n')
+
+/** one live chat as stored (without upd), or null: scheduled chat tasks append their runs to it */
+export function chatById(id: string): any | null {
+  const r = db.prepare('SELECT data FROM chats WHERE id = ? AND gone = 0').get(id) as any
+  return r?.data ? JSON.parse(r.data) : null
+}

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 defineProps<{ label: string, value: string | number, tone?: string }>()
+const skinned = useSkinned('Stat')
 </script>
 
 <template>
-  <div class="stat"><span class="lbl">{{ label }}</span><b :class="tone">{{ value }}</b></div>
+  <component :is="skinned" v-if="skinned" v-bind="$props" />
+  <div v-else class="stat"><span class="lbl">{{ label }}</span><b :class="tone">{{ value }}</b></div>
 </template>
 
 <style scoped>

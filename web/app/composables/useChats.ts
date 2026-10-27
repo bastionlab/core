@@ -2,6 +2,11 @@ export interface Chat {
   id: string, title: string, at: number, turns: Turn[]
   /** Claude chats: the Claude Code session it resumes, and whether the next message may change things */
   engine?: 'local' | 'claude', session?: string, auto?: boolean, model?: string, effort?: string
+  /** the next Claude message starts the session as a copy of another one, up to that message (edit / branch) */
+  fork?: { from: string, at: string } | null
+  pinned?: boolean, archived?: boolean
+  /** Claude may hand work to cheaper subagents (default on) · incognito: never stored or synced */
+  team?: boolean, incognito?: boolean
   /** when this device last changed it (ms); the newer copy wins between devices */
   upd?: number
 }
@@ -14,8 +19,9 @@ const compact = (c: Chat) => {
   const { upd, ...rest } = c
   return {
     ...rest,
-    turns: c.turns.map(({ q, a, r, model, tps, error, at, tools, ct, auto, secs, denied, fin, effort, answered }) => ({
-      q, a, r: r?.slice(0, 4000) ?? '', model, tps, error, at, ct, auto, secs, denied, fin, effort, answered,
+    turns: c.turns.map(({ q, a, r, model, tps, error, at, tools, ct, auto, secs, denied, fin, effort, answered, clear, imgs, sid, uuid, ctx, compacted, usage, team, plan, executed, cmp, vote }) => ({
+      q, a, r: r?.slice(0, 4000) ?? '', model, tps, error, at, ct, auto, secs, denied, fin, effort, answered, clear, imgs, sid, uuid, ctx, compacted, usage, team, plan, executed, vote,
+      cmp: cmp?.map(({ key, engine, label, q, a, error, ct, fin, model, secs, tps, usage }) => ({ key, engine, label, q, a, r: '', error, ct, fin, model, secs, tps, usage })),
       tools: tools?.slice(-40).map(({ name, label, done, error }) => ({ name, label, done, error, args: null })),
     })),
   }
@@ -109,11 +115,12 @@ export function useChats() {
   }
 
   const cache = () => {
-    try { localStorage.setItem(KEY, JSON.stringify(chats.value.slice(0, MAX).map(c => ({ ...compact(c), upd: c.upd })))) } catch {}
+    try { localStorage.setItem(KEY, JSON.stringify(chats.value.filter(c => !c.incognito).slice(0, MAX).map(c => ({ ...compact(c), upd: c.upd })))) } catch {}
   }
 
   const save = () => {
     for (const c of chats.value) {
+      if (c.incognito) continue // lives in this tab only: gone on reload, never on the server
       const json = JSON.stringify(compact(c))
       if (sent.get(c.id) === json || (!c.turns.length && !sent.has(c.id))) continue
       sent.set(c.id, json)
@@ -124,8 +131,8 @@ export function useChats() {
     flush()
   }
 
-  function create() {
-    const chat: Chat = { id: Math.random().toString(36).slice(2, 10), title: 'New chat', at: Date.now(), turns: [] }
+  function create(incognito = false) {
+    const chat: Chat = { id: Math.random().toString(36).slice(2, 10), title: 'New chat', at: Date.now(), turns: [], ...(incognito ? { incognito } : {}) }
     chats.value.unshift(chat)
     currentId.value = chat.id
     return chat

@@ -11,7 +11,7 @@ Polls the repo every 1.5 s; once nothing has changed for 2 s it applies only wha
 While dash-rebuild runs (full deploy, add-on install, config change) it waits and treats that run as the baseline.
 Status for Settings → Deploy: /var/lib/dash-live/status.json.
 """
-import json, os, py_compile, subprocess, sys, time
+import json, os, py_compile, subprocess, sys, tempfile, time
 from pathlib import Path
 
 DIR = Path(__file__).resolve().parent.parent
@@ -90,7 +90,9 @@ def apply_agent(files):
     for f in files:
         if f.endswith(".py") and (DIR / f).is_file():
             try:
-                py_compile.compile(str(DIR / f), doraise=True, cfile=os.devnull)
+                # a throwaway .pyc: newer Pythons refuse cfile=/dev/null (not a regular file)
+                with tempfile.TemporaryDirectory() as t:
+                    py_compile.compile(str(DIR / f), doraise=True, cfile=os.path.join(t, "x.pyc"))
             except py_compile.PyCompileError as e:
                 return False, f"agent not restarted, {f} doesn't compile:\n{e.msg}"
     rc, out = run(["systemctl", "restart", "dash-agent"])

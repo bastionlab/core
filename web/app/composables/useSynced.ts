@@ -22,5 +22,5 @@ export function useSynced<T>(key: string, fallback: () => T) {
   const onVis = () => { if (!document.hidden) pull() }
   onMounted(() => { pull(); document.addEventListener('visibilitychange', onVis) })
   onUnmounted(() => document.removeEventListener('visibilitychange', onVis))
-  return { value: computed(() => state.value.value), set, pull }
+  return { value: computed(() => state.value.value), upd: computed(() => state.value.upd), set, pull }
 }

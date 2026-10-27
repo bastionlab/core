@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""local-sum — let the local model on the 3060 read a long text so Claude doesn't have to (no subscription tokens).
+
+    journalctl -u foo -n 2000 | local-sum "why does foo keep restarting?"
+    local-sum "which errors repeat?" < /var/log/big.log
+
+Prints a short answer to the question about what came in on stdin. Used by the chat's team mode (agent/claude.py):
+the scout pipes big logs and command output through it and reports only the gist. Takes the model Ollama is
+holding warm (the dashboard's default Ask model), else the first one installed.
+"""
+import json, sys, urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from config import ip  # noqa: E402
+
+MAX_IN = 60_000  # characters: ~15k tokens, what a 9B model still reads well; longer input keeps head + tail
+
+
+def call(path, body=None, timeout=300):
+    req = urllib.request.Request(f"http://{ip('ai')}:11434{path}", data=json.dumps(body).encode() if body else None,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def model():
+    held = sorted(call("/api/ps", timeout=10).get("models", []), key=lambda m: m.get("expires_at", ""), reverse=True)
+    if held:
+        return held[0]["name"]
+    return call("/api/tags", timeout=10)["models"][0]["name"]
+
+
+def main():
+    q = " ".join(sys.argv[1:]).strip() or "Summarise this. Point out errors, warnings and anything unusual."
+    text = sys.stdin.read()
+    if not text.strip():
+        sys.exit("local-sum: nothing on stdin")
+    if len(text) > MAX_IN:
+        text = text[: MAX_IN // 3] + f"\n\n[… {len(text) - MAX_IN} characters cut …]\n\n" + text[-2 * MAX_IN // 3:]
+    r = call("/api/chat", {"model": model(), "stream": False, "think": False, "options": {"num_ctx": 24576, "temperature": 0.2},
+                           "messages": [{"role": "system", "content": "You read logs and command output for a sysadmin. Answer the question in at most 12 short lines. Quote exact error lines, timestamps and names. Say plainly when the text doesn't contain the answer; never guess."},
+                                        {"role": "user", "content": f"{q}\n\n---\n{text}"}]})
+    print(r["message"]["content"].strip())
+
+
+if __name__ == "__main__":
+    main()

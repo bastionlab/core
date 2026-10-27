@@ -1,11 +1,18 @@
 <script setup lang="ts">
-/** every panel folds from its header; fold="closed" starts folded, fold="phone" starts folded only on a phone. The viewer's choice sticks per panel (localStorage). */
+/** every panel folds from its header and starts open: pages are split into tabs (<PageTabs>), so nothing needs to start folded any more
+ *  (fold="closed"/"phone" are still accepted and mean the same as open). The viewer's own fold sticks per panel (localStorage). */
 const props = withDefaults(defineProps<{ title: string, sub?: string, id?: string, fold?: 'open' | 'closed' | 'phone' }>(), { fold: 'open' })
+if (typeof window !== 'undefined') try {
+  if (!localStorage.getItem('panels:v2')) {
+    for (const k of Object.keys(localStorage)) if (k.startsWith('panel:')) localStorage.removeItem(k)
+    localStorage.setItem('panels:v2', '1')
+  }
+} catch {}
 const key = props.id ? `panel:${props.id}` : `panel:${useRoute().path}:${props.title}`
 const oldKey = `panel:${props.id ?? props.title}`
-const phone = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches
-const open = ref(props.fold === 'open' || (props.fold === 'phone' && !phone))
+const open = ref(true)
 if (props.fold) try { const v = localStorage.getItem(key) ?? localStorage.getItem(oldKey); if (v) open.value = v === '1' } catch {}
+const skinned = useSkinned('Panel')
 function toggle() {
   if (!props.fold) return
   open.value = !open.value
@@ -14,7 +21,8 @@ function toggle() {
 </script>
 
 <template>
-  <section :id="id" class="panel" :class="{ folded: !open }">
+  <component :is="skinned" v-if="skinned" v-bind="{ ...$props, fold: 'open' }"><template v-for="(_, n) in $slots" #[n]="p"><slot :name="n" v-bind="p ?? {}" /></template></component>
+  <section v-else :id="id" class="panel" :class="{ folded: !open }">
     <header :class="{ toggle: fold }" @click="toggle">
       <Icon v-if="fold" name="arrow" :size="15" class="chev" />
       <h2>{{ title }}</h2>

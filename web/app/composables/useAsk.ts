@@ -10,6 +10,15 @@ export interface Turn {
   answered?: Record<number, string[]> | null
   /** a /clear divider: nothing before it is sent to the model again */
   clear?: boolean
+  /** Claude turns: the session it ran in and its last answer's message id (an edit or branch forks there),
+   *  how full the context was after it, and a compaction that happened in it */
+  sid?: string, uuid?: string, ctx?: { used: number, max?: number }, compacted?: { pre: number, post: number }
+  /** tokens (and list-price $) per model in this answer; team: subagents were offered; plan: answered as a plan */
+  usage?: Record<string, { tok: number, usd: number }>, team?: boolean, plan?: boolean, executed?: boolean
+  /** a compare turn: the same question to several models (panes A, B, C…), names hidden until `vote` */
+  cmp?: (Turn & { key: string, engine: 'claude' | 'local', label: string })[], vote?: string
+  /** when the stream last showed a sign of life (live only, not stored) */
+  last?: number
 }
 
 /** the turns since the last /clear, i.e. what the model should still remember */

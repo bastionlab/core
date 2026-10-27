@@ -72,6 +72,8 @@ code, .mono { font-family: var(--mono); font-size: 12.5px; }
 input:not([type='checkbox']):not([type='radio']), select, textarea {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line-2); border-radius: 8px; font: inherit;
 }
+/* inner padding at zero specificity (:where), so a page's or skin's own padding still wins */
+:where(input:not([type='checkbox'], [type='radio'], [type='range'], [type='color'], [type='file']), select, textarea) { padding: 7px 10px; }
 input:focus-visible, select:focus-visible, textarea:focus-visible { outline: none; border-color: var(--accent); }
 input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 /* phones zoom into inputs under 16px; !important so a compact scoped size cannot undo it */

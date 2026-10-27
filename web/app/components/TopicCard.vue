@@ -10,10 +10,12 @@ defineProps<{
   /** detail rows (newest notes, latest deals, …) for tall tiles */
   more?: { text: string, sub?: string, tone?: string }[]
 }>()
+const skinned = useSkinned('TopicCard')
 </script>
 
 <template>
-  <NuxtLink :to="to" class="topic">
+  <component :is="skinned" v-if="skinned" v-bind="$props" />
+  <NuxtLink v-else :to="to" class="topic">
     <span class="hd">
       <span class="ti"><Icon :name="icon" :size="18" /></span>
       <span class="txt">

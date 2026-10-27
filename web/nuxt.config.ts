@@ -56,7 +56,7 @@ export default defineNuxtConfig({
   // the SPA shell must be revalidated or phones (iOS home-screen apps especially) keep showing the old build after a deploy;
   // /_nuxt/* is content-hashed and keeps its long cache
   routeRules: {
-    '/**': { headers: { 'cache-control': 'no-cache', 'x-frame-options': 'SAMEORIGIN', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin', 'permissions-policy': 'camera=(), microphone=(), geolocation=()' } },
+    '/**': { headers: { 'cache-control': 'no-cache', 'x-frame-options': 'SAMEORIGIN', 'x-content-type-options': 'nosniff', 'referrer-policy': 'same-origin', 'permissions-policy': 'camera=(), microphone=(self), geolocation=()' } },
     '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
   },
   runtimeConfig: {

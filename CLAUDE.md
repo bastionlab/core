@@ -16,6 +16,10 @@ See docs/architecture.md for what lives where (README.md is the public overview)
   (`tar -C . --exclude=node_modules --exclude=.git --exclude='addons/*/agent' --transform 's,^web/,,;s,^web$,.,' -cf - web addons`),
   `npx nuxi build`, then delete `/tmp/x`. If you start it, use `NOTES_DIR=<scratch dir> LEARN_WORKER=0` so it
   can't touch the real databases or start Claude jobs through the agent.
+- Changed something the owner (or a friend running Bastion) would notice in the core? Add one line under
+  `## Unreleased` in `CHANGELOG.md` (Features / Fixes). The next Deploy turns that into the release notes; with
+  no notes it falls back to commit subjects, which the Deploy button's `deploy: <files>` commits don't give.
+  Add-on changes go in the add-on, not here.
 - Commits: author MaxJC0 (repo-local git config is set). No Co-Authored-By / Claude / Anthropic lines, ever.
 - Secrets (`agent/token`, `pin_hash`, `lan_key`) are gitignored; keep it that way.
 

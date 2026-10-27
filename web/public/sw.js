@@ -40,9 +40,16 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   let d = {}
   try { d = e.data ? e.data.json() : {} } catch { d = { title: e.data ? e.data.text() : 'Bastion' } }
-  e.waitUntil(self.registration.showNotification(d.title || 'Bastion', {
-    body: d.body || '', tag: d.tag, data: { url: d.url || '/' }, renotify: !!d.tag,
-  }))
+  e.waitUntil((async () => {
+    // "Claude is done" while the dashboard is on screen: the page shows it already (Chrome allows skipping then)
+    if (d.topic === 'chat') {
+      const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      if (wins.some(w => w.visibilityState === 'visible')) return
+    }
+    await self.registration.showNotification(d.title || 'Bastion', {
+      body: d.body || '', tag: d.tag, data: { url: d.url || '/' }, renotify: !!d.tag,
+    })
+  })())
 })
 
 self.addEventListener('notificationclick', (e) => {

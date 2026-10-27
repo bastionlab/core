@@ -14,7 +14,7 @@ import push
 from core import HERE, POOL, cached, invalidate
 from metrics import all_updates, backups, cpu_percent, cts, datasets, gpu, host, pools, ports, smart, tailnet
 from actions import deploy_status, check_action, job_status, marketplace_index, marketplace_local, marketplace_scan, service_uptime, start_action
-from claude import _alive, _cc_turn, claude_send, claude_stop, claude_usage
+from claude import _alive, _cc_turn, claude_send, claude_stop, claude_usage, claude_watch
 import backup
 import release
 import dash_sdk
@@ -127,7 +127,9 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/claude/send":
                 return self._send(200, claude_send(str(body.get("chat")), str(body.get("session")), body.get("prompt"),
                                                    body.get("auto") is True, body.get("model"), body.get("effort"),
-                                                   [i for i in body.get("images") or [] if isinstance(i, dict)]))
+                                                   [i for i in body.get("images") or [] if isinstance(i, dict)], body.get("fork"),
+                                                   body.get("team") is True, body.get("plan") is True, body.get("quiet") is True,
+                                                   body.get("push") is not False))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage(refresh=True))
             if u.path == "/claude/stop":
@@ -248,6 +250,7 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     cpu_percent()
+    threading.Thread(target=claude_watch, daemon=True).start()
     for fn in dash_sdk.STARTUP:  # add-ons' background loops
         threading.Thread(target=fn, daemon=True).start()
     ThreadingHTTPServer((BIND, PORT), H).serve_forever()

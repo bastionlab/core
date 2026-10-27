@@ -1,7 +1,7 @@
 /**
  * Pull-to-refresh on phones: drag down from the top of the page and let go past the mark. Re-runs everything the
  * page polls (usePoll) plus its useFetch data; the page stays on screen, dimmed, until the new data is in.
- * Not on pages that scroll inside themselves (chat, terminals) or anything marked `data-no-pull`.
+ * Not on pages that scroll inside themselves (chat, terminals), anything marked `data-no-pull` or with touch-action: none.
  */
 export function usePull(skip: () => boolean) {
   const dist = ref(0)
@@ -10,7 +10,8 @@ export function usePull(skip: () => boolean) {
   let y0 = -1
   const scrolled = (el: Element | null) => {
     for (let e = el; e && e !== document.body; e = e.parentElement) {
-      if ((e as HTMLElement).dataset?.noPull !== undefined || e.scrollTop > 0) return true
+      // touch-action: none = a drawing surface (kanji pad…) that owns the drag
+      if ((e as HTMLElement).dataset?.noPull !== undefined || e.scrollTop > 0 || getComputedStyle(e).touchAction === 'none') return true
     }
     return false
   }

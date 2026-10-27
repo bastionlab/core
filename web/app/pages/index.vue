@@ -32,14 +32,22 @@ const health = computed(() => {
 const { list: addons, pageOn } = useAddons()
 const pascal = (id: string) => id.split('-').map(w => w[0]!.toUpperCase() + w.slice(1)).join('')
 const cards = computed(() => addons.filter(a => a.home && a.routes[0] && pageOn(a.routes[0])).map(a => ({ id: a.id, order: a.order ?? 100, comp: `Home${pascal(a.id)}` })))
-// the viewer's layout (Edit): order, hidden and pinned apps/cards, shared by every device (useSynced)
+// the viewer's layout (Edit): order, hidden and pinned apps/cards, synced across devices (useSynced).
+// 'home' is the shared one; each kind of device may keep its own ('home:phone', own: true) instead.
 // sizes: grid cells per item (columns × rows); 2×1 isn't stored. Older layouts kept 's' / 'l' there.
 interface Box { w: number, h: number }
 interface HomeLayout { apps: string[], cards: string[], pinned: string[], hidden: string[], sizes: Record<string, Box | 's' | 'l'> }
 const EMPTY: HomeLayout = { apps: [], cards: [], pinned: [], hidden: [], sizes: {} }
-const pref = useSynced<HomeLayout>('home', () => ({ ...EMPTY }))
+const device = deviceKind()
+const shared = useSynced<HomeLayout>('home', () => ({ ...EMPTY }))
+const mine = useSynced<HomeLayout & { own?: boolean }>(`home:${device}`, () => ({ ...EMPTY }))
+const own = computed(() => !!mine.value.value?.own)
+const pref = computed<HomeLayout>(() => {
+  const { own: _, ...l } = (own.value ? mine.value.value : shared.value.value) ?? EMPTY
+  return l
+})
 const draft = ref<HomeLayout | null>(null) // while a drag is under way
-const lay = computed<HomeLayout>(() => ({ ...EMPTY, ...(draft.value ?? pref.value.value ?? {}) }))
+const lay = computed<HomeLayout>(() => ({ ...EMPTY, ...(draft.value ?? pref.value ?? {}) }))
 const editing = ref(false)
 // the tile whose frame is showing in edit mode (its key)
 const selected = ref('')
@@ -47,7 +55,9 @@ watch(editing, () => { selected.value = '' })
 // the Ask bar needs admin, the Home layout is the owner's (shared/utils/roles.ts)
 const { role } = useAddons()
 const canRole = (need: 'viewer' | 'member' | 'admin' | 'owner') => !role.value || atLeast(role.value, need)
-const save = (l: HomeLayout) => { draft.value = null; pref.set(l) }
+const save = (l: HomeLayout) => { draft.value = null; own.value ? mine.set({ ...l, own: true }) : shared.set(l) }
+// "Only this phone": starts from the shared layout; back to "Same everywhere" keeps it for next time
+const setOwn = (on: boolean) => { if (on !== own.value) mine.set(on ? { ...(mine.upd.value ? mine.value.value : pref.value), own: true } : { ...mine.value.value, own: false }) }
 
 interface Item { id: string, key: string, s?: any, comp?: string }
 const sortBy = (items: Item[], order: string[]) => [...items].sort((a, b) => {
@@ -170,6 +180,12 @@ const metricsChips = computed(() => o.value
       </span>
     </h2>
     <p v-if="editing" class="small faint hint">{{ $t('home.editHint') }}</p>
+    <div v-if="editing" class="hint">
+      <div class="seg">
+        <button type="button" :class="{ on: !own }" @click="setOwn(false)">{{ $t('home.layoutShared') }}</button>
+        <button type="button" :class="{ on: own }" @click="setOwn(true)">{{ $t(`home.layoutOwn.${device}`) }}</button>
+      </div>
+    </div>
     <Skeleton v-if="!o && !error" kind="tiles" :n="6" />
     <div v-else-if="groups.apps.length" class="apps">
       <HomeItem v-for="it in groups.apps" :key="it.key" v-bind="bind(it, 'apps')" />
