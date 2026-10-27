@@ -4,6 +4,8 @@ What changed in each core release (add-ons keep their own). Newest first.
 
 ## Unreleased
 
+## 0.1.1 (2026-10-27)
+
 ### Features
 
 - Chat: Auto model and effort. A Haiku router sizes each message and picks the lead model, effort, team on/off and plan-first (capped at Opus medium); /model or /effort still override
