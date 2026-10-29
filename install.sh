@@ -9,6 +9,9 @@
 # dashboard gets, your Tailscale login), writes /etc/dash/config.json, creates the dashboard CT (Debian,
 # node 22, Tailscale, Caddy), sets a PIN and runs deploy.sh. Add-ons come later from the Add-ons page.
 # Nothing existing is overwritten: it stops if the CT id is taken or /etc/dash/config.json already exists.
+# Unattended: a non-empty env var answers its question (BASTION_TAILNET, BASTION_OWNER, BASTION_CT, BASTION_CT_IP,
+#   BASTION_STORAGE, BASTION_DEV_IDS); BASTION_PIN (4-12 digits) sets the PIN without a tty; TS_AUTHKEY logs the CT
+#   into the tailnet without a link (passed as a root-only file, not argv); BASTION_TS_HOSTNAME = its name (dash).
 set -euo pipefail
 
 REPO=${BASTION_REPO:-https://github.com/bastionlab/core}
@@ -27,12 +30,19 @@ say() { printf '\033[1m→ %s\033[0m\n' "$*"; }
 die() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
 run() { if [ $DRY = 1 ]; then printf '   [dry-run] %s\n' "$*"; else "$@"; fi; }
 # questions come from the terminal even when the script itself is piped in through curl
-ask() { local v; read -rp "$1 [$2]: " v </dev/tty || true; printf '%s' "${v:-$2}"; }
+# $1 = env var that answers it unattended, $2 = question, $3 = suggestion
+ask() { local v; if [ -n "${!1:-}" ]; then v=${!1}; echo "$2 [$3]: $v (from $1)" >&2; elif : </dev/tty 2>/dev/null; then read -rp "$2 [$3]: " v </dev/tty || true; fi; printf '%s' "${v:-$3}"; }
 
 # --- checks -------------------------------------------------------------------------------------------
 [ "$(id -u)" = 0 ] || die "run as root on the Proxmox host"
 command -v pveversion >/dev/null || die "this is not a Proxmox host (no pveversion)"
 [ -e "$CONF" ] && [ $DRY = 0 ] && die "$CONF exists already — this host is set up; use $DIR/deploy.sh"
+# the questions below already need jq (and python3-yaml for the agent later): install them first
+MISSING=$(for c in git jq curl; do command -v $c >/dev/null || echo $c; done; python3 -c 'import yaml' 2>/dev/null || echo python3-yaml)
+if [ -n "$MISSING" ]; then
+  [ $DRY = 1 ] && die "--dry-run needs these first: apt-get install -y" $MISSING
+  apt-get install -y -q $MISSING >/dev/null || die "could not install:" $MISSING
+fi
 
 # --- what this host looks like --------------------------------------------------------------------------
 HOST_CIDR=$(ip -4 -o addr show vmbr0 2>/dev/null | awk '{print $4}' | head -1)
@@ -58,12 +68,12 @@ old() { jq -r "($1) // empty" <<<"$OLD_CFG"; }
 OLD_CT=$(old .cts.dash.id); pct status "${OLD_CT:-0}" >/dev/null 2>&1 && OLD_CT=""
 
 say "questions (Enter keeps the suggestion)"
-TAILNET=$(ask "Tailnet name (admin console → DNS, e.g. tail1234.ts.net)" "$(old .tailnet || true)"); TAILNET=${TAILNET:-example.ts.net}
-OWNER=$(ask "Your Tailscale login (who may open the dashboard)" "$(old '.owner_logins[0]')"); OWNER=${OWNER:-you@example.com}
-CT=$(ask "CT id for the dashboard" "${OLD_CT:-$NEXT_ID}")
-CT_IP=$(ask "Its LAN IP" "$PREFIX.$(( ${HOST_IP##*.} + 4 ))")
-STORAGE=$(ask "Storage for its disk" "${STORAGE:-local-lvm}")
-DEV_IDS=$(ask "Dev box id range" "200-299")
+TAILNET=$(ask BASTION_TAILNET "Tailnet name (admin console → DNS, e.g. tail1234.ts.net)" "$(old .tailnet || true)"); TAILNET=${TAILNET:-example.ts.net}
+OWNER=$(ask BASTION_OWNER "Your Tailscale login (who may open the dashboard)" "$(old '.owner_logins[0]')"); OWNER=${OWNER:-you@example.com}
+CT=$(ask BASTION_CT "CT id for the dashboard" "${OLD_CT:-$NEXT_ID}")
+CT_IP=$(ask BASTION_CT_IP "Its LAN IP" "$PREFIX.$(( ${HOST_IP##*.} + 4 ))")
+STORAGE=$(ask BASTION_STORAGE "Storage for its disk" "${STORAGE:-local-lvm}")
+DEV_IDS=$(ask BASTION_DEV_IDS "Dev box id range" "200-299")
 
 [[ "$CT" =~ ^[0-9]+$ ]] || die "CT id must be a number"
 pct status "$CT" >/dev/null 2>&1 && die "CT $CT exists already"
@@ -72,7 +82,8 @@ ping -c1 -W1 "$CT_IP" >/dev/null 2>&1 && die "$CT_IP answers already — pick a 
 
 # --- core sources -------------------------------------------------------------------------------------
 say "packages + core sources in $DIR"
-run apt-get install -y -q git jq curl python3-yaml
+# ClamAV: agent/addon_scan.py runs its signatures over every add-on before install / update (freshclam keeps them fresh)
+run apt-get install -y -q clamav clamav-freshclam
 if [ -d "$DIR/.git" ]; then run git -C "$DIR" pull -q --ff-only; else run git clone -q "$REPO" "$DIR"; fi
 # add-ons are installed into addons/ from the Add-ons page (bastionlab/addons)
 run mkdir -p "$DIR/addons"
@@ -83,7 +94,7 @@ CFG=$(jq -n --arg tn "$TAILNET" --arg owner "$OWNER" --arg subnet "$SUBNET" --ar
   --arg dir "$DIR" --argjson ct "$CT" --arg ctip "$CT_IP" --arg lo "${DEV_IDS%-*}" --arg hi "${DEV_IDS#*-}" --arg pfx "$PREFIX" '{
   name: "pve", tailnet: $tn, owner_logins: [$owner],
   lan: { subnet: $subnet, host_ip: $host },
-  paths: { dashboard: $dir, devbox: "/root/devbox", backends: "/opt/bastion" },
+  paths: { dashboard: $dir, devbox: "/opt/devbox", backends: "/opt/bastion" },
   devbox: { ids: [($lo|tonumber), ($hi|tonumber)], ips: [($pfx + ".60"), ($pfx + ".99")] },
   cts: { dash: { id: $ct, ip: $ctip } },
   marketplace: { index: "https://raw.githubusercontent.com/bastionlab/addons/main/index.json",
@@ -106,7 +117,14 @@ run pct exec "$CT" -- sh -c 'for i in $(seq 30); do ping -c1 -W1 deb.debian.org 
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y -q nodejs
   curl -fsSL https://tailscale.com/install.sh | sh'
 say "log the CT into your tailnet (open the link it prints)"
-run pct exec "$CT" -- tailscale up --hostname dash
+TS_HOST=${BASTION_TS_HOSTNAME:-dash}
+if [ -n "${TS_AUTHKEY:-}" ] && [ $DRY = 0 ]; then
+  # the key goes in as a root-only file inside the CT, never in a command line
+  KEYF=$(mktemp); chmod 600 "$KEYF"; printf '%s' "$TS_AUTHKEY" > "$KEYF"
+  pct push "$CT" "$KEYF" /root/.ts-authkey --perms 600; rm -f "$KEYF"
+  pct exec "$CT" -- tailscale up --hostname "$TS_HOST" --auth-key=file:/root/.ts-authkey || { pct exec "$CT" -- rm -f /root/.ts-authkey; die "tailscale up failed"; }
+  pct exec "$CT" -- rm -f /root/.ts-authkey
+else run pct exec "$CT" -- tailscale up --hostname "$TS_HOST"; fi
 
 # --- agent, PIN, first deploy ----------------------------------------------------------------------------
 if [ -n "$FROM" ]; then
@@ -121,7 +139,8 @@ if [ -n "$FROM" ]; then
 fi
 say "agent token + PIN"
 if [ $DRY = 0 ]; then (umask 077; [ -s "$DIR/agent/token" ] || openssl rand -hex 32 > "$DIR/agent/token"); fi
-if [ -s "$DIR/agent/pin_hash" ]; then echo "   PIN from the backup"; else run "$DIR/set-pin" </dev/tty; fi
+if [ -s "$DIR/agent/pin_hash" ]; then echo "   PIN from the backup"; elif [ -n "${BASTION_PIN:-}" ]; then run "$DIR/set-pin"
+else run "$DIR/set-pin" </dev/tty; fi
 say "first deploy"
 run "$DIR/deploy.sh"
 if [ -n "${ADDONS:-}" ]; then

@@ -3,9 +3,12 @@
 # ./deploy.sh hands it to the app. Changing it logs every browser out.
 set -euo pipefail
 DIR=$(dirname "$(readlink -f "$0")")
-[ -t 0 ] || { echo "needs a real terminal (ssh root@pve), the PIN is read hidden" >&2; exit 1; }
-read -rsp "New PIN (4-12 digits): " a; echo
-read -rsp "Again: " b; echo
+if [ -n "${BASTION_PIN:-}" ]; then a=$BASTION_PIN; b=$a   # unattended (install.sh)
+else
+  [ -t 0 ] || { echo "needs a real terminal (ssh root@pve), the PIN is read hidden" >&2; exit 1; }
+  read -rsp "New PIN (4-12 digits): " a; echo
+  read -rsp "Again: " b; echo
+fi
 [[ "$a" == "$b" ]] || { echo "PINs differ" >&2; exit 1; }
 [[ "$a" =~ ^[0-9]{4,12}$ ]] || { echo "4-12 digits only" >&2; exit 1; }
 umask 077
