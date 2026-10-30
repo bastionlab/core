@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /** this install's own values, from /etc/dash/config.json (deploy.sh copies it in from pve); see config.example.json */
 export interface DashConfig {
@@ -15,7 +17,14 @@ export interface DashConfig {
 
 let cached: DashConfig | null = null
 export function cfg(): DashConfig {
-  return (cached ??= JSON.parse(readFileSync('/etc/dash/config.json', 'utf8')))
+  return (cached ??= JSON.parse(readFileSync(configPath(), 'utf8')))
+}
+/** DASH_CONFIG (demo mode) > /etc/dash/config.json > the config.example.json shipped next to the build, so the app boots on any machine */
+function configPath() {
+  if (process.env.DASH_CONFIG) return process.env.DASH_CONFIG
+  if (existsSync('/etc/dash/config.json')) return '/etc/dash/config.json'
+  const here = dirname(fileURLToPath(import.meta.url))
+  return [join(process.cwd(), 'config.example.json'), join(here, '..', '..', 'config.example.json'), join(here, '..', '..', '..', 'config.example.json')].find(existsSync) ?? '/etc/dash/config.json'
 }
 export const ctIp = (name: string) => cfg().cts[name]?.ip ?? ''
 export const ctId = (name: string) => cfg().cts[name]?.id ?? 0

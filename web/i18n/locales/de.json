@@ -1,5 +1,6 @@
 {
   "common": {
+    "demo": "Demo: Beispieldaten, nichts hier ist echt",
     "loading": "Lädt…",
     "checking": "Prüft…",
     "refresh": "Aktualisieren",

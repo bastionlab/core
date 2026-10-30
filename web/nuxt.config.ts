@@ -71,7 +71,7 @@ export default defineNuxtConfig({
     ownerLogins: '', // NUXT_OWNER_LOGINS — Tailscale logins let in (comma-separated)
     marketplaceLocal,
     addonApps,
-    public: { addons, coreVersion }, // add-ons from addons/*/addon.yaml, merged with the built-in list (shared/utils/addons.ts)
+    public: { addons, coreVersion, demo: false }, // NUXT_PUBLIC_DEMO=true: sample data from demo/agent.mjs, see demo/README.md. add-ons from addons/*/addon.yaml, merged with the built-in list (shared/utils/addons.ts)
     lanKey: '', // NUXT_LAN_KEY — shared with Caddy (lan/Caddyfile) so LAN requests can be told apart
   },
 })

@@ -1,0 +1,2515 @@
+{
+ "GET /overview": {
+  "time": "$now",
+  "cts": [
+   {
+    "vmid": 101,
+    "name": "immich",
+    "type": "lxc",
+    "status": "running",
+    "tags": [],
+    "ip": "192.168.1.51",
+    "cpu": 0.02,
+    "cpus": 4,
+    "mem": 1181116006,
+    "maxmem": 17179869184,
+    "disk": 19327352832,
+    "maxdisk": 34359738368,
+    "uptime": 1213337
+   },
+   {
+    "vmid": 102,
+    "name": "jellyfin",
+    "type": "lxc",
+    "status": "running",
+    "tags": [],
+    "ip": "192.168.1.52",
+    "cpu": 0.01,
+    "cpus": 4,
+    "mem": 966367641,
+    "maxmem": 8589934592,
+    "disk": 12884901888,
+    "maxdisk": 34359738368,
+    "uptime": 1213374
+   },
+   {
+    "vmid": 103,
+    "name": "books",
+    "type": "lxc",
+    "status": "running",
+    "tags": [],
+    "ip": "192.168.1.53",
+    "cpu": 0.005,
+    "cpus": 2,
+    "mem": 322122547,
+    "maxmem": 2147483648,
+    "disk": 6442450944,
+    "maxdisk": 17179869184,
+    "uptime": 1213411
+   },
+   {
+    "vmid": 104,
+    "name": "dash",
+    "type": "lxc",
+    "status": "running",
+    "tags": [],
+    "ip": "192.168.1.50",
+    "cpu": 0.03,
+    "cpus": 4,
+    "mem": 966367641,
+    "maxmem": 6442450944,
+    "disk": 3221225472,
+    "maxdisk": 17179869184,
+    "uptime": 1213448
+   },
+   {
+    "vmid": 105,
+    "name": "ai",
+    "type": "lxc",
+    "status": "running",
+    "tags": [],
+    "ip": "192.168.1.55",
+    "cpu": 0.04,
+    "cpus": 8,
+    "mem": 6871947673,
+    "maxmem": 34359738368,
+    "disk": 51539607552,
+    "maxdisk": 68719476736,
+    "uptime": 1213485
+   },
+   {
+    "vmid": 106,
+    "name": "media",
+    "type": "lxc",
+    "status": "running",
+    "tags": [],
+    "ip": "192.168.1.56",
+    "cpu": 0.02,
+    "cpus": 4,
+    "mem": 2040109465,
+    "maxmem": 4294967296,
+    "disk": 9663676416,
+    "maxdisk": 34359738368,
+    "uptime": 1213522
+   },
+   {
+    "vmid": 107,
+    "name": "deals",
+    "type": "lxc",
+    "status": "running",
+    "tags": [],
+    "ip": "192.168.1.57",
+    "cpu": 0.004,
+    "cpus": 2,
+    "mem": 214748364,
+    "maxmem": 2147483648,
+    "disk": 5368709120,
+    "maxdisk": 17179869184,
+    "uptime": 1213559
+   },
+   {
+    "vmid": 108,
+    "name": "money",
+    "type": "lxc",
+    "status": "running",
+    "tags": [],
+    "ip": "192.168.1.58",
+    "cpu": 0.004,
+    "cpus": 2,
+    "mem": 322122547,
+    "maxmem": 2147483648,
+    "disk": 6442450944,
+    "maxdisk": 17179869184,
+    "uptime": 1213596
+   },
+   {
+    "vmid": 201,
+    "name": "devbox",
+    "type": "lxc",
+    "status": "running",
+    "tags": [
+     "dev"
+    ],
+    "ip": "192.168.1.60",
+    "cpu": 0.01,
+    "cpus": 8,
+    "mem": 2254857830,
+    "maxmem": 17179869184,
+    "disk": 18253611008,
+    "maxdisk": 34359738368,
+    "uptime": 864000
+   }
+  ],
+  "host": {
+   "name": "homelab",
+   "cpu": 11.4,
+   "cpus": 16,
+   "cpuModel": "Example CPU @ 3.00GHz",
+   "load": [
+    1.42,
+    1.18,
+    0.97
+   ],
+   "uptime": 1209700,
+   "mem": {
+    "used": 22978075033,
+    "total": 34359738368
+   },
+   "temps": {
+    "cpu": 46.0,
+    "nvme": 39.5
+   },
+   "pveVersion": "pve-manager/9.0/demo",
+   "kernel": "6.14.0-demo-pve",
+   "shutdown": null
+  },
+  "gpu": {
+   "name": "NVIDIA GeForce RTX 3060",
+   "memUsed": 7945689497,
+   "memTotal": 12884901888,
+   "temp": 47.0,
+   "util": 3.0,
+   "power": 34.0,
+   "procs": [
+    {
+     "pid": 4211,
+     "name": "python",
+     "mem": 858993459,
+     "ct": 105
+    },
+    {
+     "pid": 5120,
+     "name": "llama-server",
+     "mem": 7086696038,
+     "ct": 105
+    }
+   ]
+  },
+  "pools": [
+   {
+    "name": "tank",
+    "size": 6000000000000,
+    "alloc": 1900000000000,
+    "free": 4099999999999,
+    "health": "ONLINE",
+    "frag": 2,
+    "scan": "scrub repaired 0B in 01:07:30 with 0 errors on Sun Oct 11 01:31:38 2026",
+    "scrubbed": "$ago:1500000",
+    "errors": "No known data errors"
+   },
+   {
+    "name": "backup",
+    "size": 6000000000000,
+    "alloc": 1700000000000,
+    "free": 4300000000000,
+    "health": "ONLINE",
+    "frag": 0,
+    "scan": "scrub repaired 0B in 01:55:00 with 0 errors on Sun Oct 11 03:55:00 2026",
+    "scrubbed": "$ago:1490000",
+    "errors": "No known data errors"
+   }
+  ],
+  "datasets": [
+   {
+    "name": "tank",
+    "used": 1825361100800,
+    "avail": 4099999999999,
+    "mountpoint": "/tank"
+   },
+   {
+    "name": "tank/documents",
+    "used": 128849018880,
+    "avail": 4099999999999,
+    "mountpoint": "/tank/documents"
+   },
+   {
+    "name": "tank/photos",
+    "used": 687194767360,
+    "avail": 4099999999999,
+    "mountpoint": "/tank/photos"
+   },
+   {
+    "name": "tank/media",
+    "used": 891205713920,
+    "avail": 4099999999999,
+    "mountpoint": "/tank/media"
+   },
+   {
+    "name": "tank/backups",
+    "used": 42949672960,
+    "avail": 4099999999999,
+    "mountpoint": "/tank/backups"
+   },
+   {
+    "name": "backup",
+    "used": 1717986918400,
+    "avail": 4099999999999,
+    "mountpoint": "/backup"
+   },
+   {
+    "name": "backup/tank",
+    "used": 1707249500160,
+    "avail": 4099999999999,
+    "mountpoint": "/backup/tank"
+   }
+  ],
+  "backups": {
+   "vzdump": [
+    {
+     "vmid": 101,
+     "name": "immich",
+     "time": "$ago:40000",
+     "size": 3221225472,
+     "count": 7,
+     "run": {
+      "time": "$ago:39800",
+      "ok": true,
+      "error": null
+     }
+    },
+    {
+     "vmid": 102,
+     "name": "jellyfin",
+     "time": "$ago:40060",
+     "size": 5046586572,
+     "count": 7,
+     "run": {
+      "time": "$ago:39860",
+      "ok": true,
+      "error": null
+     }
+    },
+    {
+     "vmid": 103,
+     "name": "books",
+     "time": "$ago:40120",
+     "size": 6871947673,
+     "count": 7,
+     "run": {
+      "time": "$ago:39920",
+      "ok": true,
+      "error": null
+     }
+    },
+    {
+     "vmid": 104,
+     "name": "dash",
+     "time": "$ago:40180",
+     "size": 8697308774,
+     "count": 7,
+     "run": {
+      "time": "$ago:39980",
+      "ok": true,
+      "error": null
+     }
+    },
+    {
+     "vmid": 105,
+     "name": "ai",
+     "time": "$ago:40240",
+     "size": 10522669875,
+     "count": 7,
+     "run": {
+      "time": "$ago:40040",
+      "ok": true,
+      "error": null
+     }
+    },
+    {
+     "vmid": 106,
+     "name": "media",
+     "time": "$ago:40300",
+     "size": 12348030976,
+     "count": 7,
+     "run": {
+      "time": "$ago:40100",
+      "ok": true,
+      "error": null
+     }
+    },
+    {
+     "vmid": 107,
+     "name": "deals",
+     "time": "$ago:40360",
+     "size": 14173392076,
+     "count": 7,
+     "run": {
+      "time": "$ago:40160",
+      "ok": true,
+      "error": null
+     }
+    },
+    {
+     "vmid": 108,
+     "name": "money",
+     "time": "$ago:40420",
+     "size": 15998753177,
+     "count": 7,
+     "run": {
+      "time": "$ago:40220",
+      "ok": true,
+      "error": null
+     }
+    },
+    {
+     "vmid": 201,
+     "name": "devbox",
+     "time": "$ago:40480",
+     "size": 17824114278,
+     "count": 7,
+     "run": {
+      "time": "$ago:40280",
+      "ok": true,
+      "error": null
+     }
+    }
+   ],
+   "history": [
+    {
+     "time": "$ago:40000",
+     "end": "$ago:39000",
+     "status": "OK",
+     "id": null
+    },
+    {
+     "time": "$ago:126400",
+     "end": "$ago:125400",
+     "status": "OK",
+     "id": null
+    },
+    {
+     "time": "$ago:212800",
+     "end": "$ago:211800",
+     "status": "OK",
+     "id": null
+    },
+    {
+     "time": "$ago:299200",
+     "end": "$ago:298200",
+     "status": "OK",
+     "id": null
+    },
+    {
+     "time": "$ago:385600",
+     "end": "$ago:384600",
+     "status": "OK",
+     "id": null
+    },
+    {
+     "time": "$ago:472000",
+     "end": "$ago:471000",
+     "status": "OK",
+     "id": null
+    },
+    {
+     "time": "$ago:558400",
+     "end": "$ago:557400",
+     "status": "OK",
+     "id": null
+    },
+    {
+     "time": "$ago:644800",
+     "end": "$ago:643800",
+     "status": "OK",
+     "id": null
+    }
+   ],
+   "vzdumpJobs": [
+    {
+     "schedule": "23:00",
+     "enabled": 1,
+     "storage": "vzdump",
+     "all": 1
+    }
+   ],
+   "busy": [],
+   "sanoid": {
+    "result": "success",
+    "state": "inactive",
+    "last": "$ago:600",
+    "next": "$ago:-300",
+    "installed": true,
+    "datasets": [
+     {
+      "name": "tank/documents",
+      "snap": "autosnap_demo_daily",
+      "time": "$ago:30000"
+     },
+     {
+      "name": "tank/photos",
+      "snap": "autosnap_demo_daily",
+      "time": "$ago:30000"
+     },
+     {
+      "name": "tank/media",
+      "snap": "autosnap_demo_daily",
+      "time": "$ago:30000"
+     }
+    ]
+   },
+   "syncoid": {
+    "result": "success",
+    "state": "inactive",
+    "last": "$ago:20000",
+    "next": "$ago:-60000",
+    "installed": true,
+    "datasets": [
+     {
+      "name": "backup/tank/documents",
+      "snap": "autosnap_demo_daily",
+      "time": "$ago:86000"
+     },
+     {
+      "name": "backup/tank/photos",
+      "snap": "autosnap_demo_daily",
+      "time": "$ago:86000"
+     },
+     {
+      "name": "backup/tank/media",
+      "snap": "autosnap_demo_daily",
+      "time": "$ago:86000"
+     }
+    ]
+   }
+  },
+  "tailnet": {
+   "tailnet": "example.ts.net",
+   "nodes": [
+    {
+     "name": "homelab",
+     "dns": "homelab.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.1",
+     "online": true,
+     "self": true,
+     "tags": [],
+     "lastSeen": null,
+     "keyExpiry": null,
+     "routes": [
+      "192.168.1.0/24"
+     ]
+    },
+    {
+     "name": 101,
+     "dns": "101.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.10",
+     "online": true,
+     "self": false,
+     "tags": [
+      "tag:dev"
+     ],
+     "lastSeen": null,
+     "keyExpiry": null,
+     "routes": []
+    },
+    {
+     "name": 102,
+     "dns": "102.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.11",
+     "online": true,
+     "self": false,
+     "tags": [
+      "tag:dev"
+     ],
+     "lastSeen": null,
+     "keyExpiry": null,
+     "routes": []
+    },
+    {
+     "name": 103,
+     "dns": "103.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.12",
+     "online": true,
+     "self": false,
+     "tags": [
+      "tag:dev"
+     ],
+     "lastSeen": null,
+     "keyExpiry": null,
+     "routes": []
+    },
+    {
+     "name": 104,
+     "dns": "104.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.13",
+     "online": true,
+     "self": false,
+     "tags": [
+      "tag:dev"
+     ],
+     "lastSeen": null,
+     "keyExpiry": null,
+     "routes": []
+    },
+    {
+     "name": 105,
+     "dns": "105.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.14",
+     "online": true,
+     "self": false,
+     "tags": [
+      "tag:dev"
+     ],
+     "lastSeen": null,
+     "keyExpiry": null,
+     "routes": []
+    },
+    {
+     "name": 106,
+     "dns": "106.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.15",
+     "online": true,
+     "self": false,
+     "tags": [
+      "tag:dev"
+     ],
+     "lastSeen": null,
+     "keyExpiry": null,
+     "routes": []
+    },
+    {
+     "name": 107,
+     "dns": "107.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.16",
+     "online": true,
+     "self": false,
+     "tags": [
+      "tag:dev"
+     ],
+     "lastSeen": null,
+     "keyExpiry": null,
+     "routes": []
+    },
+    {
+     "name": 108,
+     "dns": "108.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.17",
+     "online": true,
+     "self": false,
+     "tags": [
+      "tag:dev"
+     ],
+     "lastSeen": null,
+     "keyExpiry": null,
+     "routes": []
+    },
+    {
+     "name": 201,
+     "dns": "201.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.18",
+     "online": true,
+     "self": false,
+     "tags": [
+      "tag:dev"
+     ],
+     "lastSeen": null,
+     "keyExpiry": null,
+     "routes": []
+    },
+    {
+     "name": "Alex's phone",
+     "dns": "Alex's phone.example.ts.net",
+     "os": "android",
+     "ip": "100.64.0.40",
+     "online": false,
+     "self": false,
+     "tags": [],
+     "lastSeen": "$iso_now",
+     "keyExpiry": "2027-03-14T22:10:45Z",
+     "routes": []
+    },
+    {
+     "name": "Sam's laptop",
+     "dns": "Sam's laptop.example.ts.net",
+     "os": "macOS",
+     "ip": "100.64.0.41",
+     "online": true,
+     "self": false,
+     "tags": [],
+     "lastSeen": null,
+     "keyExpiry": "2027-03-31T20:36:18Z",
+     "routes": []
+    },
+    {
+     "name": "alex-desktop",
+     "dns": "alex-desktop.example.ts.net",
+     "os": "linux",
+     "ip": "100.64.0.42",
+     "online": true,
+     "self": false,
+     "tags": [],
+     "lastSeen": null,
+     "keyExpiry": "2027-03-17T16:09:24Z",
+     "routes": []
+    }
+   ],
+   "authKey": {
+    "created": "$ago:3000000",
+    "expires": "$ago:-3500000"
+   }
+  },
+  "ports": {
+   "host": {
+    "listen": [
+     {
+      "addr": "0.0.0.0",
+      "port": 22,
+      "proc": "sshd",
+      "local": false
+     },
+     {
+      "addr": "0.0.0.0",
+      "port": 8006,
+      "proc": "pveproxy",
+      "local": false
+     },
+     {
+      "addr": "192.168.1.50",
+      "port": 7070,
+      "proc": "python3",
+      "local": false
+     },
+     {
+      "addr": "0.0.0.0",
+      "port": 3128,
+      "proc": "spiceproxy",
+      "local": false
+     },
+     {
+      "addr": "0.0.0.0",
+      "port": 111,
+      "proc": "rpcbind",
+      "local": false
+     },
+     {
+      "addr": "127.0.0.1",
+      "port": 25,
+      "proc": "master",
+      "local": true
+     }
+    ],
+    "serve": []
+   },
+   "cts": {
+    "101": {
+     "listen": [
+      {
+       "addr": "*",
+       "port": 22,
+       "proc": "sshd",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 2283,
+       "proc": "node",
+       "local": false
+      }
+     ],
+     "serve": [
+      {
+       "url": "https://immich.example.ts.net:443",
+       "target": "http://127.0.0.1:2283",
+       "host": 101,
+       "public": false
+      }
+     ]
+    },
+    "102": {
+     "listen": [
+      {
+       "addr": "*",
+       "port": 22,
+       "proc": "sshd",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 8096,
+       "proc": "jellyfin",
+       "local": false
+      }
+     ],
+     "serve": [
+      {
+       "url": "https://jellyfin.example.ts.net:443",
+       "target": "http://127.0.0.1:8096",
+       "host": 102,
+       "public": false
+      }
+     ]
+    },
+    "103": {
+     "listen": [
+      {
+       "addr": "*",
+       "port": 22,
+       "proc": "sshd",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 13378,
+       "proc": "node",
+       "local": false
+      }
+     ],
+     "serve": [
+      {
+       "url": "https://books.example.ts.net:443",
+       "target": "http://127.0.0.1:13378",
+       "host": 103,
+       "public": false
+      }
+     ]
+    },
+    "104": {
+     "listen": [
+      {
+       "addr": "*",
+       "port": 22,
+       "proc": "sshd",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 8080,
+       "proc": "node",
+       "local": false
+      }
+     ],
+     "serve": [
+      {
+       "url": "https://dash.example.ts.net:443",
+       "target": "http://127.0.0.1:8080",
+       "host": 104,
+       "public": false
+      }
+     ]
+    },
+    "105": {
+     "listen": [
+      {
+       "addr": "*",
+       "port": 22,
+       "proc": "sshd",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 11434,
+       "proc": "ollama",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 3000,
+       "proc": "python",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 8880,
+       "proc": "python",
+       "local": false
+      }
+     ],
+     "serve": [
+      {
+       "url": "https://ai.example.ts.net:11443",
+       "target": "http://127.0.0.1:11434",
+       "host": 105,
+       "public": false
+      }
+     ]
+    },
+    "106": {
+     "listen": [
+      {
+       "addr": "*",
+       "port": 22,
+       "proc": "sshd",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 5055,
+       "proc": "node",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 8989,
+       "proc": "Sonarr",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 7878,
+       "proc": "Radarr",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 9696,
+       "proc": "Prowlarr",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 8080,
+       "proc": "qbittorrent",
+       "local": false
+      }
+     ],
+     "serve": [
+      {
+       "url": "https://media.example.ts.net:443",
+       "target": "http://127.0.0.1:5055",
+       "host": 106,
+       "public": false
+      }
+     ]
+    },
+    "107": {
+     "listen": [
+      {
+       "addr": "*",
+       "port": 22,
+       "proc": "sshd",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 8090,
+       "proc": "python3",
+       "local": false
+      }
+     ],
+     "serve": []
+    },
+    "108": {
+     "listen": [
+      {
+       "addr": "*",
+       "port": 22,
+       "proc": "sshd",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 8090,
+       "proc": "python3",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 8081,
+       "proc": "php-fpm",
+       "local": false
+      }
+     ],
+     "serve": []
+    },
+    "201": {
+     "listen": [
+      {
+       "addr": "*",
+       "port": 22,
+       "proc": "sshd",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 3001,
+       "proc": "node",
+       "local": false
+      },
+      {
+       "addr": "*",
+       "port": 5173,
+       "proc": "node",
+       "local": true
+      }
+     ],
+     "serve": []
+    }
+   }
+  },
+  "smart": [
+   {
+    "dev": "sda",
+    "model": "Example HDD 6TB",
+    "passed": true,
+    "temp": 34,
+    "hours": 14800,
+    "size": 6000000000000,
+    "wear": null,
+    "realloc": 0,
+    "pending": 0,
+    "uncorrectable": 0,
+    "crc": 0,
+    "warn": []
+   },
+   {
+    "dev": "sdb",
+    "model": "Example HDD 6TB",
+    "passed": true,
+    "temp": 35,
+    "hours": 14790,
+    "size": 6000000000000,
+    "wear": null,
+    "realloc": 0,
+    "pending": 0,
+    "uncorrectable": 0,
+    "crc": 0,
+    "warn": []
+   },
+   {
+    "dev": "nvme0n1",
+    "model": "Example NVMe 512GB",
+    "passed": true,
+    "temp": 38,
+    "hours": 6000,
+    "size": 512000000000,
+    "wear": 5,
+    "warn": [],
+    "spare": 100,
+    "mediaErrors": 0,
+    "critical": 0
+   }
+  ],
+  "updates": {
+   "host": {
+    "count": 8,
+    "packages": [
+     "bind9-dnsutils",
+     "curl",
+     "libssl3",
+     "openssh-server",
+     "tzdata",
+     "linux-libc-dev",
+     "systemd",
+     "python3-minimal"
+    ],
+    "checked": "$ago:3000"
+   },
+   "cts": {
+    "101": {
+     "count": 0,
+     "packages": [],
+     "checked": "$ago:3000"
+    },
+    "102": {
+     "count": 0,
+     "packages": [],
+     "checked": "$ago:3000"
+    },
+    "103": {
+     "count": 0,
+     "packages": [],
+     "checked": "$ago:3000"
+    },
+    "104": {
+     "count": 0,
+     "packages": [],
+     "checked": "$ago:3000"
+    },
+    "105": {
+     "count": 6,
+     "packages": [
+      "bind9-dnsutils",
+      "curl",
+      "libssl3",
+      "openssh-server",
+      "tzdata",
+      "linux-libc-dev"
+     ],
+     "checked": "$ago:3000"
+    },
+    "106": {
+     "count": 3,
+     "packages": [
+      "bind9-dnsutils",
+      "curl",
+      "libssl3"
+     ],
+     "checked": "$ago:3000"
+    },
+    "107": {
+     "count": 0,
+     "packages": [],
+     "checked": "$ago:3000"
+    },
+    "108": {
+     "count": 0,
+     "packages": [],
+     "checked": "$ago:3000"
+    },
+    "201": {
+     "count": 0,
+     "packages": [],
+     "checked": "$ago:3000"
+    }
+   }
+  },
+  "uptime": [
+   {
+    "name": "immich",
+    "ct": 101,
+    "state": "running",
+    "since": "$ago:1213337",
+    "restarts": 0
+   },
+   {
+    "name": "jellyfin",
+    "ct": 102,
+    "state": "running",
+    "since": "$ago:1213374",
+    "restarts": 0
+   },
+   {
+    "name": "books",
+    "ct": 103,
+    "state": "running",
+    "since": "$ago:1213411",
+    "restarts": 0
+   },
+   {
+    "name": "dash",
+    "ct": 104,
+    "state": "running",
+    "since": "$ago:1213448",
+    "restarts": 0
+   },
+   {
+    "name": "ai",
+    "ct": 105,
+    "state": "running",
+    "since": "$ago:1213485",
+    "restarts": 0
+   },
+   {
+    "name": "media",
+    "ct": 106,
+    "state": "running",
+    "since": "$ago:1213522",
+    "restarts": 0
+   },
+   {
+    "name": "deals",
+    "ct": 107,
+    "state": "running",
+    "since": "$ago:1213559",
+    "restarts": 0
+   },
+   {
+    "name": "money",
+    "ct": 108,
+    "state": "running",
+    "since": "$ago:1213596",
+    "restarts": 0
+   },
+   {
+    "name": "devbox",
+    "ct": 201,
+    "state": "running",
+    "since": "$ago:864000",
+    "restarts": 0
+   },
+   {
+    "name": "immich-ml",
+    "ct": 101,
+    "state": "running",
+    "since": "$ago:500000",
+    "restarts": 0
+   },
+   {
+    "name": "immich-db",
+    "ct": 101,
+    "state": "running",
+    "since": "$ago:500000",
+    "restarts": 0
+   },
+   {
+    "name": "qbittorrent",
+    "ct": 106,
+    "state": "running",
+    "since": "$ago:500000",
+    "restarts": 0
+   },
+   {
+    "name": "gluetun",
+    "ct": 106,
+    "state": "running",
+    "since": "$ago:500000",
+    "restarts": 0
+   },
+   {
+    "name": "ollama",
+    "ct": 105,
+    "state": "running",
+    "since": "$ago:500000",
+    "restarts": 0
+   }
+  ],
+  "net": {
+   "down": 3400000,
+   "up": 410000,
+   "iface": "nic0",
+   "history": [
+    [
+     3694299,
+     337712
+    ],
+    [
+     4056884,
+     318109
+    ],
+    [
+     4152125,
+     391422
+    ],
+    [
+     4025591,
+     426858
+    ],
+    [
+     4167431,
+     408411
+    ],
+    [
+     4333036,
+     322678
+    ],
+    [
+     4682266,
+     506713
+    ],
+    [
+     4626827,
+     355809
+    ],
+    [
+     5041017,
+     536927
+    ],
+    [
+     5108468,
+     399170
+    ],
+    [
+     5430041,
+     311645
+    ],
+    [
+     5424872,
+     372402
+    ],
+    [
+     5044459,
+     329448
+    ],
+    [
+     5173131,
+     504031
+    ],
+    [
+     5108261,
+     445400
+    ],
+    [
+     5376460,
+     393099
+    ],
+    [
+     5296630,
+     315697
+    ],
+    [
+     4960511,
+     351489
+    ],
+    [
+     5272186,
+     406898
+    ],
+    [
+     4974808,
+     446390
+    ],
+    [
+     4964740,
+     374941
+    ],
+    [
+     5061256,
+     474748
+    ],
+    [
+     4609508,
+     443605
+    ],
+    [
+     4644713,
+     518784
+    ],
+    [
+     4623576,
+     371984
+    ],
+    [
+     4621867,
+     329516
+    ],
+    [
+     4125907,
+     489285
+    ],
+    [
+     3802870,
+     422240
+    ],
+    [
+     3569239,
+     467053
+    ],
+    [
+     3837929,
+     443256
+    ],
+    [
+     3739434,
+     378436
+    ],
+    [
+     3469812,
+     448592
+    ],
+    [
+     3244576,
+     414051
+    ],
+    [
+     3252065,
+     536170
+    ],
+    [
+     2893262,
+     466038
+    ],
+    [
+     2516914,
+     475373
+    ],
+    [
+     2753073,
+     548273
+    ],
+    [
+     2756234,
+     371148
+    ],
+    [
+     2408093,
+     467163
+    ],
+    [
+     2120016,
+     415423
+    ],
+    [
+     2154353,
+     329273
+    ],
+    [
+     2053782,
+     492058
+    ],
+    [
+     2079171,
+     361903
+    ],
+    [
+     2237775,
+     517855
+    ],
+    [
+     2071652,
+     412296
+    ],
+    [
+     2391277,
+     520845
+    ],
+    [
+     2609231,
+     515996
+    ],
+    [
+     2357813,
+     403824
+    ],
+    [
+     2495268,
+     521048
+    ],
+    [
+     2958935,
+     337730
+    ],
+    [
+     2608078,
+     357989
+    ],
+    [
+     2772704,
+     421240
+    ],
+    [
+     3127228,
+     365686
+    ],
+    [
+     2926218,
+     404736
+    ],
+    [
+     3302428,
+     441585
+    ],
+    [
+     3815019,
+     472623
+    ],
+    [
+     3717906,
+     454398
+    ],
+    [
+     3980910,
+     313498
+    ],
+    [
+     4280561,
+     494992
+    ],
+    [
+     4428230,
+     499468
+    ],
+    [
+     4296654,
+     399744
+    ],
+    [
+     4274131,
+     458572
+    ],
+    [
+     4391359,
+     316836
+    ],
+    [
+     4610737,
+     340575
+    ],
+    [
+     4808827,
+     313143
+    ],
+    [
+     4710624,
+     337816
+    ],
+    [
+     4862123,
+     390902
+    ],
+    [
+     4891258,
+     518583
+    ],
+    [
+     5302142,
+     337137
+    ],
+    [
+     5125116,
+     386847
+    ],
+    [
+     5214144,
+     330710
+    ],
+    [
+     5508448,
+     548275
+    ],
+    [
+     5263631,
+     420958
+    ],
+    [
+     5002216,
+     325546
+    ],
+    [
+     5105024,
+     366189
+    ],
+    [
+     5328254,
+     340359
+    ],
+    [
+     4759882,
+     537746
+    ],
+    [
+     4962695,
+     336650
+    ],
+    [
+     4857230,
+     306760
+    ],
+    [
+     4721059,
+     544625
+    ],
+    [
+     4783903,
+     474049
+    ],
+    [
+     4274846,
+     391674
+    ],
+    [
+     4063048,
+     492984
+    ],
+    [
+     4121315,
+     494763
+    ],
+    [
+     3834774,
+     355760
+    ],
+    [
+     3957408,
+     546231
+    ],
+    [
+     3815969,
+     501519
+    ],
+    [
+     3631694,
+     484968
+    ],
+    [
+     3117472,
+     429409
+    ],
+    [
+     3041895,
+     307245
+    ],
+    [
+     2700730,
+     369854
+    ],
+    [
+     2704947,
+     473130
+    ],
+    [
+     3000549,
+     411806
+    ],
+    [
+     2879288,
+     547009
+    ],
+    [
+     2795100,
+     391158
+    ],
+    [
+     2275161,
+     356711
+    ],
+    [
+     2198430,
+     351093
+    ],
+    [
+     2409875,
+     525077
+    ],
+    [
+     2512789,
+     419868
+    ],
+    [
+     2391801,
+     499910
+    ],
+    [
+     2060867,
+     465146
+    ],
+    [
+     2584228,
+     495575
+    ],
+    [
+     2534834,
+     419508
+    ],
+    [
+     2255706,
+     497283
+    ],
+    [
+     2428612,
+     500205
+    ],
+    [
+     2908280,
+     398959
+    ],
+    [
+     2676788,
+     536699
+    ],
+    [
+     2994629,
+     342500
+    ],
+    [
+     2771363,
+     337787
+    ],
+    [
+     3383368,
+     501625
+    ],
+    [
+     3081611,
+     506627
+    ],
+    [
+     3741782,
+     464317
+    ],
+    [
+     3527808,
+     437165
+    ],
+    [
+     3562368,
+     303560
+    ],
+    [
+     4232726,
+     462418
+    ],
+    [
+     4130702,
+     533406
+    ],
+    [
+     4235719,
+     517935
+    ],
+    [
+     4625943,
+     352760
+    ],
+    [
+     4428395,
+     373241
+    ]
+   ],
+   "speedtest": null
+  }
+ },
+ "GET /core": {
+  "current": "0.1.2",
+  "channel": "stable",
+  "repo": "bastionlab/core",
+  "git": false,
+  "rollback": [],
+  "latest": {
+   "tag": "v0.1.3",
+   "version": "0.1.3",
+   "prerelease": false,
+   "published": "2026-10-28T18:24:04Z",
+   "url": "https://github.com/bastionlab/core/releases/tag/v0.1.3"
+  },
+  "newer": true,
+  "blocked": [],
+  "notes": [
+   {
+    "tag": "v0.1.3",
+    "body": "- Demo mode: run the dashboard with sample data on any machine\n- Settings: clearer connection checks\n- Fixes in the Metrics page"
+   }
+  ],
+  "error": null,
+  "dirty": false
+ },
+ "POST /core/channel": {
+  "ok": true,
+  "channel": "stable"
+ },
+ "GET /settings": {
+  "connections": [
+   {
+    "id": "github",
+    "name": "GitHub token",
+    "used_by": "Dev, marketplace, add-on installs",
+    "ok": true,
+    "detail": "alex-demo · repo, workflow",
+    "expires": "2027-01-22 22:18:01 UTC",
+    "updated": "$ago:900000",
+    "set": "github_token"
+   },
+   {
+    "id": "tailscale",
+    "name": "Tailscale auth key",
+    "used_by": "new dev boxes",
+    "ok": true,
+    "detail": "41 days left",
+    "expires": "$ago:-3500000",
+    "warn": false,
+    "set": "tailscale_authkey"
+   },
+   {
+    "id": "discord",
+    "name": "Discord webhooks",
+    "used_by": "alerts, Deals, Flats, Jobs, Money",
+    "ok": true,
+    "warn": true,
+    "detail": "3 of 5 channels"
+   },
+   {
+    "id": "claude",
+    "name": "Claude login",
+    "used_by": "Chat, Ask bar, Learn",
+    "ok": true,
+    "detail": "signed in",
+    "fix": "claude /login in a terminal on the host"
+   }
+  ],
+  "addons": {
+   "cost": {
+    "name": "Cost",
+    "fields": [
+     {
+      "key": "eur_kwh",
+      "label": "Electricity per kWh",
+      "type": "number",
+      "help": null,
+      "options": null,
+      "default": 0.3,
+      "min": 0,
+      "max": 5,
+      "value": 0.3
+     },
+     {
+      "key": "usd_eur",
+      "label": "USD to EUR",
+      "type": "number",
+      "help": null,
+      "options": null,
+      "default": 0.92,
+      "min": 0,
+      "max": 5,
+      "value": 0.92
+     }
+    ]
+   },
+   "learn": {
+    "name": "Learn",
+    "fields": [
+     {
+      "key": "hour",
+      "label": "Lesson hour (Monday)",
+      "type": "number",
+      "help": null,
+      "options": null,
+      "default": 12,
+      "min": 0,
+      "max": 23,
+      "value": 12
+     },
+     {
+      "key": "model",
+      "label": "Claude model for lessons",
+      "type": "select",
+      "help": null,
+      "options": [
+       "sonnet",
+       "opus"
+      ],
+      "default": "sonnet",
+      "min": null,
+      "max": null,
+      "value": "sonnet"
+     }
+    ]
+   },
+   "money": {
+    "name": "Money",
+    "fields": [
+     {
+      "key": "firefly_token",
+      "label": "Firefly personal access token",
+      "type": "secret",
+      "help": "Firefly > Profile > OAuth > Personal access tokens",
+      "options": null,
+      "min": null,
+      "max": null,
+      "set": false,
+      "updated": null
+     }
+    ]
+   }
+  },
+  "config": {
+   "name": "homelab",
+   "tailnet": "example.ts.net",
+   "owner_logins": [
+    "you@example.com"
+   ],
+   "lan": {
+    "subnet": "192.168.1.0/24",
+    "host_ip": "192.168.1.50"
+   },
+   "devbox": {
+    "ids": [
+     200,
+     299
+    ],
+    "ips": [
+     "192.168.1.60",
+     "192.168.1.99"
+    ]
+   },
+   "cts": {
+    "immich": {
+     "id": 101,
+     "ip": "192.168.1.51"
+    },
+    "jellyfin": {
+     "id": 102,
+     "ip": "192.168.1.52"
+    },
+    "books": {
+     "id": 103,
+     "ip": "192.168.1.53"
+    },
+    "dash": {
+     "id": 104,
+     "ip": "192.168.1.50"
+    },
+    "ai": {
+     "id": 105,
+     "ip": "192.168.1.55"
+    },
+    "deals": {
+     "id": 107,
+     "ip": "192.168.1.57"
+    },
+    "money": {
+     "id": 108,
+     "ip": "192.168.1.58"
+    },
+    "dl": {
+     "id": 106,
+     "ip": "192.168.1.56"
+    }
+   },
+   "marketplace": {
+    "index": "https://raw.githubusercontent.com/bastionlab/addons/main/index.json",
+    "counter": "",
+    "share_installs": false,
+    "repo": "https://github.com/bastionlab/addons"
+   }
+  },
+  "secrets": [
+   {
+    "name": "Dashboard PIN",
+    "where": "/opt/bastion/agent/pin_hash",
+    "used_by": "login (hash only)",
+    "set": true,
+    "updated": "$ago:900000",
+    "old": false,
+    "rotate": "pin"
+   },
+   {
+    "name": "Agent token",
+    "where": "/opt/bastion/agent/token",
+    "used_by": "app to agent",
+    "set": true,
+    "updated": "$ago:900000",
+    "old": false,
+    "rotate": "tokens"
+   },
+   {
+    "name": "LAN key",
+    "where": "/opt/bastion/agent/lan_key",
+    "used_by": "Caddy to app (home network)",
+    "set": true,
+    "updated": "$ago:900000",
+    "old": false,
+    "rotate": "tokens"
+   },
+   {
+    "name": "Deals API token",
+    "where": "/opt/bastion/deals/token",
+    "used_by": "app to Deals/Flats/Jobs",
+    "set": true,
+    "updated": "$ago:900000",
+    "old": false,
+    "rotate": "tokens"
+   },
+   {
+    "name": "GitHub token",
+    "where": "/opt/devbox/keys/github_token",
+    "used_by": "Dev, marketplace",
+    "set": true,
+    "updated": "$ago:900000",
+    "old": false,
+    "rotate": "github_token"
+   },
+   {
+    "name": "Tailscale auth key",
+    "where": "/opt/devbox/keys/tailscale_authkey",
+    "used_by": "new dev boxes",
+    "set": true,
+    "updated": "$ago:900000",
+    "old": false,
+    "rotate": "tailscale_authkey"
+   },
+   {
+    "name": "Discord webhooks",
+    "where": "/etc/dash/discord.json",
+    "used_by": "alerts + add-ons",
+    "set": true,
+    "updated": "$ago:900000",
+    "old": false,
+    "rotate": "discord"
+   },
+   {
+    "name": "Push keys",
+    "where": "/etc/dash/secrets/push.json",
+    "used_by": "phone notifications",
+    "set": true,
+    "updated": "$ago:900000",
+    "old": false,
+    "rotate": null
+   },
+   {
+    "name": "Claude login",
+    "where": "/root/.claude/.credentials.json",
+    "used_by": "Chat, Ask bar, Learn",
+    "set": true,
+    "updated": "$ago:900000",
+    "old": false,
+    "rotate": null
+   },
+   {
+    "name": "Firefly personal access token",
+    "where": "/etc/dash/secrets/money.json",
+    "used_by": "Money",
+    "set": false,
+    "updated": null,
+    "old": false,
+    "rotate": "addon:money"
+   }
+  ]
+ },
+ "GET /settings/values": {
+  "values": {}
+ },
+ "POST /settings/set": {
+  "ok": true
+ },
+ "POST /settings/pin": {
+  "ok": true
+ },
+ "POST /settings/core": {
+  "ok": true
+ },
+ "GET /backup": {
+  "schedule": "daily",
+  "keep": 7,
+  "storage": "local",
+  "dir": "/var/lib/dash-backups",
+  "pass_set": true,
+  "pass_updated": "$ago:900000",
+  "storages": [
+   "local",
+   "vzdump"
+  ],
+  "list": [
+   {
+    "name": "dash-homelab-20261021-233000.tar.gz",
+    "size": 3209000,
+    "created": "$ago:172800",
+    "host": "homelab",
+    "core": "0.1.2",
+    "secrets": true,
+    "items": 14,
+    "skipped": []
+   },
+   {
+    "name": "dash-homelab-20261022-233000.tar.gz",
+    "size": 3218000,
+    "created": "$ago:259200",
+    "host": "homelab",
+    "core": "0.1.2",
+    "secrets": true,
+    "items": 14,
+    "skipped": []
+   },
+   {
+    "name": "dash-homelab-20261023-233000.tar.gz",
+    "size": 3227000,
+    "created": "$ago:345600",
+    "host": "homelab",
+    "core": "0.1.2",
+    "secrets": true,
+    "items": 14,
+    "skipped": []
+   }
+  ]
+ },
+ "GET /backup/preview": {
+  "name": "demo",
+  "items": [
+   {
+    "path": "/etc/dash/addons.json",
+    "action": "replace"
+   },
+   {
+    "path": "/var/lib/dash/notes.db",
+    "action": "replace"
+   }
+  ],
+  "core": "0.1.2"
+ },
+ "POST /backup/settings": {
+  "ok": true
+ },
+ "POST /backup/pass": {
+  "ok": true
+ },
+ "GET /push": {
+  "key": "BDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemoDemo",
+  "topics": [
+   {
+    "key": "alerts",
+    "label": "Alerts",
+    "route": "both"
+   },
+   {
+    "key": "backups",
+    "label": "Backups",
+    "route": "discord"
+   },
+   {
+    "key": "deals",
+    "label": "Deals",
+    "route": "discord"
+   },
+   {
+    "key": "wohnungen",
+    "label": "Flats",
+    "route": "discord"
+   },
+   {
+    "key": "jobs",
+    "label": "Jobs",
+    "route": "discord"
+   },
+   {
+    "key": "money",
+    "label": "Money",
+    "route": "discord"
+   },
+   {
+    "key": "chat",
+    "label": "Chat",
+    "route": "discord"
+   }
+  ],
+  "devices": [
+   {
+    "id": "demo1",
+    "name": "Alex's phone",
+    "topics": [
+     "alerts",
+     "backups",
+     "chat"
+    ],
+    "added": "$ago:900000"
+   }
+  ]
+ },
+ "POST /push": {
+  "ok": true
+ },
+ "GET /discord": {
+  "channels": [
+   {
+    "key": "deals",
+    "set": true,
+    "name": "Deals bot"
+   },
+   {
+    "key": "wohnungen",
+    "set": false,
+    "name": ""
+   },
+   {
+    "key": "jobs",
+    "set": true,
+    "name": "Jobs bot"
+   },
+   {
+    "key": "money",
+    "set": false,
+    "name": ""
+   },
+   {
+    "key": "alerts",
+    "set": true,
+    "name": "Alerts bot"
+   }
+  ]
+ },
+ "POST /discord": {
+  "ok": true
+ },
+ "POST /discord/test": {
+  "sent": false
+ },
+ "GET /deploy": {
+  "running": false,
+  "started": "$ago:7200",
+  "rc": 0,
+  "ended": "$ago:7100",
+  "log": [
+   "demo: nothing is deployed in demo mode"
+  ],
+  "live": {
+   "state": "watching",
+   "at": "$ago:30",
+   "files": []
+  }
+ },
+ "GET /claude/usage": {
+  "at": "$now",
+  "status": "allowed",
+  "limited": null,
+  "windows": {
+   "five_hour": {
+    "used": 0.12,
+    "resets": "$ago:-9000"
+   },
+   "seven_day": {
+    "used": 0.31,
+    "resets": "$ago:-200000"
+   }
+  }
+ },
+ "POST /claude/usage": {
+  "at": "$now",
+  "status": "allowed",
+  "limited": null,
+  "windows": {
+   "five_hour": {
+    "used": 0.12,
+    "resets": "$ago:-9000"
+   },
+   "seven_day": {
+    "used": 0.31,
+    "resets": "$ago:-200000"
+   }
+  }
+ },
+ "POST /action/check": {
+  "desc": "Demo: this would run on a real install, here nothing runs"
+ },
+ "POST /action/run": {
+  "id": "demo-1",
+  "action": "demo",
+  "args": {},
+  "desc": "Demo: nothing actually runs",
+  "started": "$now",
+  "done": "$now",
+  "rc": 0,
+  "log": [
+   "demo: nothing was run"
+  ]
+ },
+ "GET /action/status": {
+  "id": "demo-1",
+  "action": "demo",
+  "args": {},
+  "desc": "Demo: nothing actually runs",
+  "started": "$now",
+  "done": "$now",
+  "rc": 0,
+  "log": [
+   "demo: nothing was run"
+  ]
+ },
+ "GET /marketplace/local": {},
+ "GET /projects": [
+  {
+   "vmid": 201,
+   "name": "devbox",
+   "type": "lxc",
+   "status": "running",
+   "tags": [
+    "dev"
+   ],
+   "ip": "192.168.1.60",
+   "cpu": 0.01,
+   "cpus": 8,
+   "mem": 2254857830,
+   "maxmem": 17179869184,
+   "disk": 18253611008,
+   "maxdisk": 34359738368,
+   "uptime": 864000,
+   "projects": [
+    {
+     "path": "/home/dev/Projects/sample-app",
+     "name": "sample-app",
+     "id": "sample-app",
+     "command": "npm run dev",
+     "ports": null,
+     "branch": "main",
+     "dirty": true,
+     "git": {
+      "remote": "git@github.com:alex-demo/sample-app.git",
+      "url": "https://github.com/alex-demo/sample-app",
+      "repo": "alex-demo/sample-app",
+      "dirty": 2,
+      "changes": [
+       " M README.md",
+       " M README.md"
+      ],
+      "ahead": 1,
+      "behind": 0,
+      "tracking": true,
+      "last": {
+       "hash": "a1b2c3d",
+       "at": "$iso_now",
+       "subject": "Add settings page"
+      },
+      "fetched": "$ago:3600"
+     },
+     "session": "pv-sample-app",
+     "running": false,
+     "exited": null,
+     "urls": [],
+     "cc": {
+      "running": false,
+      "session": "cc-sample-app",
+      "profile": null,
+      "started": null,
+      "attach": "ssh -t dev@devbox tmux a -t cc-sample-app"
+     },
+     "ship": null
+    },
+    {
+     "path": "/home/dev/Projects/notes-api",
+     "name": "notes-api",
+     "id": "notes-api",
+     "command": null,
+     "ports": null,
+     "branch": "main",
+     "dirty": false,
+     "git": {
+      "remote": "git@github.com:alex-demo/notes-api.git",
+      "url": "https://github.com/alex-demo/notes-api",
+      "repo": "alex-demo/notes-api",
+      "dirty": 0,
+      "changes": [],
+      "ahead": 0,
+      "behind": 0,
+      "tracking": true,
+      "last": {
+       "hash": "a1b2c3d",
+       "at": "$iso_now",
+       "subject": "Fix pagination"
+      },
+      "fetched": "$ago:3600"
+     },
+     "session": "pv-notes-api",
+     "running": false,
+     "exited": null,
+     "urls": [],
+     "cc": {
+      "running": false,
+      "session": "cc-notes-api",
+      "profile": null,
+      "started": null,
+      "attach": "ssh -t dev@devbox tmux a -t cc-notes-api"
+     },
+     "ship": null
+    }
+   ]
+  }
+ ],
+ "GET /media": {
+  "time": "$now",
+  "vpn": {
+   "up": true,
+   "health": "healthy",
+   "since": "$iso_now",
+   "killSwitch": true,
+   "ip": "203.0.113.7",
+   "homeIp": "198.51.100.23",
+   "leaking": false,
+   "country": "SE",
+   "city": "Stockholm",
+   "org": "AS64500 Example VPN",
+   "forwardedPort": 42774,
+   "listenPort": 42774,
+   "portOk": true,
+   "speed": {
+    "down": 2100000,
+    "up": 0,
+    "downTotal": 63245848322,
+    "upTotal": 926831145,
+    "status": "connected"
+   }
+  },
+  "library": {
+   "movies": {
+    "total": 48,
+    "have": 46,
+    "size": 190000000000,
+    "monitored": 48
+   },
+   "series": {
+    "total": 12,
+    "episodes": 310,
+    "missing": 4,
+    "size": 420000000000
+   },
+   "books": {
+    "total": 44,
+    "have": 40,
+    "wanted": 2
+   },
+   "anime": {
+    "total": 6,
+    "episodes": 140,
+    "missing": 0,
+    "size": 150000000000
+   }
+  },
+  "sizes": {
+   "dirs": {
+    "movies": 190000000000,
+    "series": 420000000000,
+    "anime": 150000000000,
+    "audiobooks": 5000000000,
+    "downloads": 60000000000
+   },
+   "apparent": 825000000000,
+   "used": 900000000000,
+   "avail": 4100000000000
+  },
+  "queues": {
+   "movies": [
+    {
+     "kind": "movie",
+     "id": 1,
+     "title": "Example Movie",
+     "sub": "2025",
+     "release": "Example.Movie.2025.1080p",
+     "hash": "0000000000000000000000000000000000000000",
+     "status": "ok",
+     "state": "downloading",
+     "client": "qBittorrent",
+     "size": 8000000000,
+     "left": 3000000000,
+     "progress": 0.62,
+     "eta": 1800,
+     "speed": 2100000,
+     "seeds": 14,
+     "idleHours": 0,
+     "ratio": 0,
+     "torrentState": "downloading",
+     "messages": [],
+     "error": null
+    }
+   ],
+   "series": [],
+   "books": []
+  },
+  "watchdog": {
+   "acted": [],
+   "ai": {
+    "error": null,
+    "model": "qwen3.5:9b",
+    "used": true
+   },
+   "alerts": [],
+   "ok": true,
+   "summary": "Nothing to repair: all downloads are moving.",
+   "ts": "$ago:300",
+   "watching": [],
+   "age": 300
+  },
+  "torrents": {
+   "error": null,
+   "total": 120,
+   "downloading": 1,
+   "seeding": 90,
+   "errored": []
+  }
+ },
+ "GET /ai/jobs": {
+  "jobs": {
+   "ask": "qwen3.5:9b",
+   "notes": "qwen3.5:9b",
+   "voice": "qwen3.5:9b",
+   "gist": "qwen3.5:9b",
+   "chat": "qwen3.5:9b",
+   "research": "qwen3.5:9b",
+   "trending": "qwen3.5:9b",
+   "hunters": "qwen3.5:9b",
+   "money": "qwen3.5:9b"
+  },
+  "keys": [
+   "ask",
+   "notes",
+   "voice",
+   "gist",
+   "chat",
+   "research",
+   "trending",
+   "hunters",
+   "money"
+  ]
+ },
+ "POST /ai/jobs": {
+  "jobs": {
+   "ask": "qwen3.5:9b",
+   "notes": "qwen3.5:9b",
+   "voice": "qwen3.5:9b",
+   "gist": "qwen3.5:9b",
+   "chat": "qwen3.5:9b",
+   "research": "qwen3.5:9b",
+   "trending": "qwen3.5:9b",
+   "hunters": "qwen3.5:9b",
+   "money": "qwen3.5:9b"
+  },
+  "keys": [
+   "ask",
+   "notes",
+   "voice",
+   "gist",
+   "chat",
+   "research",
+   "trending",
+   "hunters",
+   "money"
+  ]
+ },
+ "GET /github/repos": {
+  "configured": true,
+  "user": "alex-demo",
+  "url": "https://github.com/alex-demo?tab=repositories",
+  "scope": "all repos incl. private",
+  "repos": [
+   {
+    "name": "sample-app",
+    "full": "alex-demo/sample-app",
+    "owner": "alex-demo",
+    "ssh": "git@github.com:alex-demo/sample-app.git",
+    "url": "https://github.com/alex-demo/sample-app",
+    "private": false,
+    "fork": false,
+    "archived": false,
+    "lang": "TypeScript",
+    "stars": 3,
+    "branch": "main",
+    "pushed": "$iso_now",
+    "desc": "A sample web app"
+   },
+   {
+    "name": "notes-api",
+    "full": "alex-demo/notes-api",
+    "owner": "alex-demo",
+    "ssh": "git@github.com:alex-demo/notes-api.git",
+    "url": "https://github.com/alex-demo/notes-api",
+    "private": true,
+    "fork": false,
+    "archived": false,
+    "lang": "Python",
+    "stars": 0,
+    "branch": "main",
+    "pushed": "$iso_now",
+    "desc": "Small notes API"
+   },
+   {
+    "name": "homelab-docs",
+    "full": "alex-demo/homelab-docs",
+    "owner": "alex-demo",
+    "ssh": "git@github.com:alex-demo/homelab-docs.git",
+    "url": "https://github.com/alex-demo/homelab-docs",
+    "private": false,
+    "fork": false,
+    "archived": false,
+    "lang": "Markdown",
+    "stars": 1,
+    "branch": "main",
+    "pushed": "$iso_now",
+    "desc": "How the homelab is put together"
+   },
+   {
+    "name": "dotfiles",
+    "full": "alex-demo/dotfiles",
+    "owner": "alex-demo",
+    "ssh": "git@github.com:alex-demo/dotfiles.git",
+    "url": "https://github.com/alex-demo/dotfiles",
+    "private": true,
+    "fork": false,
+    "archived": false,
+    "lang": "Shell",
+    "stars": 0,
+    "branch": "main",
+    "pushed": "$iso_now",
+    "desc": "Shell and editor config"
+   }
+  ]
+ },
+ "POST /net/speedtest": {
+  "down": 94000000,
+  "up": 18000000,
+  "ping": 11,
+  "at": "$now"
+ }
+}

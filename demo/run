@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# demo/run — run Bastion on any machine with Node 22+ and sample data; no host agent, Proxmox, Tailscale or Ollama needed.
+#   demo/run [--port 3000] [--data <dir>] [--addons a,b,c] [--keep] [--no-build]
+# Builds into ./.demo-build, keeps sample data in ./.demo-data (fresh each run unless --keep). See demo/README.md.
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$HERE/.." && pwd)"
+PORT=3000
+DATA="$ROOT/.demo-data"
+ADDONS="designs,notes,habits,kanji,learn,chat,widgets,media,deals,flats,jobs,hunters,ai,skin-glass"
+KEEP=0
+BUILD=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --port) PORT="$2"; shift 2 ;;
+    --data) DATA="$2"; shift 2 ;;
+    --addons) ADDONS="$2"; shift 2 ;;
+    --keep) KEEP=1; shift ;;
+    --no-build) BUILD=0; shift ;;
+    -h|--help) sed -n 2,5p "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) echo "unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+command -v node >/dev/null || { echo "demo: Node 22 or newer is required (node not found)" >&2; exit 1; }
+[ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ] || { echo "demo: Node 22 or newer is required (found $(node -v))" >&2; exit 1; }
+command -v npm >/dev/null || { echo "demo: npm not found" >&2; exit 1; }
+
+# never touch a real install's data
+mkdir -p "$DATA"
+DATA="$(cd "$DATA" && pwd -P)"
+case "$DATA/" in
+  /var/lib/dash/*|/etc/dash/*) echo "demo: refusing to use $DATA, that is a real install's data directory" >&2; exit 1 ;;
+esac
+
+BUILD_DIR="$ROOT/.demo-build"
+# a fresh clone of the core has no add-ons yet: fetch the marketplace into addons/ (gitignored)
+if [ ! -f "$ROOT/addons/index.json" ]; then
+  command -v git >/dev/null || { echo "demo: git is needed to fetch the add-ons" >&2; exit 1; }
+  echo "demo: fetching the add-ons from ${DEMO_MARKETPLACE:-https://github.com/bastionlab/addons}"
+  git clone -q --depth 1 "${DEMO_MARKETPLACE:-https://github.com/bastionlab/addons}" "$ROOT/addons" \
+    || { echo "demo: could not fetch the add-ons (set DEMO_MARKETPLACE to a clone or URL)" >&2; exit 1; }
+fi
+IDS=()
+for a in ${ADDONS//,/ }; do
+  [ -d "$ROOT/addons/$a" ] && IDS+=("$a") || echo "demo: add-on '$a' not found, skipped" >&2
+done
+ADDONS="$(IFS=,; echo "${IDS[*]:-}")"
+
+# rebuild only when a source is newer than the last build or the add-on list changed
+need_build() {
+  [ -f "$BUILD_DIR/.output/server/index.mjs" ] || return 0
+  [ "$(cat "$BUILD_DIR/.built-addons" 2>/dev/null)" = "$ADDONS" ] || return 0
+  local paths=("$ROOT/web" "$ROOT/VERSION" "$ROOT/config.example.json" "$ROOT/addons/index.json")
+  for a in "${IDS[@]}"; do paths+=("$ROOT/addons/$a"); done
+  [ -n "$(find "${paths[@]}" -type f -newer "$BUILD_DIR/.built" -not -path '*/node_modules/*' -not -path '*/.nuxt/*' -not -path '*/.output/*' -not -path '*/demo/*' -print -quit 2>/dev/null)" ]
+}
+
+if [ "$BUILD" = 1 ] && need_build; then
+  echo "demo: building into $BUILD_DIR (a few minutes the first time)"
+  mkdir -p "$BUILD_DIR"
+  (cd "$BUILD_DIR" && rm -rf app server public shared addons i18n .output .nuxt)
+  inc=(web)
+  [ -f "$ROOT/VERSION" ] && inc+=(VERSION)
+  inc+=(config.example.json addons/index.json)
+  for a in "${IDS[@]}"; do inc+=("addons/$a"); done
+  tar -C "$ROOT" --exclude=node_modules --exclude=.nuxt --exclude=.output --exclude=__pycache__ --exclude=.git \
+    --exclude='addons/*/agent' --exclude='addons/*/deploy.sh' --exclude='addons/*/demo' \
+    --transform 's,^web/,,;s,^web$,.,' -cf - "${inc[@]}" | tar -C "$BUILD_DIR" -xf -
+  (cd "$BUILD_DIR" && npm install --no-audit --no-fund --loglevel=error && npm run build 2>&1 | tail -5)
+  echo "$ADDONS" > "$BUILD_DIR/.built-addons"
+  touch "$BUILD_DIR/.built"
+fi
+[ -f "$BUILD_DIR/.output/server/index.mjs" ] || { echo "demo: no build found, run without --no-build" >&2; exit 1; }
+
+if [ "$KEEP" = 0 ]; then
+  find "$DATA" -mindepth 1 -delete
+fi
+SEEDED=0
+[ -f "$DATA/.seeded" ] && SEEDED=1
+
+PIDS=()
+stop() { trap - INT TERM EXIT; for p in "${PIDS[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done; wait 2>/dev/null || true; }
+trap stop INT TERM EXIT
+
+AGENT_PORT="${DEMO_AGENT_PORT:-17070}"; OLLAMA_PORT="${DEMO_OLLAMA_PORT:-11435}"; DEALS_PORT="${DEMO_DEALS_PORT:-18090}"; MONEY_PORT="${DEMO_MONEY_PORT:-18091}"
+DEMO_ADDONS="$ADDONS" DEMO_AGENT_PORT="$AGENT_PORT" DEMO_OLLAMA_PORT="$OLLAMA_PORT" DEMO_DEALS_PORT="$DEALS_PORT" DEMO_MONEY_PORT="$MONEY_PORT" \
+  node "$HERE/agent.mjs" & PIDS+=($!)
+
+cd "$BUILD_DIR"
+env HOST=127.0.0.1 PORT="$PORT" NODE_ENV=production \
+  NUXT_PUBLIC_DEMO=true DASH_CONFIG="$BUILD_DIR/config.example.json" DASH_ADDONS_DIR="$BUILD_DIR/addons" NOTES_DIR="$DATA" \
+  NUXT_AGENT_URL="http://127.0.0.1:$AGENT_PORT" NUXT_AGENT_TOKEN=demo NUXT_OLLAMA_URL="http://127.0.0.1:$OLLAMA_PORT" \
+  NUXT_DEALS_URL="http://127.0.0.1:$DEALS_PORT" NUXT_DEALS_TOKEN=demo NUXT_MONEY_URL="http://127.0.0.1:$MONEY_PORT" NUXT_MONEY_TOKEN=demo \
+  NUXT_PIN_HASH= NUXT_OWNER_LOGINS= LEARN_WORKER=0 RESEARCH_WORKER=0 TRENDING_REPOS_WORKER=0 \
+  node .output/server/index.mjs & PIDS+=($!)
+
+URL="http://127.0.0.1:$PORT"
+for _ in $(seq 1 60); do
+  curl -fs "$URL/api/auth/status" >/dev/null 2>&1 && break
+  kill -0 "${PIDS[1]}" 2>/dev/null || { echo "demo: the app stopped, see the output above" >&2; exit 1; }
+  sleep 1
+done
+curl -fs "$URL/api/auth/status" >/dev/null 2>&1 || { echo "demo: the app did not answer in 60 s" >&2; exit 1; }
+
+if [ "$SEEDED" = 0 ]; then node "$HERE/seed.mjs" "$URL" "$DATA" "$ADDONS"; fi
+echo
+echo "Bastion demo is running: $URL   (Ctrl-C stops it; sample data in $DATA)"
+wait "${PIDS[1]}"

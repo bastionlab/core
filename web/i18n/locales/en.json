@@ -1,5 +1,6 @@
 {
   "common": {
+    "demo": "Demo: sample data, nothing here is real",
     "loading": "Loading…",
     "checking": "Checking…",
     "refresh": "Refresh",

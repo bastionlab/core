@@ -41,6 +41,16 @@ Most homelab dashboards are either a wall of links or a full admin console. Bast
 - **Optional Claude**: a chat with Claude Code on your host, read-only unless you switch it on. Uses your own
   Claude login or API key.
 
+## Try it without a server
+
+Demo mode runs the whole dashboard with invented sample data on any machine with Node 22:
+
+```sh
+git clone https://github.com/bastionlab/core && cd core && demo/run
+```
+
+Then open http://127.0.0.1:3000. Details: [demo/README.md](demo/README.md).
+
 ## Requirements
 
 - **Proxmox VE** with a root shell on the host (tested on Proxmox VE 9). Support for plain Linux hosts is on
@@ -139,7 +149,6 @@ counts with the marketplace is opt-in and off by default.
 
 ## Roadmap
 
-- **Demo mode** with sample data, to try Bastion without a server.
 - **Plain Linux hosts** (Debian, Ubuntu) without Proxmox, with Docker instead of LXC containers.
 - More add-ons from the community.
 

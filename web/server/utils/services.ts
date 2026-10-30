@@ -33,6 +33,8 @@ export function services(): Service[] {
 }
 
 export function check(url: string, timeout = 3000): Promise<{ up: boolean, status?: number, ms?: number, error?: string }> {
+  // demo mode: nothing on the network is probed, every service answers
+  if (useRuntimeConfig().public.demo) return Promise.resolve({ up: true, status: 200, ms: 3 + [...url].reduce((n, c) => n + c.charCodeAt(0), 0) % 28 })
   const t0 = performance.now()
   const lib = url.startsWith('https') ? https : http
   return new Promise((resolve) => {

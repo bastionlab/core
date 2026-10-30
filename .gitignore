@@ -10,3 +10,7 @@ agent/*.old
 
 # owner-only notes, never published
 docs/my-setup.md
+
+# demo mode (demo/run)
+.demo-build/
+.demo-data/

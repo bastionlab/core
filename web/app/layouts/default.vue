@@ -72,6 +72,7 @@ const pull = usePull(() => full.value || sheet.value || palette.value || route.p
 const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value ? 'stale' : 'live'))
 // a skin (Designs add-on) may bring its own navigation; it gets the same pages, badges and live state
+const demo = useRuntimeConfig().public.demo // demo mode (demo/README.md): the sample-data note
 const SkinNav = useSkinned('Nav')
 // …and may paint a full-page backdrop behind everything, and frame each page (title, chrome, layout)
 const SkinBackdrop = useSkinned('Backdrop')
@@ -160,6 +161,7 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
     <OfflinePill />
 
     <main class="wrap" :class="{ refreshing: pull.busy.value }">
+      <div v-if="demo" class="pill accent demo-pill small" role="note">{{ $t('common.demo') }}</div>
       <!-- floats over the page so it never shifts content (chat scroll etc.) -->
       <Transition name="pop">
         <div v-if="state !== 'ok'" class="banner small" :class="state" role="status">{{ down ? 'Agent unreachable — data may be old' : 'Data is stale' }}</div>
@@ -209,6 +211,7 @@ main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
   padding: 6px 14px; border-radius: 999px; white-space: nowrap; pointer-events: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, .35); backdrop-filter: blur(6px);
 }
+.demo-pill { position: fixed; z-index: 59; left: 8px; top: calc(env(safe-area-inset-top, 0px) + 4px); pointer-events: none; opacity: .92; font-size: 11px; }
 .pop-enter-active, .pop-leave-active { transition: opacity .2s, transform .2s; }
 .pop-enter-from, .pop-leave-to { opacity: 0; transform: translate(-50%, -8px); }
 .banner.bad { background: var(--bad-soft); color: var(--bad); }

@@ -1,0 +1,13 @@
+{
+  "GET /api/tags": { "models": [
+    { "name": "qwen3.5:9b", "model": "qwen3.5:9b", "modified_at": "2026-10-01T10:00:00Z", "size": 6600000000, "digest": "demo1", "details": { "family": "qwen", "parameter_size": "9B", "quantization_level": "Q4_K_M" } },
+    { "name": "gemma3:12b", "model": "gemma3:12b", "modified_at": "2026-09-12T10:00:00Z", "size": 8100000000, "digest": "demo2", "details": { "family": "gemma", "parameter_size": "12B", "quantization_level": "Q4_K_M" } },
+    { "name": "nomic-embed-text:latest", "model": "nomic-embed-text:latest", "modified_at": "2026-08-20T10:00:00Z", "size": 274000000, "digest": "demo3", "details": { "family": "nomic-bert", "parameter_size": "137M", "quantization_level": "F16" } }
+  ] },
+  "GET /api/ps": { "models": [
+    { "name": "qwen3.5:9b", "model": "qwen3.5:9b", "size": 7400000000, "size_vram": 7400000000, "expires_at": "2126-10-01T10:00:00Z", "context_length": 8192 }
+  ] },
+  "POST /api/chat": { "model": "qwen3.5:9b", "created_at": "$iso_now", "message": { "role": "assistant", "content": "This is demo mode, so there is no real model behind this answer. On a real install the Ask bar answers from your own Ollama server." }, "done": true },
+  "POST /api/pull": { "status": "success" },
+  "GET /api/version": { "version": "0.0.0-demo" }
+}
