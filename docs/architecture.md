@@ -1,7 +1,8 @@
 # Architecture
 
 How the core is put together, for people changing it. The user-facing overview is the [README](../README.md).
-CT ids and addresses below are the defaults; each install's real ones live in `/etc/dash/config.json`.
+CTs are named by role below (dashboard CT, AI CT, …); each install's real ids and addresses live in
+`/etc/dash/config.json` (`cts.<role>`). In example commands `<dash-ct>` is `cts.dash`.
 
 | page | what lives there |
 |---|---|
@@ -10,12 +11,12 @@ CT ids and addresses below are the defaults; each install's real ones live in `/
 | `/addons` | every add-on: on/off, install, update, remove; the marketplace |
 | `/settings` | every connection's status in one list, config.json (edits go through Run + rebuild), Discord, each add-on's fields |
 
-Everything else is an add-on in `addons/<id>/`: Notes, Learn, Kanji, Habits, Media, Dev, Game servers, Deals,
-Flats, Jobs, Money, Chat, and Local AI (no tab of its own).
+Everything else is an add-on in `addons/<id>/`, installed from the
+[marketplace](https://github.com/bastionlab/addons); the Add-ons page lists what is available.
 
 ## Pieces
 
-- `agent/` — runs on pve (`dash-agent.service`, <host LAN IP>:7070). Only answers CT 104 (and pve itself) with
+- `agent/` — runs on the Proxmox host (`dash-agent.service`, <host LAN IP>:7070). Only answers the dashboard CT (and the host itself) with
   the bearer token in `agent/token`. `agent.py` is just the HTTP server; the rest is split by topic:
   `core` (shell helpers, cache, pools), `metrics`, `actions` (the host's allowlist + jobs), `claude` (one
   `claude -p` systemd unit per chat turn), `dash_sdk` (what add-ons build on: routes, streams, actions, services,
@@ -23,21 +24,23 @@ Flats, Jobs, Money, Chat, and Local AI (no tab of its own).
   `media-rm`; Dev: `dev.py`, `github.py`, `devroutes.py`, `gh-new`; Game servers: `games.py` + `gsm`; Local AI:
   `localai.py` with the ollama actions and its containers) and is
   loaded only while that add-on is installed. `addons/<id>/deploy.sh` runs on every deploy (pv into dev boxes,
-  gsm into the gameservers CT). `hooks.py` (Discord webhooks, `/etc/dash/discord.json`), `alerts.py` + `dash-alerts.timer` (failed backups
-  and full disks → #alerts every 15 min).
-- `web/` — Nuxt 4, built and run in CT 104 `dash` (`/opt/dash`, `dash.service`, 127.0.0.1:3000, published with
-  `tailscale serve`). Notes and chats are SQLite in `/var/lib/dash` there. Calls to the agent / CT 107 / CT 108 /
+  gsm into the game-servers CT). `hooks.py` (Discord webhooks, `/etc/dash/discord.json`), `alerts.py` + `dash-alerts.timer` (failed backups
+  and full disks → the alerts channel every 15 min).
+- `web/` — Nuxt 4, built and run in the dashboard CT (`/opt/dash`, `dash.service`, 127.0.0.1:3000, published with
+  `tailscale serve`). Notes and chats are SQLite in `/var/lib/dash` there. Calls to the agent / add-on backend CTs /
   Ollama all go through `server/utils/upstream.ts`.
 - `addons/<id>/` — every tab except Home/Metrics/Add-ons: `addon.yaml`, `web/` (a Nuxt layer the app extends) and
   `agent/*.py` (loaded through `agent/dash_sdk.py`). `addons/` is not part of this repo: it is a sparse checkout of
-  the private `bastionlab/addons` (the marketplace; HTTPS with the token file as credential helper). The checked-out
+  `bastionlab/addons` (the marketplace; HTTPS with the token file as credential helper). The checked-out
   folders are what is installed; `/addons` switches any of them off, installs, updates (a pull) or removes them.
 - `/etc/dash/config.json` — this install's tailnet, LAN, CT ids/IPs and paths (shape: `config.example.json`).
-- `/root/devbox/pv` — helper inside dev boxes (`pv ls|start|stop|log|cc|ccstop|cclog|shiplog|fetch|push|new|rm|remote`).
+- `<paths.devbox>/pv` — helper inside dev boxes (`pv ls|start|stop|log|cc|ccstop|cclog|shiplog|fetch|push|new|rm|remote`).
   Per-project overrides in `<project>/.dashboard.yml` (`command:`, `ports:`, `name:`).
 
-Deploy after changes: `./deploy.sh` — links and reloads the agent's systemd units, restarts the agent, pushes `pv`
-to the dev boxes, replaces the app sources in CT 104 and rebuilds. Needs a PIN first: `./set-pin` (in a real terminal).
+Applying changes: `dash-live` watches the working tree and, a few seconds after the last save, restarts the agent
+(Python) or rebuilds the app in a copy inside the dashboard CT, swapping it in only when the build is green
+(status: Settings → Deploy). Units, `deploy.sh`, `package.json` and Caddy changes need the full `./deploy.sh`, which
+links and reloads the systemd units, restarts the agent, pushes `pv` to the dev boxes and rebuilds the app.
 
 ## Fresh install
 
@@ -74,22 +77,22 @@ Add-ons then come from the Add-ons page (Install / Update / Remove, each shown a
    link (Settings → Users); every `/api` route and action is checked for its role, the UI hides the rest.
    Other tailnet logins reach the sign-in page only when Settings → Users allows guests.
 3. Every `/api` route needs that cookie; writes must also come from the dashboard's own origin.
-4. Requests from inside CT 104 itself (`pct exec 104 -- curl …`) skip 1–3 — that is how Claude and scripts read the API.
+4. Requests from inside the dashboard CT itself (`pct exec <dash-ct> -- curl …`) skip 1–3 — that is how Claude and scripts read the API.
 
 ## The two AIs
 
-- **Ask bar / local chat** (`server/api/ai/ask.post.ts`): Ollama in CT 105, with a snapshot of the page's data
+- **Ask bar / local chat** (`server/api/ai/ask.post.ts`): Ollama in the AI CT, with a snapshot of the page's data
   (`server/utils/context.ts`, `snapshot.ts`). It can only *propose* actions from `server/utils/actions.ts`; the
   owner presses Run and the agent validates the name and every argument again before building a fixed argv.
-- **Claude** (`agent/claude.py`): Claude Code as root on pve. Read-only turns get a fixed allowlist of read
+- **Claude** (`agent/claude.py`): Claude Code as root on the Proxmox host. Read-only turns get a fixed allowlist of read
   commands; ⚡Auto turns run in Claude Code's auto mode, so treat Auto as root access.
 
 ## GitHub
 
-Dev boxes share an SSH key, so cloning and pushing work out of the box. Public repos of the owner are listed
-without a token; private ones and creating repos need `/root/devbox/keys/github_token` on pve (repo scope).
+Dev boxes share an SSH key, so cloning and pushing work out of the box. Public repos of the GitHub owner are listed
+without a token; private ones and creating repos need `<paths.devbox>/keys/github_token` on the Proxmox host (repo scope).
 
 ## Smoke test
 
-`/opt/smoke` in CT 104 holds puppeteer + a headless Chrome and `smoke.mjs`, which loads the main pages, fails on
-any console error and writes full-page screenshots next to itself: `pct exec 104 -- sh -c 'cd /opt/smoke && node smoke.mjs'`.
+`/opt/smoke` in the dashboard CT holds puppeteer + a headless Chrome and `smoke.mjs`, which loads the main pages, fails on
+any console error and writes full-page screenshots next to itself: `pct exec <dash-ct> -- sh -c 'cd /opt/smoke && node smoke.mjs'`.
