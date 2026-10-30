@@ -7,6 +7,10 @@ local AI, finders, finance, game servers and whatever the community builds next.
 [License: AGPL-3.0](LICENSE) · [Marketplace](https://github.com/bastionlab/addons) ·
 [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
+<p align="center">
+  <img src="docs/screenshots/home-desktop.webp" alt="Bastion Home on a desktop: host status, app tiles and add-on cards" width="100%">
+</p>
+
 > Bastion runs as **root on your host** and can start, stop and change containers. Every change is shown to you
 > before it runs, but there is no warranty (see the [license](LICENSE), sections 15 and 16). Keep backups.
 
@@ -40,6 +44,25 @@ Most homelab dashboards are either a wall of links or a full admin console. Bast
   and a beta channel and one-tap roll back.
 - **Optional Claude**: a chat with Claude Code on your host, read-only unless you switch it on. Uses your own
   Claude login or API key.
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/home-phone.webp" alt="Home on a phone" width="24%">
+  <img src="docs/screenshots/metrics-phone.webp" alt="Metrics: host, GPU and storage" width="24%">
+  <img src="docs/screenshots/addons-phone.webp" alt="The add-on marketplace" width="24%">
+  <img src="docs/screenshots/notes-phone.webp" alt="The Notes add-on" width="24%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/hero.gif" alt="Moving between Home, Metrics and Add-ons on a phone" width="24%">
+  <img src="docs/screenshots/deals-phone.webp" alt="The Deals finder add-on" width="24%">
+  <img src="docs/screenshots/ai-phone.webp" alt="The Local AI add-on: which models fit your GPU" width="24%">
+</p>
+<p align="center">
+  <img src="docs/screenshots/metrics-desktop.webp" alt="Metrics on a desktop" width="100%">
+</p>
+
+All screenshots come from [demo mode](demo/README.md): the data is invented.
 
 ## Try it without a server
 
