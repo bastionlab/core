@@ -1,0 +1,36 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  shell-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: py_compile agent
+        run: python3 -m py_compile agent/*.py
+      - name: bash -n on shell scripts (found by shebang)
+        run: |
+          fail=0
+          for f in agent/* scripts/* install.sh deploy.sh; do
+            [ -f "$f" ] || continue
+            if head -n1 "$f" | grep -Eq '^#!.*\b(ba)?sh\b'; then
+              bash -n "$f" || fail=1
+            fi
+          done
+          exit $fail
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python3 scripts/i18n-lint
+      - run: python3 scripts/emoji-lint

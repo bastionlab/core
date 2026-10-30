@@ -27,7 +27,7 @@ function restart(u: any) {
 </script>
 
 <template>
-  <Panel id="uptime" title="Service uptime" fold="phone" :sub="down ? `${down} need a look` : `${uptime.length} running`">
+  <Panel id="uptime" :title="$t('home.serviceUptime')" fold="phone" :sub="down ? `${down} need a look` : `${uptime.length} running`">
     <div class="rows">
       <div v-for="u in uptime" :key="u.name" class="row">
         <span class="dot" :class="tone(u)" :title="probe.get(u.name) ? (probe.get(u.name).up ? `web check ${probe.get(u.name).ms} ms` : 'web check failing') : ''" />

@@ -10,7 +10,9 @@
     "change": "Ändern",
     "done": "Fertig",
     "search": "Suche",
-    "nothing": "Noch nichts."
+    "nothing": "Noch nichts.",
+    "ctId": "CT {id}",
+    "ms": "{n} ms"
   },
   "nav": {
     "home": "Start",
@@ -104,7 +106,10 @@
       "phone": "Nur auf dem Handy",
       "tablet": "Nur auf dem Tablet",
       "desktop": "Nur auf dem Computer"
-    }
+    },
+    "throughput": "Durchsatz",
+    "serviceUptime": "Dienste-Verfügbarkeit",
+    "lastSpeedtest": "Letzter Test: {mbit} Mbit/s"
   },
   "deploy": {
     "title": "Deploy",
@@ -167,7 +172,8 @@
     "signoutAllDone": "Alle anderen Geräte und PIN-Sitzungen sind abgemeldet.",
     "invited": "Du bist als {role} eingeladen. Wähle Namen und Passwort.",
     "join": "Konto anlegen",
-    "inviteGone": "Diese Einladung ist abgelaufen oder wurde schon benutzt."
+    "inviteGone": "Diese Einladung ist abgelaufen oder wurde schon benutzt.",
+    "unlock": "Entsperren"
   },
   "users": {
     "title": "Benutzer",

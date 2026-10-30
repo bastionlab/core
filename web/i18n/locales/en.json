@@ -10,7 +10,9 @@
     "change": "Change",
     "done": "Done",
     "search": "Search",
-    "nothing": "Nothing yet."
+    "nothing": "Nothing yet.",
+    "ctId": "CT {id}",
+    "ms": "{n} ms"
   },
   "nav": {
     "home": "Home",
@@ -104,7 +106,10 @@
       "phone": "Only this phone",
       "tablet": "Only this tablet",
       "desktop": "Only this computer"
-    }
+    },
+    "throughput": "Throughput",
+    "serviceUptime": "Service uptime",
+    "lastSpeedtest": "Last test: {mbit} Mbit/s"
   },
   "deploy": {
     "title": "Deploy",
@@ -167,7 +172,8 @@
     "signoutAllDone": "Every other device and PIN session is signed out.",
     "invited": "You're invited as {role}. Pick a name and password.",
     "join": "Create account",
-    "inviteGone": "This invite has expired or was used."
+    "inviteGone": "This invite has expired or was used.",
+    "unlock": "Unlock"
   },
   "users": {
     "title": "Users",

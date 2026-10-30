@@ -13,7 +13,7 @@ const ok = computed(() => (!props.st.searches || !props.st.last_poll ? null : Da
       {{ !st.searches ? 'no search' : !st.last_poll ? 'first run…' : `${ok ? 'running' : 'stalled'} · ${vor(st.last_poll)}` }}
     </span>
     <slot />
-    <button class="btn ghost ref" :disabled="pending" title="Reload" aria-label="Reload" @click="$emit('reload')"><Icon name="refresh" :size="16"/></button>
+    <button class="btn ghost ref" :disabled="pending" :title="$t('common.refresh')" :aria-label="$t('common.refresh')" @click="$emit('reload')"><Icon name="refresh" :size="16"/></button>
   </div>
   <div v-for="e in st.errors ?? []" :key="e.name" class="small bad q">{{ e.name }}: {{ e.error }}</div>
 </template>

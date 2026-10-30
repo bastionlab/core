@@ -155,7 +155,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', key))
         <button v-for="d in ['1', '2', '3', '4', '5', '6', '7', '8', '9']" :key="d" type="button" @click="press(d)">{{ d }}</button>
         <button type="button" class="fn" :disabled="!pin" title="delete" @click="back" aria-label="delete"><Icon name="x" :size="18"/></button>
         <button type="button" @click="press('0')">0</button>
-        <button type="submit" class="fn go" :disabled="!pin || busy" title="unlock" aria-label="unlock"><Icon name="arrow" :size="18"/></button>
+        <button type="submit" class="fn go" :disabled="!pin || busy" :title="$t('auth.unlock')" :aria-label="$t('auth.unlock')"><Icon name="arrow" :size="18"/></button>
       </div>
     </form>
   </div>

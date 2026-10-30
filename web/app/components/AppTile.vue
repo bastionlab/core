@@ -10,15 +10,15 @@ const host = (u: string) => { try { return new URL(u).host } catch { return '' }
   <a
     :href="inert ? undefined : s.url" target="_blank"
     class="app" :class="{ down: !s.up }" :style="{ '--h': s.hue ?? 220 }"
-    :title="s.up ? `${s.ms} ms${s.ct ? ` · CT ${s.ct}` : ''}` : `down${s.error ? `: ${s.error}` : ''}`"
+    :title="s.up ? `${$t('common.ms', { n: s.ms })}${s.ct ? ` · ${$t('common.ctId', { id: s.ct })}` : ''}` : `down${s.error ? `: ${s.error}` : ''}`"
   >
     <span class="icon"><AppLogo :name="s.name" /></span>
     <span class="body">
       <span class="name">{{ s.name }}</span>
       <span class="note">{{ s.up ? s.note : 'down' }}</span>
       <span class="facts">
-        <span v-if="s.up && s.ms != null" class="num">{{ s.ms }} ms</span>
-        <span v-if="s.ct">CT {{ s.ct }}</span>
+        <span v-if="s.up && s.ms != null" class="num">{{ $t('common.ms', { n: s.ms }) }}</span>
+        <span v-if="s.ct">{{ $t('common.ctId', { id: s.ct }) }}</span>
         <span v-if="host(s.url)" class="mono">{{ host(s.url) }}</span>
       </span>
     </span>

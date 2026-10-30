@@ -26,7 +26,7 @@ async function test() {
 </script>
 
 <template>
-  <Panel id="net" title="Throughput" :sub="net?.iface">
+  <Panel id="net" :title="$t('home.throughput')" :sub="net?.iface">
     <template #actions>
       <button class="btn sm" :disabled="testing" @click="test">{{ testing ? 'Testing…' : 'Test speed' }}</button>
     </template>
@@ -41,7 +41,7 @@ async function test() {
           </svg>
         </div>
       </div>
-      <div v-if="last" class="muted small" style="margin-top:8px">Last test: {{ last.mbit.toFixed(1) }} Mbit/s · {{ fmtDate(last.at * 1000, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }}</div>
+      <div v-if="last" class="muted small" style="margin-top:8px">{{ $t('home.lastSpeedtest', { mbit: last.mbit.toFixed(1) }) }} · {{ fmtDate(last.at * 1000, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }}</div>
       <div v-if="err" class="errbox" style="margin-top:8px">{{ err }}</div>
     </template>
   </Panel>
