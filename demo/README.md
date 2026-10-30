@@ -8,7 +8,7 @@ demo/run [--port 3000] [--data <dir>] [--addons a,b,c] [--keep] [--no-build]
 
 - `--port` where the app listens (default 3000, on 127.0.0.1 only; opening it from the same machine makes you the owner, there is no login).
 - `--data` where the app keeps its databases (default `./.demo-data`, emptied on every start unless `--keep`). `demo/run` refuses `/var/lib/dash` and `/etc/dash`.
-- `--addons` which add-ons to build in (default: designs, notes, habits, kanji, learn, chat, widgets, media, deals, flats, jobs, hunters, ai, skin-glass).
+- `--addons` which add-ons to build in (default: designs, notes, habits, kanji, learn, chat, widgets, media, deals, flats, jobs, hunters, ai; add skins such as skin-glass or skin-material to try other looks).
 - `--keep` keep the data of the last run (it is not seeded again).
 - `--no-build` reuse `./.demo-build` as it is. Without it the build is redone only when a source file changed.
 

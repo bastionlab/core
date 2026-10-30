@@ -8,7 +8,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 PORT=3000
 DATA="$ROOT/.demo-data"
-ADDONS="designs,notes,habits,kanji,learn,chat,widgets,media,deals,flats,jobs,hunters,ai,skin-glass"
+ADDONS="designs,notes,habits,kanji,learn,chat,widgets,media,deals,flats,jobs,hunters,ai"
 KEEP=0
 BUILD=1
 while [ $# -gt 0 ]; do

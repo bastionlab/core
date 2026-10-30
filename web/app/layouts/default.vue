@@ -211,7 +211,7 @@ main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
   padding: 6px 14px; border-radius: 999px; white-space: nowrap; pointer-events: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, .35); backdrop-filter: blur(6px);
 }
-.demo-pill { position: fixed; z-index: 59; left: 8px; top: calc(env(safe-area-inset-top, 0px) + 4px); pointer-events: none; opacity: .92; font-size: 11px; }
+.demo-pill { position: fixed; z-index: 59; right: 56px; top: calc(env(safe-area-inset-top, 0px) + 8px); pointer-events: none; opacity: .92; font-size: 11px; }
 .pop-enter-active, .pop-leave-active { transition: opacity .2s, transform .2s; }
 .pop-enter-from, .pop-leave-to { opacity: 0; transform: translate(-50%, -8px); }
 .banner.bad { background: var(--bad-soft); color: var(--bad); }

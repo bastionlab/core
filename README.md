@@ -8,7 +8,7 @@ local AI, finders, finance, game servers and whatever the community builds next.
 [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
 
 <p align="center">
-  <img src="docs/screenshots/home-desktop.webp" alt="Bastion Home on a desktop: host status, app tiles and add-on cards" width="100%">
+  <img src="docs/screenshots/home-desktop-bastion.webp" alt="Bastion Home on a desktop: host status, app tiles and add-on cards" width="100%">
 </p>
 
 > Bastion runs as **root on your host** and can start, stop and change containers. Every change is shown to you
@@ -48,18 +48,29 @@ Most homelab dashboards are either a wall of links or a full admin console. Bast
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/home-phone.webp" alt="Home on a phone" width="24%">
-  <img src="docs/screenshots/metrics-phone.webp" alt="Metrics: host, GPU and storage" width="24%">
-  <img src="docs/screenshots/addons-phone.webp" alt="The add-on marketplace" width="24%">
-  <img src="docs/screenshots/notes-phone.webp" alt="The Notes add-on" width="24%">
+  <img src="docs/screenshots/home-phone-bastion.webp" alt="Home on a phone" width="24%">
+  <img src="docs/screenshots/metrics-phone-bastion.webp" alt="Metrics: host, GPU and storage" width="24%">
+  <img src="docs/screenshots/addons-phone-bastion.webp" alt="The add-on marketplace" width="24%">
+  <img src="docs/screenshots/notes-phone-bastion.webp" alt="The Notes add-on" width="24%">
 </p>
 <p align="center">
-  <img src="docs/screenshots/hero.gif" alt="Moving between Home, Metrics and Add-ons on a phone" width="24%">
-  <img src="docs/screenshots/deals-phone.webp" alt="The Deals finder add-on" width="24%">
-  <img src="docs/screenshots/ai-phone.webp" alt="The Local AI add-on: which models fit your GPU" width="24%">
+  <img src="docs/screenshots/hero-bastion.gif" alt="Moving between Home, Metrics and Add-ons on a phone" width="24%">
+  <img src="docs/screenshots/deals-phone-bastion.webp" alt="The Deals finder add-on" width="24%">
+  <img src="docs/screenshots/ai-phone-bastion.webp" alt="The Local AI add-on: which models fit your GPU" width="24%">
 </p>
 <p align="center">
-  <img src="docs/screenshots/metrics-desktop.webp" alt="Metrics on a desktop" width="100%">
+  <img src="docs/screenshots/metrics-desktop-bastion.webp" alt="Metrics on a desktop" width="100%">
+</p>
+
+### Designs
+
+The whole interface can be restyled with designs and skins from the marketplace. The same Home page in the
+default Bastion look, Liquid Glass and Material You:
+
+<p align="center">
+  <img src="docs/screenshots/home-phone-bastion.webp" alt="Home in the Bastion look" width="30%">
+  <img src="docs/screenshots/home-phone-glass.webp" alt="Home with the Liquid Glass skin" width="30%">
+  <img src="docs/screenshots/home-phone-material.webp" alt="Home with the Material You skin" width="30%">
 </p>
 
 All screenshots come from [demo mode](demo/README.md): the data is invented.
