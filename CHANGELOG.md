@@ -4,6 +4,8 @@ What changed in each core release (add-ons keep their own). Newest first.
 
 ## Unreleased
 
+## 0.1.3 (2026-11-01)
+
 - Fixes: no more hardcoded install values for a fresh box: the Proxmox node name, ZFS pools and sanoid/syncoid units are detected (or set under `storage` in config.json), the Caddy LAN name comes from `lan.hostname`, AI prompts list this install's own CTs, and missing snapshot units no longer show as failed backups.
 
 - Features: Settings reads like a proper settings page: a title, connections grouped into "Needs attention" and "Working", add-on options as label-left / control-right rows, warning-coloured tab badges, and search labels that are translated.
