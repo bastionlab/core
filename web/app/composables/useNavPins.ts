@@ -17,8 +17,8 @@ export function useNavPins<T extends { to: string }>(nav: () => T[]) {
   })
   const editing = useState('nav:pin-edit', () => false)
   const isPinned = (to: string) => keys.value.includes(to)
-  /** the pinned pages that are on, as nav entries (with icon/label), in pin order */
-  const pinned = computed(() => keys.value.map(to => nav().find(n => n.to === to)).filter((n): n is T => !!n))
+  /** the pinned pages that are on, as nav entries (with icon/label), in nav order */
+  const pinned = computed(() => nav().filter(n => keys.value.includes(n.to)))
   const full = computed(() => keys.value.length >= MAX_PINS)
   function toggle(to: string) {
     const p = keys.value

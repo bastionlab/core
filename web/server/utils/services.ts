@@ -6,12 +6,16 @@ export type Group = 'app' | 'media' | 'ai' | 'infra'
 /** hue: the tile's accent on the home page, so the apps are told apart by colour and not only by emoji */
 export interface Service { name: string, url: string, health: string, healthUrl?: string, ct?: number, icon: string, note?: string, group: Group, hue?: number }
 
-// the core's own apps (they don't belong to any add-on); pve routes the LAN into the tailnet so these links work
-// remotely too. Add-ons bring theirs in addon.yaml `apps:` (Seerr and the *arr → Media, Open WebUI → Local AI).
+/** link a CT's tailnet name (`tailscale serve` in that CT), health still checked on its LAN port */
+const ts = (ct: string, port: number, health: string) => ({ url: tsUrl(ct), health: '', healthUrl: `http://${ctIp(ct)}:${port}${health}`, ct: ctId(ct) })
+
+// the core's own apps (they don't belong to any add-on). Apps with a tailnet name link it, so they open the same
+// at home and away. Add-ons bring theirs in addon.yaml `apps:` (Seerr and the *arr → Media, Open WebUI → Local AI).
 const CORE: Service[] = [
+  // Immich: switch to ts('immich', 2283, '/api/server/ping') once CT 101 runs tailscale serve
   { name: 'Immich', url: `http://${ctIp('immich')}:2283`, health: '/api/server/ping', ct: ctId('immich'), icon: '📷', note: 'Photos', group: 'app', hue: 265 },
-  { name: 'Jellyfin', url: `http://${ctIp('jellyfin')}:8096`, health: '/health', ct: ctId('jellyfin'), icon: '🎬', note: 'Movies & series', group: 'app', hue: 285 },
-  { name: 'Audiobookshelf', url: `http://${ctIp('books')}:13378`, health: '/healthcheck', ct: ctId('books'), icon: '🎧', note: 'Audiobooks', group: 'app', hue: 25 },
+  { name: 'Jellyfin', ...ts('jellyfin', 8096, '/health'), icon: '🎬', note: 'Movies & series', group: 'app', hue: 285 },
+  { name: 'Audiobookshelf', ...ts('books', 13378, '/healthcheck'), icon: '🎧', note: 'Audiobooks', group: 'app', hue: 25 },
   { name: 'Proxmox', url: `https://${cfg().lan.host_ip}:8006`, health: '/', icon: '🖥️', note: 'Hypervisor', group: 'infra' },
 ].filter(s => s.ct !== 0) // a CT this install doesn't have (not in config.json) has no tile
 

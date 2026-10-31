@@ -1,6 +1,6 @@
 """this install's own values (tailnet, LAN, CT ids and IPs, paths) from /etc/dash/config.json, so no module hardcodes
 them. config.example.json in the repo shows the shape and is the fallback on a box that has none yet."""
-import json
+import json, socket
 from pathlib import Path
 
 _FILE = Path("/etc/dash/config.json")
@@ -13,6 +13,9 @@ DASHBOARD = CFG["paths"]["dashboard"]
 DEVBOX = Path(CFG["paths"]["devbox"])
 DEVBOX_IDS = tuple(CFG["devbox"]["ids"])
 DEVBOX_IPS = tuple(CFG["devbox"]["ips"])
+NODE = CFG.get("node") or socket.gethostname().split(".")[0]  # the Proxmox node name
+NAME = CFG.get("name") or NODE
+STORAGE = CFG.get("storage") or {}  # optional: {"pools": [...], "snapshot_units": [...]}, else autodetected
 
 
 # a fresh install has only some of these CTs: a missing one is 0 / "" (the add-on using it starts switched off)

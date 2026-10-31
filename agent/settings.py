@@ -185,7 +185,7 @@ def core_connections():
 
 
 def set_core(key, value):
-    """POST /settings/core — the two host keys the core keeps in /root/devbox/keys (write-only, like secrets)"""
+    """POST /settings/core — the two host keys the core keeps in the devbox keys dir (write-only, like secrets)"""
     v = str(value or "").strip()
     if key == "github_token":
         if not re.fullmatch(r"(ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,120})", v):

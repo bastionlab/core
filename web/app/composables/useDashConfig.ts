@@ -8,5 +8,6 @@ export function useDashConfig() {
     ip: (name: string) => c.value?.cts?.[name]?.ip ?? '',
     ctId: (name: string) => c.value?.cts?.[name]?.id as number | undefined,
     hostIp: computed(() => c.value?.hostIp ?? ''),
+    name: computed(() => c.value?.name ?? 'server'),
   }
 }

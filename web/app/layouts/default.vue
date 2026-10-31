@@ -19,7 +19,8 @@ const withPage = list.filter(a => a.routes[0])
 NAV.splice(1, 0, ...withPage.filter(a => (a.order ?? 100) < 90).map(tab))
 NAV.push(...withPage.filter(a => (a.order ?? 100) >= 90).map(tab))
 onMounted(loadAddons)
-const nav = computed(() => NAV.filter(n => pageOn(n.to)))
+// the viewer's own page order for this kind of device (Sidebar order add-on) is applied here, so skins get it too
+const { ordered: nav } = useNavOrder(() => NAV.filter(n => pageOn(n.to)))
 const badge = (to: string) => (to === '/metrics' ? problems.value : 0)
 // chat: a pulsing dot while Claude works, an amber one when an answer waits on the owner's pick, on every page
 const { chats, load: loadChats, save: saveChats, overall } = useChats()

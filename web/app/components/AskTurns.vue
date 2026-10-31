@@ -2,9 +2,10 @@
 import type { Proposal, Turn } from '~/composables/useAsk'
 // dock: open questions are shown by the page above its input instead of in the answer; here only what was picked
 // canEdit / canFork: whether turn i's question can be edited and sent again / the chat branched after turn i
-// extras: read aloud + save as note (the chat page) · a compare turn (t.cmp) is drawn by the page's #compare slot
-const props = defineProps<{ turns: Turn[], retry?: boolean, dock?: boolean, canEdit?: (i: number) => boolean, canFork?: (i: number) => boolean, extras?: boolean }>()
-const emit = defineEmits<{ run: [Proposal], answer: [string], retry: [], edit: [number], fork: [number], stop: [], nudge: [], note: [number], execute: [number], remember: [number, string], skipMem: [number, string], speak: [string, string, boolean] }>()
+// extras: read aloud + save as note + compare (the chat page) · a compare turn (t.cmp) is drawn by the page's #compare slot
+// codePanel: code blocks get an "open in panel" button that emits `code` (the page shows it); compare: ask turn i's question to several models
+const props = defineProps<{ turns: Turn[], retry?: boolean, dock?: boolean, canEdit?: (i: number) => boolean, canFork?: (i: number) => boolean, extras?: boolean, codePanel?: boolean }>()
+const emit = defineEmits<{ run: [Proposal], answer: [string], retry: [], edit: [number], fork: [number], stop: [], nudge: [], note: [number], execute: [number], remember: [number, string], skipMem: [number, string], speak: [string, string, boolean], code: [{ lang: string, text: string }], compare: [number] }>()
 const { t: tr } = useI18n()
 const { speak, speaking, loading: speakLoading, error: speakError } = useSpeak()
 
@@ -13,7 +14,7 @@ interface Act { key: string, label: string, icon?: string, title?: string, run: 
 const USE = 'chat.acts'
 const uses = ref<Record<string, number>>({})
 onMounted(() => { try { uses.value = JSON.parse(localStorage.getItem(USE) || '{}') } catch {} })
-const ORDER = ['copy', 'retry', 'edit', 'branch', 'speak', 'note', 'speakAll']
+const ORDER = ['copy', 'retry', 'edit', 'branch', 'speak', 'note', 'compare', 'speakAll']
 function acts(t: Turn, i: number): Act[] {
   const k = 't' + i
   const all: (Act | false)[] = [
@@ -24,6 +25,7 @@ function acts(t: Turn, i: number): Act[] {
     !!props.extras && !!t.a && { key: 'speak', label: speaking.value === k ? tr('ask.stopSpeak') : tr('ask.speak'), icon: speaking.value === k ? 'stop' : 'play', run: () => emit('speak', k, view(t).text, false) },
     !!props.extras && !!t.a && t.a.length > 450 && speaking.value !== k && { key: 'speakAll', label: tr('ask.speakAll'), icon: 'play', run: () => emit('speak', k, view(t).text, true) },
     !!props.extras && !!t.a && { key: 'note', label: tr('ask.note'), icon: 'note', run: () => emit('note', i) },
+    !!props.extras && !!t.a && !t.cmp && !!t.q && t.q !== '/compact' && { key: 'compare', label: tr('ask.compare'), icon: 'scale', run: () => emit('compare', i) },
   ]
   return (all.filter(Boolean) as Act[]).sort((a, b) => (uses.value[b.key] ?? 0) - (uses.value[a.key] ?? 0) || ORDER.indexOf(a.key) - ORDER.indexOf(b.key))
 }
@@ -38,7 +40,13 @@ const kt2 = (n: number) => (n >= 1e6 ? `${+(n / 1e6).toFixed(1)}M` : n >= 1000 ?
 const usageLine = (t: Turn) => Object.entries(t.usage ?? {}).sort((a, b) => b[1].tok - a[1].tok).map(([m, u]) => `${m} ${kt2(u.tok)}`).join(' · ')
 const usd = (t: Turn) => Object.values(t.usage ?? {}).reduce((s, u) => s + u.usd, 0)
 // a plan's closing marker is for the page (Execute button), not for reading
-const view = (t: Turn) => splitQuestions(t.plan ? t.a.replace(/\n*PLAN READY\s*$/, '') : t.a, t.busy)
+// (a Claude ```action block at the start of a line, even half-streamed, is hidden while the turn runs: when it ends
+// useClaude turns the valid ones into Run cards and cuts them; one that does not parse stays visible)
+const ACTION = /^```action[ \t]*\n[\s\S]*?(?:^```[ \t]*$|(?![\s\S]))/gm
+const view = (t: Turn) => {
+  const a = t.plan ? t.a.replace(/\n*PLAN READY\s*$/, '') : t.a
+  return splitQuestions(t.busy ? a.replace(ACTION, '') : a, t.busy)
+}
 const picked = (t: Turn) => {
   const qs = view(t).qs ?? []
   const a = (j: number) => t.answered?.[j]?.join(', ') || '—'
@@ -54,11 +62,15 @@ const srcShown = (t: Turn, i: number) => (srcOpen.value.has(i) ? t.sources! : t.
 const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u } }
 const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tools!.slice(-SHOW))
 
-// code blocks get a copy button; clicks are caught once on the list instead of per block
+// code blocks get a header (copy / wrap / open in panel) and long ones fold, dashboard pages become links (useAsk.ts);
+// clicks are caught once on the list instead of per block
 // keys, tokens and passwords in it are blurred until tapped (utils/secrets.ts)
+const render = useAnswerRender()
+// what the reader did to a block (wrapped 'w', unfolded 'o') survives the re-render of a streaming answer
+const codeState = new WeakMap<Turn, Record<number, string>>()
 const html = (t: Turn) => {
-  const { text, found } = hideSecrets(view(t).text)
-  return showSecrets(md(text), found).replace(/<pre>/g, '<div class="code"><button type="button" class="cp">copy</button><pre>').replace(/<\/pre>/g, '</pre></div>')
+  const { text, found } = hideSecrets(stripFiles(view(t).text))
+  return render(showSecrets(md(text), found), { busy: t.busy, panel: props.codePanel, state: codeState.get(t) })
 }
 const copied = ref('')
 async function copy(text: string, key: string) {
@@ -73,15 +85,35 @@ function onClick(e: MouseEvent) {
   const el = e.target as HTMLElement
   const sec = el.closest('.a .sec')
   if (sec) return sec.classList.toggle('shown')
-  // a link to a dashboard page (/notes?n=4) opens inside the app instead of reloading it
+  // a link to a dashboard page (/notes?n=4) opens inside the app instead of reloading it (other sites open in a new tab)
   const href = el.closest('.a a')?.getAttribute('href') ?? ''
   if (/^\/(?!\/|api\/)/.test(href)) { e.preventDefault(); return void navigateTo(href) }
-  const b = el.closest('button.cp') as HTMLElement | null
-  const pre = b?.nextElementSibling as HTMLElement | null
-  if (!b || !pre) return
-  copy(pre.innerText, '')
-  b.textContent = 'copied'
-  setTimeout(() => (b.textContent = 'copy'), 1500)
+  const b = el.closest('.code button') as HTMLElement | null
+  const box = b?.closest('.code') as HTMLElement | null
+  const pre = box?.querySelector('pre')
+  if (!b || !box || !pre) return
+  const flag = (f: string, on: boolean) => {
+    const ans = box.closest('.a') as HTMLElement | null, t = props.turns[Number(ans?.dataset.i)]
+    if (!ans || !t) return
+    const idx = [...ans.querySelectorAll('.code')].indexOf(box), st = codeState.get(t) ?? {}
+    st[idx] = (st[idx] ?? '').replace(f, '') + (on ? f : '')
+    codeState.set(t, st)
+  }
+  if (b.classList.contains('cp')) {
+    copy(pre.textContent ?? '', '')
+    b.textContent = tr('ask.copied')
+    setTimeout(() => (b.textContent = tr('ask.copy')), 1500)
+  } else if (b.classList.contains('cw')) {
+    const on = box.classList.toggle('wrap')
+    b.setAttribute('aria-pressed', String(on))
+    flag('w', on)
+  } else if (b.classList.contains('cm')) {
+    const on = box.classList.toggle('open')
+    b.textContent = (on ? b.dataset.less : b.dataset.more) ?? ''
+    flag('o', on)
+  } else if (b.classList.contains('co')) {
+    emit('code', { lang: box.querySelector('.cl')?.textContent ?? '', text: pre.textContent ?? '' })
+  }
 }
 
 // while an answer runs: what it is doing right now and for how long
@@ -166,7 +198,7 @@ function activity(t: Turn) {
         </span>
       </div>
       <details v-if="t.r" class="reason small muted"><summary>reasoning{{ t.busy && !t.a ? '…' : '' }}</summary><div class="pre">{{ t.r }}</div></details>
-      <div v-if="t.a" class="a" v-html="html(t)" />
+      <div v-if="t.a" class="a" :data-i="i" v-html="html(t)" />
       <div v-if="t.sources?.length && !t.busy" class="sources small">
         <span class="faint">{{ $t('ask.sources') }}</span>
         <a v-for="s in srcShown(t, i)" :key="s.url" :href="s.url" target="_blank" rel="noopener noreferrer" class="pill src">
@@ -216,6 +248,10 @@ function activity(t: Turn) {
             <button class="btn primary sm" :class="{ danger: p.desc?.startsWith('FORCE:') }" @click="emit('run', p)">
               {{ p.desc?.startsWith('FORCE:') ? 'Run anyway' : 'Run' }}
             </button>
+            <button class="btn ghost sm" @click="p.state = 'dismissed'">Dismiss</button>
+          </span>
+          <span v-else-if="p.state === 'sent'" class="btns">
+            <span class="pill">{{ $t('ask.proposalSent') }}</span>
             <button class="btn ghost sm" @click="p.state = 'dismissed'">Dismiss</button>
           </span>
           <span v-else class="pill" :class="{ ok: p.state === 'done', bad: p.state === 'failed' }">
@@ -276,7 +312,7 @@ function activity(t: Turn) {
 .a :deep(pre) { background: var(--bg); border: 1px solid var(--line); padding: 8px 10px; border-radius: var(--radius-sm); overflow-x: auto; }
 .a :deep(code) { font-family: var(--mono); font-size: 12.5px; }
 .a :deep(:not(pre) > code) { background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
-.a :deep(table) { margin-bottom: 8px; font-size: 13px; }
+.a :deep(table) { display: block; max-width: 100%; overflow-x: auto; margin-bottom: 8px; font-size: 13px; }
 .a :deep(h1), .a :deep(h2), .a :deep(h3) { font-size: 14px; margin: 10px 0 4px; }
 .tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .tools .pill { gap: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -304,7 +340,7 @@ function activity(t: Turn) {
 .proposal.danger .what { color: var(--bad); }
 .btn.danger { background: var(--bad); border-color: var(--bad); color: var(--bg); }
 .proposal .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.proposal .btns { margin-left: auto; display: flex; gap: 6px; }
+.proposal .btns { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .log { white-space: pre-wrap; max-height: 160px; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 0; font-family: var(--mono); }
 .reason summary { cursor: pointer; }
 .live { display: flex; align-items: center; gap: 7px; min-width: 0; }
@@ -316,12 +352,31 @@ function activity(t: Turn) {
 .acts { display: inline-flex; gap: 2px; margin-right: 6px; }
 .act { background: none; border: 1px solid transparent; border-radius: 6px; color: var(--muted); font: inherit; padding: 1px 6px; cursor: pointer; }
 .act:hover { color: var(--text); border-color: var(--line); background: var(--panel-2); }
-@media (pointer: coarse) { .act { padding: 6px 10px; } .a :deep(.cp) { padding: 4px 10px; font-size: 12px; opacity: 1; } }
-.a :deep(.code) { position: relative; margin-bottom: 8px; }
-.a :deep(.code pre) { margin: 0; }
-.a :deep(.cp) { position: absolute; top: 5px; right: 5px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font: inherit; font-size: 11px; padding: 1px 7px; cursor: pointer; opacity: .75; }
-.a :deep(.cp:hover) { opacity: 1; color: var(--text); }
+@media (pointer: coarse) { .act { padding: 6px 10px; } }
 .picked { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 10px; background: var(--panel-2); overflow-wrap: anywhere; align-self: flex-start; }
 .picked.warn { color: var(--warn); border-color: var(--warn-soft); background: var(--warn-soft); }
 .pre { white-space: pre-wrap; max-height: 200px; overflow-y: auto; padding: 6px 0; }
+</style>
+
+<style>
+/* code blocks and in-app links inside rendered answers: global because the chat's compare panes (CompareTurn) draw them too */
+.turns .a .code { margin: 0 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); overflow: hidden; }
+.turns .a .code .ch { display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 1px 4px 1px 10px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.turns .a .code .cl { flex: 1; min-width: 0; font: 11.5px var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turns .a .code .cbs { display: flex; gap: 2px; flex-shrink: 0; margin-left: auto; }
+.turns .a .code .cb { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--muted); font: inherit; font-size: 11.5px; padding: 2px 8px; cursor: pointer; }
+.turns .a .code .cb:hover { color: var(--text); border-color: var(--line); }
+.turns .a .code .cb[aria-pressed="true"] { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
+.turns .a .code pre { margin: 0; border: 0; border-radius: 0; line-height: 1.5; }
+.turns .a .code.wrap pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.turns .a .code.long:not(.open) pre { max-height: calc(16 * 1.5em + 16px); overflow-y: hidden; }
+.turns .a .code .cm { position: relative; display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12px; padding: 6px 10px; cursor: pointer; }
+.turns .a .code .cm:hover { color: var(--text); }
+.turns .a .code.long:not(.open) .cm::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 40px; background: linear-gradient(to bottom, transparent, var(--bg)); pointer-events: none; }
+.turns .a a.in { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
+@media (pointer: coarse) {
+  .turns .a .code .ch { min-height: 36px; }
+  .turns .a .code .cb { min-height: 32px; min-width: 40px; padding: 4px 10px; font-size: 12px; }
+  .turns .a .code .cm { min-height: 36px; }
+}
 </style>

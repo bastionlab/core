@@ -1,5 +1,5 @@
 <script setup lang="ts">
-useHead({ title: '__NAME__ · pve' })
+useHead({ title: '__NAME__ · Bastion' })
 const { data, error } = useFetch<any>('/api/__ID__', { server: false })
 </script>
 

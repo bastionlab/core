@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""github-protect [--org <org>] [--dry-run] — lock `main` on the core and add-on repos (run once they are public;
+GitHub Free has no rulesets on private repos).
+
+  core    main takes changes through a pull request only, no force-push, no deletion; org admins (the owner)
+          bypass, so the Deploy button can still push and tag
+  addons  same, and the GitHub Actions bot bypasses too: publish.yml merges green PRs and both workflows push the
+          rebuilt index.json straight to main
+
+Nobody but org admins can merge in either repo anyway (outsiders have no write access); the rules stop accidents
+and a stolen non-admin token. Who may publish which add-on is check.py's job, not this one's.
+Safe to re-run: an existing ruleset named "bastion-main" is updated, not duplicated.
+The token (marketplace.token_file, needs admin on the repos) goes to GitHub only, in a header.
+"""
+import argparse, json, sys, urllib.error, urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "agent"))
+from config import CFG, DEVBOX  # noqa: E402
+
+NAME = "bastion-main"
+ADMIN = {"actor_id": 1, "actor_type": "OrganizationAdmin", "bypass_mode": "always"}
+ACTIONS_BOT = {"actor_id": 15368, "actor_type": "Integration", "bypass_mode": "always"}  # the GitHub Actions app
+RULES = [
+    {"type": "deletion"},
+    {"type": "non_fast_forward"},
+    {"type": "pull_request", "parameters": {"required_approving_review_count": 0, "dismiss_stale_reviews_on_push": False,
+                                            "require_code_owner_review": False, "require_last_push_approval": False,
+                                            "required_review_thread_resolution": False}},
+]
+REPOS = {"core": [ADMIN], "addons": [ADMIN, ACTIONS_BOT]}
+
+
+def token():
+    f = Path((CFG.get("marketplace") or {}).get("token_file") or DEVBOX / "keys/github_token")
+    return f.read_text().strip()
+
+
+def gh(path, method="GET", body=None):
+    req = urllib.request.Request(f"https://api.github.com{path}", method=method,
+                                 data=json.dumps(body).encode() if body is not None else None,
+                                 headers={"Authorization": f"token {token()}", "Accept": "application/vnd.github+json",
+                                          "User-Agent": "bastion"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            return json.loads(r.read() or "null")
+    except urllib.error.HTTPError as e:
+        msg = json.loads(e.read() or "{}").get("message", "")
+        sys.exit(f"{method} {path}: {e.code} {msg}")
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--org", default="bastionlab")
+    ap.add_argument("--dry-run", action="store_true")
+    a = ap.parse_args()
+    for repo, bypass in REPOS.items():
+        slug = f"{a.org}/{repo}"
+        body = {"name": NAME, "target": "branch", "enforcement": "active", "bypass_actors": bypass,
+                "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}}, "rules": RULES}
+        if a.dry_run:
+            print(slug, json.dumps(body, indent=2))
+            continue
+        if gh(f"/repos/{slug}").get("visibility") != "public":
+            sys.exit(f"{slug} is not public yet: rulesets need a public repo (or GitHub Pro)")
+        old = next((r for r in gh(f"/repos/{slug}/rulesets") if r.get("name") == NAME), None)
+        if old:
+            gh(f"/repos/{slug}/rulesets/{old['id']}", "PUT", body)
+            print(f"{slug}: ruleset updated")
+        else:
+            gh(f"/repos/{slug}/rulesets", "POST", body)
+            print(f"{slug}: ruleset created")
+
+
+if __name__ == "__main__":
+    main()

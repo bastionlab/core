@@ -9,8 +9,8 @@ marketplace — plan").
 - Agent: `from config import ct, ip, TAILNET, HOST_IP, DASH_URL, DASHBOARD, DEVBOX` (`agent/config.py`).
 - App server: `cfg()`, `ctIp('ai')`, `ctId('dl')`, `tsUrl('ai')` (`web/server/utils/config.ts`, auto-imported).
 - Pages: `const { ts, ip, ctId, hostIp } = useDashConfig()` (served by `/api/config`, no secrets).
-- `deploy.sh` reads it with `jq` and pushes it into CT 104; Caddy gets `DASH_IP` / `LAN_SUBNET` from it.
-- Comments and AI prompt prose may still say "CT 107"; code may not.
+- `deploy.sh` reads it with `jq` and pushes it into the dashboard CT (`cts.dash`); Caddy gets `DASH_IP` / `LAN_SUBNET` from it.
+- Comments and AI prompt prose may still name a CT by role; code may not hardcode ids.
 
 ## Add-ons
 - The core is Home, Metrics and Add-ons. Every other tab is an add-on in `addons/<id>/` and can be switched off
@@ -48,7 +48,7 @@ marketplace — plan").
     creates a Debian CT (DHCP), records `cts.<key>` in config.json, clones the repo into `paths.backends` and runs
     the repo's `bootstrap.sh` (first-time setup, `DASH_CT` = the CT) and `deploy.sh` (CT + addresses from
     config.json). A CT config.json already knows is left alone. Backend repos: bastionlab/deals (shared by
-    Deals/Flats/Jobs through the `hunters` add-on), bastionlab/money, bastionlab/habits.
+    Deals/Flats/Jobs through the `hunters` add-on), bastionlab/money.
   - `depends_on` is enforced on install too: Deals won't install before `hunters` and `ai`.
 - `addon.yaml` also carries `version:` (x.y.z). Bump it on every change worth shipping, then run
   `python3 addons/build-index.py`: `addons/index.json` is the marketplace index (this folder stands in for the
@@ -79,11 +79,11 @@ marketplace — plan").
   ignored). Edit an add-on there, bump its `version:`, run `python3 build-index.py`, then commit and push in
   `addons/`. Install / Remove = `git sparse-checkout add` / drop, Update = `git pull` (every installed add-on).
   On a box without the checkout (friends), `addon-get` copies folders instead.
-- `bastionlab/addons` is private for now: `agent/addon-get` reads `marketplace.token_file` (default
-  `/root/devbox/keys/github_token`) and sends it only to GitHub (header via env, never argv); the app gets the
-  index from the agent (`/marketplace/index`), so the token never leaves pve.
+- If `bastionlab/addons` (or your own marketplace repo) is private, `agent/addon-get` reads `marketplace.token_file` (default
+  `paths.devbox`/keys/github_token) and sends it only to GitHub (header via env, never argv); the app gets the
+  index from the agent (`/marketplace/index`), so the token never leaves the Proxmox host.
 - Switched-off add-ons drop out of the nav/home and redirect to `/addons` (`useAddons().pageOn`,
-  `middleware/pages.global.ts`). On/off state is `/var/lib/dash/addons.json` in CT 104; dependencies are checked
+  `middleware/pages.global.ts`). On/off state is `/var/lib/dash/addons.json` in the dashboard CT; dependencies are checked
   both ways, so e.g. Local AI can't go off while Deals uses it.
 - Local AI goes through `server/utils/ollama.ts`; sibling services through `upstream()` — never raw fetches with
   an address in them.
@@ -97,5 +97,5 @@ marketplace — plan").
 - Data is not per person yet: keep personal add-ons (notes, habits, kanji, money, …) at owner until they are.
 
 ## Secrets
-- Tokens and keys stay in gitignored files on pve (`agent/token`, `/etc/dash/*.json`, `/root/devbox/keys/`) or
+- Tokens and keys stay in gitignored files on the Proxmox host (`agent/token`, `/etc/dash/*.json`, `paths.devbox`/keys/) or
   inside the add-on's own CT. They never reach the browser and never appear in an action's visible argv.

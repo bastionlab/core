@@ -37,20 +37,20 @@ const nights = computed(() => [...(props.b.history ?? [])].reverse())
     </table>
     </div>
 
-    <div class="zfs">
-      <div class="job">
-        <div><b>sanoid</b> <span class="faint small">tank</span></div>
+    <div v-if="b.sanoid?.installed !== false || b.syncoid?.installed !== false" class="zfs">
+      <div v-if="b.sanoid && b.sanoid.installed !== false" class="job">
+        <div><b>sanoid</b> <span class="faint small">{{ $t('backups.snapshots') }}</span></div>
         <span class="pill" :class="b.sanoid.result === 'success' ? 'ok' : 'bad'">{{ b.sanoid.result }}</span>
         <span class="small muted">ran {{ ago(b.sanoid.last, now) }} · next {{ ago(b.sanoid.next, now) }}</span>
       </div>
-      <div class="job">
-        <div><b>syncoid</b> <span class="faint small">tank → backup</span></div>
+      <div v-if="b.syncoid && b.syncoid.installed !== false" class="job">
+        <div><b>syncoid</b> <span class="faint small">{{ $t('backups.replication') }}</span></div>
         <span class="pill" :class="b.syncoid.result !== 'success' ? 'bad' : age(b.syncoid.last)">{{ b.syncoid.result }}</span>
         <span class="small muted">ran {{ ago(b.syncoid.last, now) }} · next {{ ago(b.syncoid.next, now) }}</span>
       </div>
-      <div class="snaps">
-        <span v-for="d in b.sanoid.datasets" :key="d.name" class="small" :title="d.snap">
-          <span class="dot" :class="age(d.time)" /> {{ d.name.replace('tank/', '') }} <span class="muted">{{ ago(d.time, now) }}</span>
+      <div v-if="b.sanoid && b.sanoid.installed !== false" class="snaps">
+        <span v-for="d in b.sanoid.datasets ?? []" :key="d.name" class="small" :title="d.snap">
+          <span class="dot" :class="age(d.time)" /> {{ d.name.replace(/^[^/]+\//, '') }} <span class="muted">{{ ago(d.time, now) }}</span>
         </span>
       </div>
     </div>

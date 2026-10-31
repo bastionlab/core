@@ -3,6 +3,7 @@ import os, re, subprocess, threading, time, urllib.request
 from collections import deque
 from pathlib import Path
 
+from config import NAME, NODE, STORAGE
 from core import FAN, JOBS, JOBS_LOCK, TSKEY, TSKEY_DAYS, cached, js, sh
 
 
@@ -99,7 +100,7 @@ def cpu_percent():
 
 
 def host():
-    st = js("pvesh", "get", "/nodes/pve/status", "--output-format", "json", default={})
+    st = js("pvesh", "get", f"/nodes/{NODE}/status", "--output-format", "json", default={})
     mem = st.get("memory", {})
     sensors = js("sensors", "-j", default={}) or {}
     temps = {}
@@ -109,7 +110,7 @@ def host():
         except Exception:
             pass
     return {
-        "name": "pve",
+        "name": NAME,
         "cpu": cpu_percent(),
         "cpus": st.get("cpuinfo", {}).get("cpus"),
         "cpuModel": st.get("cpuinfo", {}).get("model"),
@@ -174,16 +175,46 @@ def pools():
     return out
 
 
+@cached(300)
+def pool_names():
+    """ZFS pools: storage.pools in the config, else whatever `zpool list` reports ([] without ZFS)"""
+    if STORAGE.get("pools"):
+        return list(STORAGE["pools"])
+    try:
+        return sh("zpool", "list", "-H", "-o", "name").split()
+    except Exception:
+        return []
+
+
+@cached(300)
+def replica_pools():
+    """pools that only hold syncoid replicas (storage.replica_pools, else those with "backup" in the name)"""
+    return list(STORAGE.get("replica_pools") or [p for p in pool_names() if "backup" in p])
+
+
+@cached(300)
+def snapshot_units():
+    """sanoid/syncoid services: storage.snapshot_units in the config, else the sanoid*/syncoid* timers installed"""
+    if STORAGE.get("snapshot_units"):
+        return list(STORAGE["snapshot_units"])
+    try:
+        out = sh("systemctl", "list-unit-files", "--no-legend", "--type=timer", "sanoid*", "syncoid*")
+    except Exception:
+        return []
+    return [l.split()[0][:-6] + ".service" for l in out.splitlines() if l.split() and l.split()[0].endswith(".timer")]
+
+
 def datasets():
     out = []
-    for line in sh("zfs", "list", "-Hp", "-o", "name,used,avail,mountpoint", "-r", "tank").splitlines():
+    src = [p for p in pool_names() if p not in replica_pools()]
+    for line in (sh("zfs", "list", "-Hp", "-o", "name,used,avail,mountpoint", "-r", *src).splitlines() if src else []):
         name, used, avail, mp = line.split("\t")
         out.append({"name": name, "used": int(used), "avail": int(avail), "mountpoint": mp})
     return out
 
 
 def snapshots():
-    """newest snapshot per dataset → sanoid (tank) and syncoid (backup/tank) freshness"""
+    """newest snapshot per dataset → sanoid (source pools) and syncoid (replica pools) freshness"""
     latest = {}
     for line in sh("zfs", "list", "-Hp", "-t", "snapshot", "-o", "name,creation", "-s", "creation").splitlines():
         name, created = line.split("\t")
@@ -201,8 +232,15 @@ def unit(name):
     return {"result": d.get("Result"), "state": d.get("ActiveState"), "last": sec(t.get("last")), "next": sec(t.get("next"))}
 
 
+def _snap_unit(prefix):
+    u = next((u for u in snapshot_units() if u.startswith(prefix)), None)
+    if not u:
+        return {"result": "", "state": None, "last": None, "next": None, "installed": False}
+    return {**unit(u), "installed": True}
+
+
 def backups(cts):
-    content = js("pvesh", "get", "/nodes/pve/storage/vzdump/content", "--output-format", "json", default=[]) or []
+    content = js("pvesh", "get", f"/nodes/{NODE}/storage/vzdump/content", "--output-format", "json", default=[]) or []
     per = {}
     for b in content:
         v = b.get("vmid")
@@ -212,8 +250,10 @@ def backups(cts):
         if b.get("vmid") in per:
             per[b["vmid"]]["count"] += 1
     snaps = snapshots()
+    rep = replica_pools()
+    src = [p for p in pool_names() if p not in rep]
     jobs = js("pvesh", "get", "/cluster/backup", "--output-format", "json", default=[]) or []
-    tasks = js("pvesh", "get", "/nodes/pve/tasks", "--typefilter", "vzdump", "--limit", "14", "--output-format", "json",
+    tasks = js("pvesh", "get", f"/nodes/{NODE}/tasks", "--typefilter", "vzdump", "--limit", "14", "--output-format", "json",
                default=[]) or []
     return {
         "vzdump": [{"vmid": c["vmid"], "name": c["name"], **per.get(c["vmid"], {"time": None, "size": None, "count": 0}),
@@ -223,10 +263,10 @@ def backups(cts):
         "vzdumpJobs": [{"schedule": j.get("schedule"), "enabled": j.get("enabled", 1), "storage": j.get("storage"),
                         "all": j.get("all")} for j in jobs],
         "busy": backup_busy(),
-        "sanoid": {**unit("sanoid.service"),
-                   "datasets": [{"name": k, **v} for k, v in sorted(snaps.items()) if k.startswith("tank")]},
-        "syncoid": {**unit("syncoid.service"),
-                    "datasets": [{"name": k, **v} for k, v in sorted(snaps.items()) if k.startswith("backup/")]},
+        "sanoid": {**_snap_unit("sanoid"),
+                   "datasets": [{"name": k, **v} for k, v in sorted(snaps.items()) if k.split("/")[0] in src]},
+        "syncoid": {**_snap_unit("syncoid"),
+                    "datasets": [{"name": k, **v} for k, v in sorted(snaps.items()) if k.split("/")[0] in rep]},
     }
 
 
@@ -348,7 +388,7 @@ def ports(ctlist):
     running = [c for c in ctlist if c["status"] == "running" and c["type"] == "lxc"]
     res = dict(zip([c["vmid"] for c in running], FAN.map(lambda c: ct_ports(c["vmid"]), running)))
     host = {"listen": parse_ss(sh("ss", "-tlnpH")),
-            "serve": parse_serve(js("tailscale", "serve", "status", "--json", default=None), "pve")}
+            "serve": parse_serve(js("tailscale", "serve", "status", "--json", default=None), NODE)}
     return {"host": host, "cts": {str(k): v for k, v in res.items()}}
 
 
@@ -389,7 +429,7 @@ def backup_busy():
     """reasons a vzdump should not start right now. Snapshot mode does not stop or freeze anything, but only one
     vzdump runs at a time, it takes a lock on each guest, and it competes with an upgrade for disk I/O."""
     out = []
-    tasks = js("pvesh", "get", "/nodes/pve/tasks", "--source", "active", "--output-format", "json", default=[]) or []
+    tasks = js("pvesh", "get", f"/nodes/{NODE}/tasks", "--source", "active", "--output-format", "json", default=[]) or []
     for t in tasks:
         if t.get("type") in ("vzdump", "vzrestore", "vzsnapshot", "vzrollback", "vzmigrate"):
             out.append(f"a {t['type']} task is already running ({t.get('id') or 'all guests'}, started by {t.get('user')})")

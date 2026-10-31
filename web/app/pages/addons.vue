@@ -6,6 +6,8 @@ const { data: o } = useOverview()
 const { ctId } = useDashConfig()
 onMounted(load)
 
+const { t } = useI18n()
+const route = useRoute()
 // marketplace index (server/utils/marketplace.ts): Update badges here, the not-installed ones below
 const { data: market } = useFetch<any>('/api/marketplace', { server: false })
 const refreshing = ref(false)
@@ -22,6 +24,63 @@ const publishable = (id: string) => market.value?.local?.[id] as string | undefi
 const entry = (id: string) => market.value?.addons?.find((e: any) => e.id === id)
 const coreVersion = useRuntimeConfig().public.coreVersion as string
 const available = computed(() => (market.value?.addons ?? []).filter((e: any) => !e.installed))
+// filters: kind chips (?k=, all = omitted) shared by both tabs, search text per tab
+// skins (skin-*) and the Designs add-on itself count as designs; widget packs say kind: widget
+const kindOf = (e: any) => (e.kind === 'widget' || e.kind === 'design' ? e.kind : (e.id === 'designs' || String(e.id).startsWith('skin-')) ? 'design' : 'addon')
+/** own designs (designs add-on API) mixed into a Designs section carry _d */
+const own = (d: any) => ({ ...d, _d: true })
+const kind = computed(() => (['addon', 'design', 'widget'].includes(String(route.query.k)) ? String(route.query.k) : 'all'))
+function setKind(k: string) { navigateTo({ query: { ...route.query, k: k === 'all' ? undefined : k } }, { replace: true }) }
+const hitIn = (q: string, ...f: (string | string[] | undefined)[]) => {
+  const n = q.trim().toLowerCase()
+  return !n || f.flat().some(x => (x ?? '').toLowerCase().includes(n))
+}
+const kindChips = (a: number, d: number, w: number) => [
+  { key: 'all', label: t('market.all'), n: a + d + w },
+  { key: 'addon', label: t('market.addons'), n: a },
+  { key: 'design', label: t('market.designs'), n: d },
+  { key: 'widget', label: t('market.widgets'), n: w },
+]
+/** the sections to show: all three in order for All, else just the chosen one; empty ones drop out */
+const sectionsOf = (s: { key: string, title: string, items: any[] }[]) => s.filter(x => (kind.value === 'all' || kind.value === x.key) && x.items.length)
+
+// Marketplace
+const mq = ref('')
+const addonHits = computed(() => available.value.filter((e: any) => hitIn(mq.value, e.name, e.desc, e.author, e.id, e.needs)))
+const designHits = computed(() => ((market.value?.designs ?? []) as any[]).filter(d => hitIn(mq.value, d.name, d.author, d.skin)))
+const mDesigns = computed(() => [...addonHits.value.filter((e: any) => kindOf(e) === 'design'), ...designHits.value.map(own)])
+const mKinds = computed(() => kindChips(addonHits.value.filter((e: any) => kindOf(e) === 'addon').length, mDesigns.value.length, addonHits.value.filter((e: any) => kindOf(e) === 'widget').length))
+const mSections = computed(() => sectionsOf([
+  { key: 'addon', title: t('market.addons'), items: addonHits.value.filter((e: any) => kindOf(e) === 'addon') },
+  { key: 'design', title: t('market.designs'), items: mDesigns.value },
+  { key: 'widget', title: t('market.widgets'), items: addonHits.value.filter((e: any) => kindOf(e) === 'widget') },
+]))
+
+// Installed: status filter, updates-only, own designs (designs add-on API; failure = section hidden)
+const iq = ref('')
+const status = ref<'all' | 'on' | 'off'>('all')
+const onlyUpd = ref(false)
+const mine = ref<any>(null)
+watch(() => isOn('designs'), async on => {
+  if (!on) { mine.value = null; return }
+  try { mine.value = await $fetch<any>('/api/designs') } catch { mine.value = null }
+}, { immediate: true })
+const myDesigns = computed(() => (isOn('designs') && Array.isArray(mine.value?.mine) ? mine.value.mine : []) as any[])
+const iHits = computed(() => list.filter(a => hitIn(iq.value, a.name, a.desc, a.author, a.id, a.needs)
+  && (status.value === 'all' || (status.value === 'on') === isOn(a.id))
+  && (!onlyUpd.value || entry(a.id)?.update)))
+const iDesigns = computed(() => [
+  ...iHits.value.filter(a => kindOf(a) === 'design'),
+  ...(status.value === 'off' || onlyUpd.value ? [] : myDesigns.value.filter(d => hitIn(iq.value, d.name)).map(own)),
+])
+const iKinds = computed(() => kindChips(iHits.value.filter(a => kindOf(a) === 'addon').length, iDesigns.value.length, iHits.value.filter(a => kindOf(a) === 'widget').length))
+const iSections = computed(() => sectionsOf([
+  { key: 'addon', title: t('market.addons'), items: iHits.value.filter(a => kindOf(a) === 'addon') },
+  { key: 'design', title: t('market.designs'), items: iDesigns.value },
+  { key: 'widget', title: t('market.widgets'), items: iHits.value.filter(a => kindOf(a) === 'widget') },
+]))
+const iFiltered = computed(() => !!iq.value.trim() || status.value !== 'all' || onlyUpd.value)
+const SWATCH = ['bg', 'panel', 'accent', 'text', 'ok']
 const count = (n: number | null) => (n == null ? '' : `${n} install${n === 1 ? '' : 's'}`)
 
 // install / update / remove: the agent describes exactly what will happen, Run arms after a moment
@@ -81,8 +140,6 @@ const ctState = (key?: string) => {
   return c ? { text: `CT ${id} ${c.status}`, tone: c.status === 'running' ? 'ok' : 'warn' } : null
 }
 // sections as top tabs; old #anchors (#marketplace, #core) still land on theirs
-const { t } = useI18n()
-const route = useRoute()
 const tab = usePageTab('installed')
 const updates = computed(() => list.filter(a => entry(a.id)?.update).length)
 const tabs = computed(() => [
@@ -135,36 +192,65 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
     <div v-if="rebuilding" class="small warn">Rebuilding: the dashboard is back in a few minutes; reload then.</div>
     <PageTabs v-model="tab" :tabs="tabs" />
     <template v-if="tab === 'installed'">
-    <div class="grid cols-2 list">
-      <div v-for="a in list" :key="a.id" class="card" :class="{ dim: !isOn(a.id) }">
-        <div class="top">
-          <Icon :name="a.icon" :size="18" class="i" />
-          <div class="who">
-            <b>{{ a.name }}</b>
-            <span class="faint small">by {{ a.author }}</span>
-          </div>
-          <button type="button" class="btn sm" :class="isOn(a.id) ? 'ghost' : 'primary'" :disabled="busy === a.id || off === null" @click="toggle(a.id)">
-            {{ isOn(a.id) ? 'Turn off' : 'Turn on' }}
-          </button>
-        </div>
-        <p class="small muted desc">{{ a.desc }}</p>
-        <div class="tags">
-          <span v-if="a.version" class="pill">v{{ a.version }}</span>
-          <span v-if="a.license" class="pill">{{ a.license }}</span>
-          <span v-if="a.warning" class="pill warn" :title="a.warning">terms risk</span>
-          <button v-if="entry(a.id)?.update" type="button" class="pill accent lnk-pill" @click="ask('addon_update', a.id)">update to v{{ entry(a.id).version }}</button>
-          <span v-if="count(entry(a.id)?.installs ?? null)" class="pill">{{ count(entry(a.id).installs) }}</span>
-          <span v-if="ctState(a.ct)" class="pill" :class="ctState(a.ct)!.tone">{{ ctState(a.ct)!.text }}</span>
-          <span v-for="n in a.needs" :key="n" class="pill">{{ n }}</span>
-          <span v-if="a.dependsOn" class="pill accent">needs {{ names(a.dependsOn) }}</span>
-          <button v-if="publishable(a.id)" type="button" class="pill accent lnk-pill" @click="ask('addon_publish', a.id)">
-            {{ publishable(a.id) === 'new' ? 'Publish' : 'Publish changes' }}
-          </button>
-          <button v-if="a.version" type="button" class="lnk small rm" @click="ask('addon_remove', a.id)">Remove</button>
-        </div>
+    <AddonFilters v-model:q="iq" :kinds="iKinds" :kind="kind" @kind="setKind">
+      <div class="seg">
+        <button type="button" :class="{ on: status === 'all' }" @click="status = 'all'">{{ $t('market.statusAll') }}</button>
+        <button type="button" :class="{ on: status === 'on' }" @click="status = 'on'">{{ $t('market.statusOn') }}</button>
+        <button type="button" :class="{ on: status === 'off' }" @click="status = 'off'">{{ $t('market.statusOff') }}</button>
       </div>
-    </div>
-    <p class="faint small">Always on: Home, Notes, Chat, Metrics. Turning an add-on off hides it here; its container keeps running.</p>
+      <button v-if="updates" type="button" class="chip" :class="{ on: onlyUpd }" @click="onlyUpd = !onlyUpd">{{ $t('market.updates') }} {{ updates }}</button>
+    </AddonFilters>
+    <div v-if="!iSections.length" class="empty-state">{{ iFiltered ? $t('market.noMatch') : $t('market.nothing') }}</div>
+    <section v-for="sec in iSections" :key="sec.key" class="kindsec">
+      <h2 class="sec mk">
+        <span>{{ sec.title }} <span class="faint small">{{ sec.items.length }}</span></span>
+        <NuxtLink v-if="sec.key === 'widget' && isOn('widgets')" to="/widgets" class="lnk small">{{ $t('market.openWidgets') }}</NuxtLink>
+      </h2>
+      <div class="grid cols-2 list">
+          <div v-for="a in sec.items.filter((x: any) => !x._d)" :key="a.id" class="card" :class="{ dim: !isOn(a.id) }">
+            <div class="top">
+              <Icon :name="a.icon" :size="18" class="i" />
+              <div class="who">
+                <b>{{ a.name }}</b>
+                <span class="faint small">by {{ a.author }}</span>
+              </div>
+              <button type="button" class="btn sm" :class="isOn(a.id) ? 'ghost' : 'primary'" :disabled="busy === a.id || off === null" @click="toggle(a.id)">
+                {{ isOn(a.id) ? 'Turn off' : 'Turn on' }}
+              </button>
+            </div>
+            <p class="small muted desc">{{ a.desc }}</p>
+            <div class="tags">
+              <span v-if="kindOf(a) === 'widget'" class="pill accent">{{ $t('market.widgetPill') }}</span>
+              <span v-if="a.version" class="pill">v{{ a.version }}</span>
+              <span v-if="a.license" class="pill">{{ a.license }}</span>
+              <span v-if="a.warning" class="pill warn" :title="a.warning">terms risk</span>
+              <button v-if="entry(a.id)?.update" type="button" class="pill accent lnk-pill" @click="ask('addon_update', a.id)">update to v{{ entry(a.id).version }}</button>
+              <span v-if="count(entry(a.id)?.installs ?? null)" class="pill">{{ count(entry(a.id).installs) }}</span>
+              <span v-if="ctState(a.ct)" class="pill" :class="ctState(a.ct)!.tone">{{ ctState(a.ct)!.text }}</span>
+              <span v-for="n in a.needs" :key="n" class="pill">{{ n }}</span>
+              <span v-if="a.dependsOn" class="pill accent">needs {{ names(a.dependsOn) }}</span>
+              <button v-if="publishable(a.id)" type="button" class="pill accent lnk-pill" @click="ask('addon_publish', a.id)">
+                {{ publishable(a.id) === 'new' ? 'Publish' : 'Publish changes' }}
+              </button>
+              <button v-if="a.version" type="button" class="lnk small rm" @click="ask('addon_remove', a.id)">Remove</button>
+            </div>
+          </div>
+          <div v-for="d in sec.items.filter((x: any) => x._d)" :key="`d:${d.id}`" class="card">
+            <div class="top">
+              <div class="who"><b>{{ d.name }}</b></div>
+              <NuxtLink to="/designs" class="btn sm">{{ $t('market.openOne') }}</NuxtLink>
+            </div>
+            <div class="swatches">
+              <i v-for="k in SWATCH" :key="k" class="sw" :style="{ background: d.tokens?.[k] }" />
+            </div>
+            <div class="tags">
+              <span class="pill">{{ $t('market.designPill') }}</span>
+              <span v-if="mine?.pick === `d:${d.id}`" class="pill ok">{{ $t('market.inUse') }}</span>
+            </div>
+          </div>
+      </div>
+      <p v-if="sec.key === 'addon'" class="faint small">Always on: Home, Notes, Chat, Metrics. Turning an add-on off hides it here; its container keeps running.</p>
+    </section>
 
     </template>
 
@@ -175,30 +261,54 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
       <span>Marketplace <span v-if="market?.source === 'local'" class="faint small">offline copy</span></span>
       <button type="button" class="btn ghost sm" :disabled="refreshing" @click="refreshMarket()">{{ refreshing ? 'Checking…' : 'Refresh' }}</button>
     </h2>
+    <AddonFilters v-model:q="mq" :kinds="mKinds" :kind="kind" @kind="setKind" />
     <Skeleton v-if="!market" kind="rows" :n="4" />
-    <div v-else-if="!available.length" class="empty-state">Nothing new yet.</div>
-    <div v-else class="grid cols-2 list">
-      <div v-for="e in available" :key="e.id" class="card">
-        <div class="top">
-          <Icon :name="e.icon || 'grid'" :size="18" class="i" />
-          <div class="who">
-            <b>{{ e.name }}</b>
-            <span class="faint small">by {{ e.author }}</span>
+    <div v-else-if="!mSections.length" class="empty-state">{{ mq.trim() ? $t('market.noMatch') : $t('market.nothing') }}</div>
+    <template v-else>
+    <section v-for="sec in mSections" :key="sec.key" class="kindsec">
+      <h2 class="sec mk"><span>{{ sec.title }} <span class="faint small">{{ sec.items.length }}</span></span></h2>
+      <div class="grid cols-2 list">
+          <div v-for="e in sec.items.filter((x: any) => !x._d)" :key="e.id" class="card">
+            <div class="top">
+              <Icon :name="e.icon || 'grid'" :size="18" class="i" />
+              <div class="who">
+                <b>{{ e.name }}</b>
+                <span class="faint small">by {{ e.author }}</span>
+              </div>
+              <button type="button" class="btn primary sm" @click="ask('addon_install', e.id)">Install</button>
+            </div>
+            <p class="small muted desc">{{ e.desc }}</p>
+            <p v-if="e.warning" class="small warn desc"><Icon name="triangle-alert" :size="14"/> {{ e.warning }}</p>
+            <div class="tags">
+              <span v-if="kindOf(e) === 'widget'" class="pill accent">{{ $t('market.widgetPill') }}</span>
+              <span class="pill">v{{ e.version }}</span>
+              <span v-if="e.license" class="pill">{{ e.license }}</span>
+              <span v-if="count(e.installs)" class="pill">{{ count(e.installs) }}</span>
+              <span v-for="n in e.needs" :key="n" class="pill">{{ n }}</span>
+              <span v-if="e.depends_on?.length" class="pill accent">needs {{ names(e.depends_on) }}</span>
+              <span v-if="!coreSatisfies(coreVersion, e.core)" class="pill bad">needs core {{ e.core }}</span>
+            </div>
           </div>
-          <button type="button" class="btn primary sm" @click="ask('addon_install', e.id)">Install</button>
-        </div>
-        <p class="small muted desc">{{ e.desc }}</p>
-        <p v-if="e.warning" class="small warn desc"><Icon name="triangle-alert" :size="14"/> {{ e.warning }}</p>
-        <div class="tags">
-          <span class="pill">v{{ e.version }}</span>
-          <span v-if="e.license" class="pill">{{ e.license }}</span>
-          <span v-if="count(e.installs)" class="pill">{{ count(e.installs) }}</span>
-          <span v-for="n in e.needs" :key="n" class="pill">{{ n }}</span>
-          <span v-if="e.depends_on?.length" class="pill accent">needs {{ names(e.depends_on) }}</span>
-          <span v-if="!coreSatisfies(coreVersion, e.core)" class="pill bad">needs core {{ e.core }}</span>
-        </div>
+          <div v-for="d in sec.items.filter((x: any) => x._d)" :key="`d:${d.slug}`" class="card">
+            <div class="top">
+              <div class="who">
+                <b>{{ d.name }}</b>
+                <span class="faint small">{{ $t('market.by', { name: d.author }) }}</span>
+              </div>
+              <NuxtLink v-if="isOn('designs')" to="/designs?s=market" class="btn sm">{{ $t('market.openDesigns') }}</NuxtLink>
+            </div>
+            <div class="swatches">
+              <i v-for="k in SWATCH" :key="k" class="sw" :style="{ background: d.tokens?.[k] }" />
+            </div>
+            <div class="tags">
+              <span class="pill">{{ $t('market.designPill') }}</span>
+              <span v-if="d.skin" class="pill">{{ d.skin }}</span>
+            </div>
+            <p v-if="!isOn('designs')" class="small faint desc">{{ $t('market.needDesigns') }}</p>
+          </div>
       </div>
-    </div>
+    </section>
+    </template>
     </template>
   </div>
 </template>
@@ -212,6 +322,9 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
 .desc { margin: 0; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .tags .rm { margin-left: auto; }
+.kindsec { margin-bottom: 14px; }
+.swatches { display: flex; gap: 4px; }
+.sw { width: 22px; height: 22px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); }
 .mk { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .lnk-pill { cursor: pointer; font: inherit; font-size: 11.5px; }
 .confirm { border-color: var(--warn); margin-bottom: 14px; }

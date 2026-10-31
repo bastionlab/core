@@ -23,9 +23,11 @@ const compact = (c: Chat) => {
   const { upd, ...rest } = c
   return {
     ...rest,
-    turns: c.turns.map(({ q, a, r, model, tps, error, at, tools, ct, auto, secs, denied, fin, effort, answered, clear, imgs, sid, uuid, ctx, compacted, usage, team, plan, executed, cmp, vote, sources }) => ({
+    turns: c.turns.map(({ q, a, r, model, tps, error, at, tools, ct, auto, secs, denied, fin, effort, answered, clear, imgs, sid, uuid, ctx, compacted, usage, team, plan, executed, cmp, vote, sources, proposals }) => ({
       q, a, r: r?.slice(0, 4000) ?? '', model, tps, error, at, ct, auto, secs, denied, fin, effort, answered, clear, imgs, sid, uuid, ctx, compacted, usage, team, plan, executed, vote, sources,
       cmp: cmp?.map(({ key, engine, label, q, a, error, ct, fin, model, secs, tps, usage }) => ({ key, engine, label, q, a, r: '', error, ct, fin, model, secs, tps, usage })),
+      // action cards survive a reload; the job (with its log) doesn't, so a card that was mid-run reads as 'sent' (no Run button: it would run twice)
+      proposals: proposals?.map(({ action, args, desc, why, state }) => ({ action, args, desc, why, state: state === 'running' ? 'sent' as const : state })),
       tools: tools?.slice(-40).map(({ name, label, done, error }) => ({ name, label, done, error, args: null })),
     })),
   }

@@ -20,6 +20,10 @@ export interface Cmd {
   verbs?: string[]
 }
 
+/** the dashboard CT id for the prompts below; set from a component's setup (AskBar), never looked up in a handler */
+let dashCt = 0
+export function setCommandCt(id?: number | null) { dashCt = Number(id) || 0 }
+
 export const NOTE_VERBS = ['inform', 'build', 'delete', 'adjust']
 
 /**
@@ -35,13 +39,23 @@ export function notePrompt(arg: string) {
   const title = titlePart.trim()
   const change = changePart.trim()
   if (!title) return 'Ask me which of my notes I mean.'
-  const read = 'Read it from the Notes tab first (pct exec 104 -- curl -s http://127.0.0.1:3000/api/notes).'
+  const read = `Read it from the Notes tab first (${dashCt ? `pct exec ${dashCt} -- ` : 'inside the dashboard CT: '}curl -s http://127.0.0.1:3000/api/notes).`
   if (verb === 'build') return `Build what my note "${title}" describes: ${read} Then implement it in the dashboard (/root/dashboard; follow its CLAUDE.md and .claude/rules, a new feature starts as an add-on). Do NOT edit, rewrite or tidy the note itself, and don't just summarise it. If it is big or has open choices, give a short plan first and ask me with a questions block. When done, tell me in 2-3 lines what you built and where to find it.`
   if (verb === 'delete') return `Delete my note "${title}". ${read} Show me its title and ask "Delete it? yes/no", then delete it (/api/notes/action, action delete) only after my yes.`
   if (verb === 'adjust') return change
     ? `Adjust my note "${title}": ${change}. ${read} Make the change with /api/notes/action (action edit), then tell me what changed.`
     : `Adjust my note "${title}". ${read} Ask me what to change, then make the change with /api/notes/action (action edit).`
   return `Tell me what my note "${title}" says in 2-3 lines, and its next steps if it has any. Don't change it. ${read}`
+}
+
+/** "/newaddon <id> <Name> [what it should do]" → the prompt (needs Auto: it writes files) */
+export function newAddonPrompt(arg: string) {
+  const m = /^(\S+)\s+(?:"([^"]+)"|(\S+))\s*([\s\S]*)$/.exec(arg.trim())
+  if (!m) return 'Ask me for the id and the name of the new add-on (like "habits Habits"), and what it should do.'
+  const id = m[1]!.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+  const name = m[2] ?? m[3]!
+  const what = m[4]!.trim()
+  return `Create a new dashboard add-on with id "${id}" and name "${name}" in /root/dashboard. Use the project's new-addon skill, i.e. run \`templates/new-addon ${id} "${name}"\` there, and follow CLAUDE.md and .claude/rules (design, build; a new feature is an add-on, never core). ${what ? `What it should do: ${what}.` : 'I did not say what it should do: if that matters, ask me with a questions block first, otherwise build a small useful first version.'} Build the first working version (page, API, nav entry from addon.yaml), bump its version in addon.yaml and run python3 addons/build-index.py. Check the build status in /var/lib/dash-live/status.json. This needs write access, so it only works in Auto mode: if you cannot write files, say so and stop. When done, tell me which files you created and give me the link to its page (/${id}).`
 }
 
 export const COMMANDS: Cmd[] = [
@@ -60,6 +74,13 @@ export const COMMANDS: Cmd[] = [
   { name: 'tasks', desc: 'scheduled tasks: Claude runs a prompt on its own', busy: true },
   { name: 'remember', arg: 'fact', desc: 'remember a fact about you or the server in every chat', busy: true },
   { name: 'forget', arg: 'text', desc: 'forget a remembered fact', busy: true },
+  { name: 'prompts', desc: 'open the prompt library', busy: true },
+  { name: 'p', arg: 'slug [text]', desc: 'Use a saved prompt', busy: true },
+  { name: 'changes', desc: 'open the changes panel', busy: true },
+  // no `arg`: the input would then refuse a bare /logs; the unit is optional
+  { name: 'logs', desc: 'open the logs panel (/logs <unit> for one unit)', busy: true },
+  { name: 'schedule', arg: 'prompt', desc: 'schedule a prompt to run on its own', busy: true },
+  { name: 'newaddon', arg: '<id> <Name> [what it should do]', desc: 'build a new add-on with Claude (needs Auto)', claude: true, prompt: newAddonPrompt },
   { name: 'export', desc: 'download this chat as Markdown', busy: true },
   { name: 'stop', desc: 'stop the answer that is running', busy: true },
   { name: 'status', desc: 'is anything broken on the server right now?', prompt: () => 'Is anything broken or unhealthy on the server right now? Check quickly and keep the answer short.' },

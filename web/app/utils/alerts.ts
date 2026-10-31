@@ -32,10 +32,11 @@ export function alerts(o: any): Alert[] {
       else if (!v.time) add('warn', `CT ${v.vmid} ${v.name} has no vzdump backup yet`, 'backups')
       else if (now - v.time > 26 * H) add('bad', `CT ${v.vmid} ${v.name}: last backup ${ago(v.time, now)}`, 'backups')
     }
-    if (b.sanoid.result !== 'success') add('bad', `sanoid last run: ${b.sanoid.result}`, 'backups')
-    if (b.syncoid.result !== 'success') add('bad', `syncoid last run: ${b.syncoid.result}`, 'backups')
-    if (b.syncoid.last && now - b.syncoid.last > 26 * H) add('bad', `syncoid last ran ${ago(b.syncoid.last, now)}`, 'backups')
-    for (const d of b.sanoid.datasets) if (now - d.time > 26 * H) add('warn', `No snapshot of ${d.name} for ${duration(now - d.time)}`, 'backups')
+    // installed === false: the unit does not exist on this box; a missing flag (older agent) counts as installed
+    if (b.sanoid && b.sanoid.installed !== false && b.sanoid.result !== 'success') add('bad', `sanoid last run: ${b.sanoid.result}`, 'backups')
+    if (b.syncoid && b.syncoid.installed !== false && b.syncoid.result !== 'success') add('bad', `syncoid last run: ${b.syncoid.result}`, 'backups')
+    if (b.syncoid && b.syncoid.installed !== false && b.syncoid.last && now - b.syncoid.last > 26 * H) add('bad', `syncoid last ran ${ago(b.syncoid.last, now)}`, 'backups')
+    if (b.sanoid && b.sanoid.installed !== false) for (const d of b.sanoid.datasets ?? []) if (now - d.time > 26 * H) add('warn', `No snapshot of ${d.name} for ${duration(now - d.time)}`, 'backups')
   }
 
   const g = o.gpu

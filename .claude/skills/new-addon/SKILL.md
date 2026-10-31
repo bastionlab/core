@@ -6,7 +6,7 @@ description: Scaffold a new Bastion add-on in addons/<id> from templates/addon a
 # New add-on
 
 1. Pick an id (lowercase, dashes) and a display name; ask if unclear.
-2. Run `templates/new-addon <id> "<Name>"` from the dashboard root (`/root/dashboard`).
+2. Run `templates/new-addon <id> "<Name>"` from the dashboard root (`<paths.dashboard>`).
 3. Fill in `addons/<id>/addon.yaml` (desc, icon, needs, depends_on, ct). Keep `version: 0.1.0` until first publish.
 4. Build the feature inside that folder only: pages/components in `web/app/`, API in `web/server/api/`,
    host work in `agent/<id>.py` through `dash_sdk` (`@get`/`@post`, `pct`, `ct`/`ip`). Follow

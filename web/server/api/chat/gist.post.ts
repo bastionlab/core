@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const text = String(body?.text ?? '').trim().slice(0, 24_000)
   if (!text) throw createError({ statusCode: 400, statusMessage: 'nothing to summarise' })
   const models = (await aiModels(event)).filter((m: any) => !m.uncensored)
-  const model = (models.find((m: any) => m.warm) ?? models.find((m: any) => m.loaded) ?? models.at(-1))?.name
+  const model = (await jobModel('gist', event).catch(() => null)) ?? (models.find((m: any) => m.warm) ?? models.find((m: any) => m.loaded) ?? models.at(-1))?.name
   if (!model) throw createError({ statusCode: 503, statusMessage: 'no local model' })
   const stream = await upstream<ReadableStream<Uint8Array>>('ollama', ollamaBase(event), null, '/api/chat', 90_000, {
     method: 'POST',

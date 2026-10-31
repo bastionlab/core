@@ -10,15 +10,15 @@ import type { Scope } from './context'
 const ALL: Scope[] = ['home', 'media', 'dev', 'metrics', 'chat']
 
 const CATALOG: { scopes: Scope[], line: string }[] = [
-  { scopes: ALL, line: 'service_restart — args: service, one of dash, ollama, open-webui, searxng, immich, immich-ml, jellyfin, audiobookshelf, seerr, qbittorrent, prowlarr, radarr, sonarr, lazylibrarian, bazarr, gluetun, subgen. Restarting gluetun rotates the VPN server; media-vpn-sync re-attaches the clients.' },
+  { scopes: ALL, line: 'service_restart — args: service, a service the agent knows (core apps and installed add-ons).' },
   { scopes: ['home', 'metrics', 'chat'], line: 'backup_ct — args: vmid. vzdump backup of one container.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'backup_all — no args. vzdump backup of EVERY container now, one after the other (snapshot mode: nothing is stopped or paused, takes a few minutes). Propose this for "back up everything / all services"; use backup_ct for one container. It refuses on its own while another backup, restore or upgrade is running — if the snapshot lists anything under "Busy", say so instead of proposing.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'ct_start / ct_shutdown / ct_reboot — args: vmid. Container power state.' },
   { scopes: ['home', 'metrics', 'chat'], line: 'apt_upgrade — args: target, either "host" or a container id. Runs apt update && apt upgrade.' },
-  { scopes: ['home', 'metrics', 'chat'], line: 'apt_upgrade_all — no args. Upgrades packages on the pve host AND in every running container, one after the other. Propose this when the owner wants everything updated; use apt_upgrade for a single target.' },
-  { scopes: ['metrics', 'chat'], line: 'zfs_scrub — args: pool, either "tank" or "backup".' },
-  { scopes: ['metrics', 'chat'], line: 'unit_start — args: unit, either "sanoid.service" (snapshot now) or "syncoid.service" (replicate to the backup pool now).' },
-  { scopes: ['home', 'metrics', 'chat'], line: 'ollama_pull — args: model. Downloads it into CT 105. ollama_stop — args: model. Unloads it from VRAM.' },
+  { scopes: ['home', 'metrics', 'chat'], line: 'apt_upgrade_all — no args. Upgrades packages on the ' + cfg().name + ' host AND in every running container, one after the other. Propose this when the owner wants everything updated; use apt_upgrade for a single target.' },
+  { scopes: ['metrics', 'chat'], line: 'zfs_scrub — args: pool, the name of a ZFS pool on the host (see the pools in the snapshot).' },
+  { scopes: ['metrics', 'chat'], line: 'unit_start — args: unit, either "sanoid.service" (snapshot now) or "syncoid.service" (replicate to the backup pool now); only when the snapshot lists that unit as installed.' },
+  { scopes: ['home', 'metrics', 'chat'], line: `ollama_pull — args: model. Downloads it into the ai container (CT ${ctId('ai')}). ollama_stop — args: model. Unloads it from VRAM.` },
   { scopes: ['dev', 'metrics', 'chat'], line: `newdev — args: vmid (${cfg().devbox.ids.join('-')}), name, ip (${cfg().devbox.ips.join(' to ')}). Creates a dev box.` },
   { scopes: ['dev', 'chat'], line: 'git_push — args: vmid (the dev box), path (the project path), message (optional). With a message it commits everything first; without one it only pushes commits that already exist.' },
   { scopes: ['dev', 'chat'], line: 'git_fetch — args: vmid, path. Fetches from GitHub so ahead/behind is current.' },
@@ -26,6 +26,11 @@ const CATALOG: { scopes: Scope[], line: string }[] = [
   { scopes: ['dev', 'chat'], line: 'project_remove — args: vmid, path, force (optional). Removes a project from a dev box: stops its preview and Claude session and moves the folder to ~/.pv-trash, so it is recoverable and nothing on GitHub is touched. It refuses on its own if the project has uncommitted or unpushed work. Leave force out: "delete it", "it was just a test" or "I do not need it" is NOT permission to force. Pass force: true only after the owner has been told what is unpushed and has said in this conversation that that work can be lost. This is the action for "delete/remove/get rid of <project>"; never propose git_push for that.' },
   { scopes: ['dev', 'chat'], line: 'github_publish — args: vmid, path, name (optional, defaults to the folder name), visibility (private or public, default private). For a project that exists but has no remote: creates the GitHub repo and pushes it there. Never propose it for a project that already has one.' },
 ]
+
+/** the action names a scope may propose, read off the catalog lines ("name — args…", "a / b — …", ". name — …") */
+export function actionNames(scope: Scope = 'metrics') {
+  return CATALOG.filter(a => a.scopes.includes(scope)).flatMap(a => [...a.line.matchAll(/(?:^|\. |\s\/\s)([a-z][a-z0-9_]*)(?=\s(?:—|\/))/g)].map(m => m[1]!))
+}
 
 export function actionTool(scope: Scope = 'metrics') {
   const lines = CATALOG.filter(a => a.scopes.includes(scope)).map(a => a.line)

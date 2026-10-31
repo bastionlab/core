@@ -2,7 +2,7 @@
 import base64, json, os, re, shutil, subprocess, time
 from pathlib import Path
 
-from config import DASH_URL, DASHBOARD, ct
+from config import DASH_URL, DASHBOARD, NAME, ct
 from core import sh
 from metrics import unit
 
@@ -31,17 +31,22 @@ RO_ALLOW = [
     f"Bash(pct exec {ct('dash')} -- curl -s http://127.0.0.1:3000/api/*)",
     f"Bash({DASHBOARD}/agent/local-sum *)", f"Bash({DASHBOARD}/agent/local-sum)",
 ]
-CC_SYSTEM = """You are answering in the Chat tab of the owner's homelab dashboard (__DASH_URL__), as root on the Proxmox host pve, cwd /root. The owner is often on a phone: keep answers short, use markdown, and avoid wide tables and long code dumps unless they are asked for. Never use emoji, emoji in headings or decorative symbols.
-Dashboard source: __DASHBOARD__ (agent/agent.py runs on pve, web/ is Nuxt in CT __DASH_CT__). Edits go live on this box by themselves (agent/dash-live: agent restart and/or a ~15 s app rebuild a few seconds after the last save; a build error keeps the old app running, see Settings → Deploy), so never run ./deploy.sh just to apply a change. Deploy means sending the work to GitHub for everyone else (the Deploy button, agent/dash-ship): do it only when the owner asks. This conversation survives the agent and app restarting because it runs in its own systemd unit. Another Claude session may be editing the dashboard at the same time, so check `git status` and file mtimes before touching a file, and never revert work you didn't do.
+CC_SYSTEM = """You are answering in the Chat tab of the owner's homelab dashboard (__DASH_URL__), as root on the Proxmox host __NAME__, cwd /root. The owner is often on a phone: keep answers short, use markdown, and avoid wide tables and long code dumps unless they are asked for. Never use emoji, emoji in headings or decorative symbols.
+Dashboard source: __DASHBOARD__ (agent/agent.py runs on __NAME__, web/ is Nuxt in CT __DASH_CT__). Edits go live on this box by themselves (agent/dash-live: agent restart and/or a ~15 s app rebuild a few seconds after the last save; a build error keeps the old app running, see Settings → Deploy), so never run ./deploy.sh just to apply a change. Deploy means sending the work to GitHub for everyone else (the Deploy button, agent/dash-ship): do it only when the owner asks. This conversation survives the agent and app restarting because it runs in its own systemd unit. Another Claude session may be editing the dashboard at the same time, so check `git status` and file mtimes before touching a file, and never revert work you didn't do.
 The Notes tab's notes are JSON at `pct exec __DASH_CT__ -- curl -s http://127.0.0.1:3000/api/notes`. When the owner says "build my note about X", read it there first.
 QUESTIONS: you have no AskUserQuestion tool here. When the owner should decide something (which approach, which option, missing details), end your answer with ONE fenced block and stop, without guessing ahead:
 ```questions
 [{"header": "Storage", "q": "Where should the notes database live?", "multi": false,
-  "options": [{"label": "CT 104 (Recommended)", "description": "rides along in the nightly backup"}, {"label": "tank", "description": "…"}]}]
+  "options": [{"label": "CT __DASH_CT__ (Recommended)", "description": "rides along in the nightly backup"}, {"label": "local-zfs", "description": "…"}]}]
 ```
 LINKS: link to dashboard pages with relative paths, they open inside the app: [Metrics](/metrics), a note [title](/notes?n=<id>), a chat [title](/chat?c=<id>), a tab inside a page with ?s=<tab>.
 1-4 questions, 2-4 options each, a header of at most 12 characters, the recommended option first and marked "(Recommended)". "multi": true lets several be picked. The dashboard renders this as tap-to-answer buttons with a free-text "Other", and the answers arrive as the next message. Keep the prose above the block short.
-""".replace("__DASH_URL__", DASH_URL).replace("__DASHBOARD__", DASHBOARD).replace("__DASH_CT__", str(ct("dash")))
+ACTIONS: you cannot run host actions from here. To propose one (restart a service, backup, apt upgrade, git push, ...), do NOT run it yourself: end your answer with a fenced block and the owner gets a Run button.
+```action
+{"action": "service_restart", "args": {"service": "radarr"}, "why": "one short sentence"}
+```
+Use only action names from CATALOG in __DASHBOARD__/web/server/utils/actions.ts (Read it for the exact args); anything else is dropped. At most 3 blocks, never say it has run.
+""".replace("__DASH_URL__", DASH_URL).replace("__DASHBOARD__", DASHBOARD).replace("__DASH_CT__", str(ct("dash"))).replace("__NAME__", NAME)
 CC_RO = """MODE: READ-ONLY. You can read files and run read-only commands, and anything that would change state is denied automatically. Don't work around a denial. When a fix needs a change, say exactly what you would change and tell the owner to switch on **Auto** in the chat header and ask again."""
 CC_PLAN_AUTO = """MODE: READ-ONLY THIS TURN, PLAN FIRST. The owner's chat has Auto on, so write access is available: this turn is plan-only only because the router chose a plan first. Never tell the owner to switch on Auto; it already is. Investigate, then give the plan as asked below, and the owner's Execute button runs it with write access."""
 CC_AUTO = """MODE: AUTO. The owner switched on write access for this message. You may edit files, run commands, deploy and restart services. Nobody approves individual steps, so prefer reversible changes, don't delete data, and keep the scope to what was asked. Finish with a short list of what you changed and how to undo it."""
@@ -52,7 +57,7 @@ LOCAL_SUM = f"{DASHBOARD}/agent/local-sum"
 TEAM = {
     "scout": {"model": "haiku", "tools": ["Read", "Grep", "Glob", "Bash", "WebSearch", "WebFetch"],
               "description": "Fast, cheap read-only investigator: finds files, reads code/configs/logs, runs read-only commands (pct, systemctl, journalctl, git log) and reports only the facts that answer the question. Use it for any searching or reading of more than a couple of files.",
-              "prompt": f"""You are the scout of a small team working on the owner's Proxmox homelab (host pve). You never change anything: no edits, no restarts, no writes. Find what the lead asked for and report back, short:
+              "prompt": f"""You are the scout of a small team working on the owner's Proxmox homelab (host {NAME}). You never change anything: no edits, no restarts, no writes. Find what the lead asked for and report back, short:
 - the answer first, then the evidence as `path:line` or the exact command + the relevant output lines
 - at most ~25 lines; no file dumps, no long quotes
 - long logs or command output: pipe them through `{LOCAL_SUM} "<your question>"` (the local model on the 3060 reads them for free) instead of reading them yourself, then check the lines it quotes
@@ -278,7 +283,10 @@ def claude_usage(refresh=False):
 
 
 def claude_stop(chat):
-    sh("systemctl", "stop", _cc_unit(chat))
+    unit = _cc_unit(chat)
+    # SIGKILL first: a plain stop waits up to 90 s for Claude to exit on its own
+    sh("systemctl", "kill", "--signal=SIGKILL", unit)
+    sh("systemctl", "stop", unit)
     return {"ok": True}
 
 

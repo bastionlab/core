@@ -1,8 +1,8 @@
 # __NAME__ (a Bastion add-on)
 
-This folder plugs into the Bastion core (`/root/dashboard` on the host). Before changing anything, read the
+This folder plugs into the Bastion core (`<paths.dashboard>` on the host). Before changing anything, read the
 core's rules — they apply here too:
-- `../../.claude/rules/design.md` — UI kit, phone-first (Samsung/Chrome), copy, propose-and-approve for writes
+- `../../.claude/rules/design.md` — UI kit, phone-first (Android Chrome / Samsung Internet), copy, propose-and-approve for writes
 - `../../.claude/rules/build.md` — add-on layout, `addon.yaml`, config instead of hardcoded IDs/IPs, `dash_sdk`
 
 Layout: `addon.yaml` (manifest), `web/` (Nuxt layer: `app/pages`, `app/components`, `server/api`), `agent/*.py`

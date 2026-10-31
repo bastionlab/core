@@ -1,7 +1,8 @@
 import { marked } from 'marked'
+import { highlight } from '../utils/highlight'
 
 export interface Tool { name: string, args: any, done?: boolean, error?: string, id?: string, label?: string }
-export interface Proposal { action: string, args: any, desc: string, why?: string, state?: 'idle' | 'running' | 'done' | 'failed' | 'dismissed', job?: any }
+export interface Proposal { action: string, args: any, desc: string, why?: string, state?: 'idle' | 'running' | 'done' | 'failed' | 'dismissed' | /** was running when stored: not runnable again */ 'sent', job?: any }
 export interface Turn {
   q: string, a: string, r: string, /** screenshots sent with the question (chat image names) */ imgs?: string[], tools?: Tool[], proposals?: Proposal[], model?: string, tps?: number | null, error?: string, busy?: boolean, at?: number
   /** Claude turns: agent turn id, whether it ran with write access, how long it took, what read-only mode blocked */
@@ -47,8 +48,111 @@ export const sinceClear = (turns: Turn[]) => turns.slice(turns.findLastIndex(t =
 
 // model output is untrusted: render markdown but show any raw HTML as text
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
-marked.use({ renderer: { html: ({ text }: any) => esc(text) } })
+marked.use({
+  renderer: {
+    html: ({ text }: any) => esc(text),
+    code: ({ text, lang }: any) => `<pre><code class="language-${esc(String(lang || '').split(/\s/)[0])}">${highlight(text, lang || '')}</code></pre>\n`,
+  },
+})
 export const md = (s: string) => marked.parse(s, { async: false }) as string
+
+// --- what the answer renderers add on top of md(): jump links and code block chrome (AskTurns + the chat's compare panes)
+const PATH = String.raw`\/[a-z][\w-]*(?:\/[\w-]+)*`
+const QUERY = String.raw`\?(?:[\w%=-]|\.(?=[\w%=-])|&amp;)+`
+const BARE = new RegExp(String.raw`(?<=^|[\s(\[;"'])(${PATH})(${QUERY})?(?=$|[\s),;:!?\]"']|&(?:quot|#39);|\.(?!\w))`, 'g')
+const WHOLE = new RegExp(String.raw`^(\/(?:[a-z][\w-]*(?:\/[\w-]+)*)?)(${QUERY})?$`)
+
+/** the pages the owner can open: core ones + routes of add-ons that are installed, on and allowed for the role */
+export function useAnswerRoutes() {
+  const { list, pageOn } = useAddons()
+  return computed(() => new Set([...CORE_PAGES.filter(p => p !== '/login'), ...list.flatMap(a => a.routes)].filter(p => pageOn(p))))
+}
+
+const NAMED: Record<string, string> = { colon: ':', tab: '\t', newline: '\n', sol: '/', bsol: '\\', num: '#', amp: '&', lpar: '(', rpar: ')' }
+/**
+ * Is this link target safe to keep in a rendered answer (model output is untrusted; marked passes any scheme through)?
+ * Allowlist: /path (not //host or /\host), #anchor, http:, https:, mailto:. HTML entities are decoded and whitespace /
+ * control characters dropped first, the way a browser reads the attribute, so `java&#9;script:` or `&#58;` don't slip by.
+ */
+export function okHref(href: string) {
+  const h = String(href ?? '')
+    .replace(/&#x([0-9a-f]+);?/gi, (_, n) => String.fromCodePoint(Math.min(parseInt(n, 16), 0x10ffff)))
+    .replace(/&#(\d+);?/g, (_, n) => String.fromCodePoint(Math.min(+n, 0x10ffff)))
+    .replace(/&([a-z]+);/gi, (m, n) => NAMED[n.toLowerCase()] ?? m)
+    .replace(/[\u0000-\u0020\u007f-\u009f\u00ad\u200b-\u200f\u2028\u2029\ufeff]/g, '')
+    .toLowerCase()
+  return /^\/(?![/\\])/.test(h) || h[0] === '#' || /^(?:https?|mailto):/.test(h)
+}
+
+/**
+ * md() output → dashboard pages named in text or inline `code` (/metrics, /notes?n=4) become in-app links, links to a
+ * page get class "in", links to other sites open in a new tab. Never touches code blocks or existing links' text.
+ */
+export function linkify(html: string, routes: Set<string>) {
+  const parts = html.split(/(<[^>]*>)/)
+  let pre = 0, a = 0
+  for (let i = 0; i < parts.length; i++) {
+    const s = parts[i]!
+    if (s[0] === '<') {
+      const m = /^<(\/?)([a-z0-9]+)/i.exec(s)
+      if (!m) continue
+      const tag = m[2]!.toLowerCase(), close = !!m[1]
+      if (tag === 'pre') pre = Math.max(0, pre + (close ? -1 : 1))
+      else if (tag === 'a') {
+        a = Math.max(0, a + (close ? -1 : 1))
+        if (!close) {
+          // a link whose target is not on the allowlist (javascript:, data:, …) stays as text without a href
+          const hm = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]*))/i.exec(s)
+          if (hm && !okHref(hm[1] ?? hm[2] ?? hm[3] ?? '')) { parts[i] = s.replace(hm[0], ''); continue }
+          const h = hm?.[1] ?? ''
+          if (/^\/(?!\/|api\/)/.test(h)) parts[i] = s.replace(/^<a/, '<a class="in"')
+          else if (/^https?:\/\//i.test(h)) parts[i] = s.replace(/^<a/, '<a target="_blank" rel="noopener noreferrer"')
+        }
+      }
+      continue
+    }
+    if (!s || pre || a) continue
+    if (/^<code[\s>]/.test(parts[i - 1] ?? '') && parts[i + 1] === '</code>') {
+      const w = WHOLE.exec(s)
+      if (w && routes.has(w[1]!)) parts[i] = `<a class="in" href="${s}">${s}</a>`
+    } else if (s.includes('/')) {
+      parts[i] = s.replace(BARE, (m, p: string, q = '') => (routes.has(p) ? `<a class="in" href="${p}${q}">${m}</a>` : m))
+    }
+  }
+  return parts.join('')
+}
+
+export interface CodeLabels { copy: string, wrap: string, panel: string, all: (n: number) => string, less: string }
+const COLLAPSE = 18
+
+/**
+ * md() output → every code block in a box with a header (language, copy, wrap, optionally "open in panel").
+ * Blocks over 18 lines collapse behind a show-all button, but not while the answer streams (it would jump around).
+ * `state` = per block index the flags the reader set ('w' wrap, 'o' open), so a re-render keeps them.
+ */
+export function codeBlocks(html: string, o: { labels: CodeLabels, panel?: boolean, busy?: boolean, state?: Record<number, string> }) {
+  const L = o.labels
+  let n = 0
+  return html.replace(/<pre>(<code[^>]*>)?([\s\S]*?)<\/pre>/g, (_m, open = '', body: string) => {
+    const lang = /language-([^"\s]*)/.exec(open)?.[1] ?? ''
+    const st = o.state?.[n++] ?? ''
+    const lines = body.replace(/<\/code>\s*$/, '').replace(/\n$/, '').split('\n').length
+    const long = !o.busy && lines > COLLAPSE, wrap = st.includes('w'), more = long && st.includes('o')
+    return `<div class="code${wrap ? ' wrap' : ''}${long ? ' long' : ''}${more ? ' open' : ''}"><div class="ch"><span class="cl">${lang}</span><span class="cbs">`
+      + `<button type="button" class="cb cp">${L.copy}</button><button type="button" class="cb cw" aria-pressed="${wrap}">${L.wrap}</button>`
+      + `${o.panel ? `<button type="button" class="cb co">${L.panel}</button>` : ''}</span></div><pre>${open}${body}</pre>`
+      + `${long ? `<button type="button" class="cm" data-more="${L.all(lines)}" data-less="${L.less}">${more ? L.less : L.all(lines)}</button>` : ''}</div>`
+  })
+}
+
+/** linkify + codeBlocks with the viewer's language: one call for every place that draws an answer */
+export function useAnswerRender() {
+  const { t: tr } = useI18n()
+  const routes = useAnswerRoutes()
+  return (html: string, o: { busy?: boolean, panel?: boolean, state?: Record<number, string> } = {}) => codeBlocks(linkify(html, routes.value), {
+    ...o, labels: { copy: tr('ask.copy'), wrap: tr('ask.wrap'), panel: tr('ask.panel'), all: n => tr('ask.showAll', { n }), less: tr('ask.showLess') },
+  })
+}
 
 /** the model picker and the web/think toggles are shared by every page */
 export function useAskSettings() {

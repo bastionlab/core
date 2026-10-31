@@ -209,6 +209,22 @@
     "guestsHint": "Off: only your own Tailscale login and the home network. Everyone still needs an account."
   },
   "settings": {
+    "title": "Settings",
+    "notifications": "Notifications",
+    "notifications_k": "push alerts",
+    "secrets": "Secrets",
+    "secrets_k": "PIN token key rotate",
+    "discord": "Discord",
+    "discord_k": "webhook channels",
+    "attention": "Needs attention",
+    "working": "Working",
+    "set": "Set",
+    "notSet": "Not set",
+    "clear": "Clear",
+    "saved": "Saved",
+    "okPill": "OK",
+    "warnPill": "Check",
+    "badPill": "Down",
     "search": "Find a setting…",
     "noHits": "Nothing matches “{q}”",
     "needs": "{n} need you",
@@ -252,7 +268,7 @@
       "logins": "Owner logins",
       "logins_h": "Tailscale logins that are the owner, comma separated",
       "subnet": "LAN subnet",
-      "subnet_h": "Home network, e.g. 192.168.1.0.0/24",
+      "subnet_h": "Home network, e.g. 192.168.1.0/24",
       "hostip": "Host IP",
       "hostip_h": "This server on the home network",
       "dbids": "Container ids",
@@ -271,6 +287,31 @@
       "auto_h": "Checks hourly for new versions"
     }
   },
+  "market": {
+    "all": "All",
+    "addons": "Add-ons",
+    "designs": "Designs",
+    "widgets": "Widgets",
+    "search": "Search the marketplace",
+    "noMatch": "Nothing matches your search.",
+    "nothing": "Nothing here yet.",
+    "widgetPill": "widget",
+    "designPill": "design",
+    "by": "by {name}",
+    "openDesigns": "Open in Designs",
+    "needDesigns": "Needs the Designs add-on.",
+    "statusAll": "All",
+    "statusOn": "On",
+    "statusOff": "Off",
+    "updates": "Updates",
+    "openWidgets": "Open Widgets",
+    "inUse": "In use",
+    "openOne": "Open"
+  },
+  "backups": {
+    "snapshots": "ZFS snapshots",
+    "replication": "ZFS replication"
+  },
   "tabs": {
     "machine": "Machine",
     "backups": "Backups",
@@ -286,6 +327,7 @@
     "searches": "Searches"
   },
   "ask": {
+    "proposalSent": "Started earlier, see the jobs tray",
     "compacted": "context compacted · {pre} → {post} tokens",
     "compactedShort": "context compacted",
     "quiet": "Quiet for {time}. Still working?",
@@ -312,6 +354,11 @@
     "executeHint": "runs it with write access (Auto) for this one message",
     "planTag": "plan",
     "usageHint": "tokens per model in this answer (lead + subagents); list price ≈ ${usd}, your plan covers it",
-    "speakAll": "read it all"
+    "speakAll": "read it all",
+    "wrap": "Wrap",
+    "panel": "Panel",
+    "showAll": "Show all {n} lines",
+    "showLess": "Show less",
+    "compare": "Compare"
   }
 }

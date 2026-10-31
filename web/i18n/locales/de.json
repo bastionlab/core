@@ -209,6 +209,22 @@
     "guestsHint": "Aus: nur dein eigener Tailscale-Login und das Heimnetz. Alle brauchen trotzdem ein Konto."
   },
   "settings": {
+    "title": "Einstellungen",
+    "notifications": "Benachrichtigungen",
+    "notifications_k": "Push Hinweise",
+    "secrets": "Geheimnisse",
+    "secrets_k": "PIN Token Schlüssel rotieren",
+    "discord": "Discord",
+    "discord_k": "Webhook Kanäle",
+    "attention": "Braucht dich",
+    "working": "Läuft",
+    "set": "Setzen",
+    "notSet": "Nicht gesetzt",
+    "clear": "Löschen",
+    "saved": "Gespeichert",
+    "okPill": "OK",
+    "warnPill": "Prüfen",
+    "badPill": "Aus",
     "search": "Einstellung suchen…",
     "noHits": "Nichts passt zu „{q}“",
     "needs": "{n} brauchen dich",
@@ -252,7 +268,7 @@
       "logins": "Besitzer-Logins",
       "logins_h": "Tailscale-Logins des Besitzers, kommagetrennt",
       "subnet": "LAN-Subnetz",
-      "subnet_h": "Heimnetz, z. B. 192.168.1.0.0/24",
+      "subnet_h": "Heimnetz, z. B. 192.168.1.0/24",
       "hostip": "Host-IP",
       "hostip_h": "Dieser Server im Heimnetz",
       "dbids": "Container-IDs",
@@ -271,6 +287,31 @@
       "auto_h": "Prüft stündlich auf neue Versionen"
     }
   },
+  "market": {
+    "all": "Alle",
+    "addons": "Add-ons",
+    "designs": "Designs",
+    "widgets": "Widgets",
+    "search": "Marktplatz durchsuchen",
+    "noMatch": "Nichts passt zur Suche.",
+    "nothing": "Noch nichts hier.",
+    "widgetPill": "Widget",
+    "designPill": "Design",
+    "by": "von {name}",
+    "openDesigns": "In Designs öffnen",
+    "needDesigns": "Braucht das Designs-Add-on.",
+    "statusAll": "Alle",
+    "statusOn": "An",
+    "statusOff": "Aus",
+    "updates": "Updates",
+    "openWidgets": "Widgets öffnen",
+    "inUse": "In Benutzung",
+    "openOne": "Öffnen"
+  },
+  "backups": {
+    "snapshots": "ZFS-Snapshots",
+    "replication": "ZFS-Replikation"
+  },
   "tabs": {
     "machine": "Maschine",
     "backups": "Backups",
@@ -286,6 +327,7 @@
     "searches": "Suchen"
   },
   "ask": {
+    "proposalSent": "Früher gestartet, siehe Jobs-Leiste",
     "compacted": "Kontext verdichtet · {pre} → {post} Tokens",
     "compactedShort": "Kontext verdichtet",
     "quiet": "Seit {time} still. Läuft es noch?",
@@ -312,6 +354,11 @@
     "executeHint": "läuft mit Schreibrechten (Auto), nur für diese Nachricht",
     "planTag": "Plan",
     "usageHint": "Tokens pro Modell in dieser Antwort (Lead + Subagenten); Listenpreis ≈ ${usd}, vom Abo gedeckt",
-    "speakAll": "alles vorlesen"
+    "speakAll": "alles vorlesen",
+    "wrap": "Umbruch",
+    "panel": "Panel",
+    "showAll": "Alle {n} Zeilen zeigen",
+    "showLess": "Weniger zeigen",
+    "compare": "Vergleichen"
   }
 }

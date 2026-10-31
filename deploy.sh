@@ -54,7 +54,7 @@ pct exec $CT -- sh -c 'tailscale serve --bg --https=443 http://127.0.0.1:8080 >/
 echo "→ home network (Caddy on the LAN IP; waits for / retries until the CT has that address after a boot)"
 pct exec $CT -- sh -c 'command -v caddy >/dev/null || apt-get install -y -q caddy >/dev/null'
 pct push $CT "$DIR/lan/Caddyfile" /etc/caddy/Caddyfile
-pct exec $CT -- sh -c "umask 077; printf 'LAN_KEY=%s\\nDASH_IP=%s\\nLAN_SUBNET=%s\\n' '$(cat "$DIR/agent/lan_key")' '$(c .cts.dash.ip)' '$(c .lan.subnet)' > /etc/caddy/lan.env; chown caddy /etc/caddy/lan.env
+pct exec $CT -- sh -c "umask 077; printf 'LAN_KEY=%s\\nDASH_IP=%s\\nLAN_SUBNET=%s\\nDASH_LAN_HOST=%s\\n' '$(cat "$DIR/agent/lan_key")' '$(c .cts.dash.ip)' '$(c .lan.subnet)' '$(c '.lan.hostname // "dash.lan"')' > /etc/caddy/lan.env; chown caddy /etc/caddy/lan.env
   mkdir -p /etc/systemd/system/caddy.service.d; printf '[Unit]\\nWants=network-online.target\\nAfter=network-online.target\\nStartLimitIntervalSec=0\\n[Service]\\nEnvironmentFile=/etc/caddy/lan.env\\nRestart=on-failure\\nRestartSec=5\\n' > /etc/systemd/system/caddy.service.d/lan.conf
   systemctl daemon-reload; systemctl enable -q caddy; systemctl restart caddy"
 sleep 2

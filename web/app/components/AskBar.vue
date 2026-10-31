@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { parseCommand, type Cmd } from '~/utils/commands'
+import { parseCommand, setCommandCt, type Cmd } from '~/utils/commands'
 // history: earlier questions for ↑ recall · voice: mic button (Whisper) · queue: a message may be sent while busy
 const props = defineProps<{ busy: boolean, models: any[], placeholder?: string, commands?: Cmd[], draftKey?: string, images?: boolean, history?: string[], voice?: boolean, queue?: boolean }>()
-const emit = defineEmits<{ submit: [string, string[]], stop: [], focus: [boolean] }>()
+const emit = defineEmits<{ submit: [string, string[]], stop: [], focus: [boolean], file: [File, string] }>()
 const { model, think, web } = useAskSettings()
+// the /note prompts name the dashboard CT: resolve it here in setup, not inside a command handler
+const dashCfg = useDashConfig()
+watchEffect(() => setCommandCt(dashCfg.ctId('dash')))
 const q = ref('')
 const imgs = ref<string[]>([]) // pasted/picked/dropped screenshots and files, already uploaded
 const opts = ref(false)
@@ -35,7 +38,7 @@ async function addImages(files: Iterable<File>) {
   imgErr.value = ''
   for (const f of files) {
     uploading.value++
-    try { imgs.value.push(shrinkable(f) ? await uploadNoteImage(f, '/api/chat/image') : await uploadChatFile(f)) } catch (e: any) { imgErr.value = `${f.name || 'file'} failed: ${e?.data?.statusMessage || e?.statusMessage || e?.message}` } finally { uploading.value-- }
+    try { const up = shrinkable(f) ? await uploadNoteImage(f, '/api/chat/image') : await uploadChatFile(f); imgs.value.push(up); emit('file', f, up) } catch (e: any) { imgErr.value = `${f.name || 'file'} failed: ${e?.data?.statusMessage || e?.statusMessage || e?.message}` } finally { uploading.value-- }
   }
 }
 function onPaste(e: ClipboardEvent) {
@@ -170,7 +173,7 @@ async function mic() {
 onBeforeUnmount(() => { if (mr?.state === 'recording') { recSecs.value = 0; mr.stop() } })
 const mmss = (n: number) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`
 
-defineExpose({ setText: (v: string) => { q.value = v; nextTick(() => { box.value?.focus(); fit() }) } })
+defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: string) => { q.value = v; nextTick(() => { box.value?.focus(); fit() }) } })
 </script>
 
 <template>

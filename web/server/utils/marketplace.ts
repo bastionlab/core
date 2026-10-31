@@ -11,6 +11,8 @@ export interface MarketEntry {
   license?: string, warning?: string
   /** folder in bastionlab/addons, or … */
   path?: string
+  /** 'widget' for widget packs; missing = a normal add-on */
+  kind?: string
   /** … someone's own repo */
   repo?: string
 }
@@ -56,7 +58,7 @@ export async function marketplace(force = false) {
       update: !!(i?.version && newer(e.version, i.version)),
     }
   })
-  const data = { source: index.source === 'remote' ? 'remote' : 'local', updated: index.updated ?? null, shareInstalls: !!m.share_installs, addons }
+  const data = { source: index.source === 'remote' ? 'remote' : 'local', updated: index.updated ?? null, shareInstalls: !!m.share_installs, addons, designs: index.designs ?? [] }
   cache = { at: Date.now(), data }
   return { ...data, local }
 }

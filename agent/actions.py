@@ -2,9 +2,9 @@
 import importlib.machinery, importlib.util, json, os, re, secrets, shlex, signal, subprocess, threading, time
 
 import backup, release
-from config import DASHBOARD, ct
+from config import DASHBOARD, NAME, ct
 from core import FAN, JOBS, JOBS_LOCK, cached, invalidate, sh
-from metrics import backup_busy, cts, pools, scheduled_shutdown, unit
+from metrics import backup_busy, cts, pools, scheduled_shutdown, snapshot_units, unit
 
 
 # Every action the dashboard (and through it the AI) may run: the host's own here, an add-on's in its agent module
@@ -119,7 +119,7 @@ def a_host_shutdown(args):
     if scheduled_shutdown():
         raise ValueError("a shutdown is already scheduled")
     n = sum(1 for c in cts() if c["status"] == "running")
-    return (f"power off the pve host in 1 minute ({n} running containers are shut down first)",
+    return (f"power off the {NAME} host in 1 minute ({n} running containers are shut down first)",
             ["shutdown", "-P", "+1", "powered off from the dashboard"], 60)
 
 
@@ -134,7 +134,7 @@ def a_host_reboot(args):
         raise ValueError("at must be HH:MM")
     n = sum(1 for c in cts() if c["status"] == "running")
     when = f"at {at}" if at else "in 1 minute"
-    return (f"reboot the pve host {when} ({n} running containers stop and start again)",
+    return (f"reboot the {NAME} host {when} ({n} running containers stop and start again)",
             ["shutdown", "-r", at or "+1", "rebooted from the dashboard"], 60)
 
 
@@ -159,7 +159,7 @@ def a_apt_upgrade(args):
     target = args.get("target", "host")
     line = "apt-get update && apt-get -y -o Dpkg::Options::=--force-confold upgrade"
     if target == "host":
-        return "upgrade packages on the pve host", ["sh", "-c", line], 3600
+        return f"upgrade packages on the {NAME} host", ["sh", "-c", line], 3600
     c = _ct({"vmid": target}, running=True)
     return f"upgrade packages in CT {c['vmid']} {c['name']}", _pct(c["vmid"], "sh", "-c", line), 3600
 
@@ -169,12 +169,12 @@ def a_apt_upgrade_all(args):
     container ids only — nothing the caller sends reaches the shell."""
     ids = [c["vmid"] for c in cts() if c["status"] == "running" and c["type"] == "lxc"]
     line = "apt-get update && apt-get -y -o Dpkg::Options::=--force-confold upgrade"
-    steps = [f'echo "=== pve host ==="; ({line}) || echo "host: FAILED"']
+    steps = [f'echo "=== {NAME} host ==="; ({line}) || echo "host: FAILED"']
     for vmid in ids:
         name = next((c["name"] for c in cts() if c["vmid"] == vmid), "")
         steps.append(f'echo; echo "=== CT {vmid} {name} ==="; '
                      f'pct exec {vmid} -- sh -c {shlex.quote(line)} || echo "CT {vmid}: FAILED"')
-    return (f"upgrade packages everywhere: the pve host and {len(ids)} running containers",
+    return (f"upgrade packages everywhere: the {NAME} host and {len(ids)} running containers",
             ["sh", "-c", "; ".join(steps)], 4 * 3600)
 
 
@@ -187,9 +187,9 @@ def a_zfs_scrub(args):
 
 def a_unit_start(args):
     unit = str(args.get("unit", ""))
-    if unit not in ("sanoid.service", "syncoid.service"):
-        raise ValueError("only sanoid.service or syncoid.service")
-    what = "take ZFS snapshots now" if unit.startswith("sanoid") else "replicate tank → backup pool now"
+    if unit not in snapshot_units():
+        raise ValueError("only " + (" or ".join(snapshot_units()) or "a configured snapshot unit"))
+    what = "take ZFS snapshots now" if unit.startswith("sanoid") else "replicate to the backup pool now"
     return what, ["systemctl", "start", unit], 6 * 3600
 
 
@@ -229,7 +229,7 @@ def _addon(args, cmd):
             if here.exists():
                 raise ValueError(f"{aid} is already installed")
             desc = (f"install the add-on {e.get('name', aid)} {e.get('version')} by {e.get('author')} from {src} — "
-                    f"its code runs as root on pve (install.sh, if it has one, runs now), {rebuild}")
+                    f"its code runs as root on {NAME} (install.sh, if it has one, runs now), {rebuild}")
             if e.get("license"):
                 desc += f" — license {e['license']}"
             if e.get("warning"):

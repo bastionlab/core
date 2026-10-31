@@ -68,7 +68,7 @@ export default defineEventHandler(async (event) => {
   const context = await scopeContext(event, scope, models)
     .catch((e: any) => `(The live server data could not be loaded right now: ${e?.statusMessage || e?.message}. Say so if the question needs it.)`)
   const usable = models.filter(m => !m.uncensored)
-  const model = usable.find(m => m.name === body.model)?.name ?? usable.find(m => m.warm)?.name ?? usable[0]?.name
+  const model = usable.find(m => m.name === body.model)?.name ?? await jobModel('ask', event).catch(() => null) ?? usable.find(m => m.warm)?.name ?? usable[0]?.name
   if (!model) throw createError({ statusCode: 502, statusMessage: 'no usable model installed' })
 
   const history = (Array.isArray(body.history) ? body.history : [])

@@ -11,7 +11,7 @@ marketplace). It runs `agent/addon-publish <id>`; from a terminal the same is `p
 What happens:
 1. The version goes up a patch if it isn't already higher than the marketplace's (written back into addon.yaml);
    a new add-on gets the publisher's GitHub login as `author`.
-2. A pre-check on pve runs the marketplace's own gate (`bastionlab/addons/.github/check/check.py`, no lint).
+2. A pre-check on the Proxmox host runs the marketplace's own gate (`bastionlab/addons/.github/check/check.py`, no lint).
 3. The folder is pushed to the `publish/<id>` branch and a PR opened. `.github/workflows/publish.yml` checks it:
    scope (only `<id>/`), manifest + version, owner (only the author or an org admin updates an add-on),
    safety scan + ClamAV, leaked secrets, style (no hex colours in styles, no hardcoded IPs / tailnet / CT ids,

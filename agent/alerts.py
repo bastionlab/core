@@ -6,7 +6,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hooks  # noqa: E402
-from metrics import vzdump_run  # noqa: E402
+from config import NAME, NODE  # noqa: E402
+from metrics import snapshot_units, vzdump_run  # noqa: E402
 
 STATE = Path("/var/lib/dash/alerts.json")
 FULL = 90  # %
@@ -29,7 +30,7 @@ def problems(state):
     """{key: message} for everything wrong right now"""
     out = {}
     # backups: every vzdump task that ended badly since we last looked, and the nightly job going quiet
-    tasks = js("pvesh", "get", "/nodes/pve/tasks", "--typefilter", "vzdump", "--limit", "20", "--output-format", "json") or []
+    tasks = js("pvesh", "get", f"/nodes/{NODE}/tasks", "--typefilter", "vzdump", "--limit", "20", "--output-format", "json") or []
     seen = state.get("_task_seen", time.time() - 86400)
     for t in tasks:
         if t.get("endtime") and t["endtime"] > seen and t.get("status") != "OK":
@@ -47,7 +48,7 @@ def problems(state):
         run = vzdump_run(log.stem[4:])
         if run and run["error"] and time.time() - run["time"] < 2 * 86400:
             out[f"ct-backup:{log.stem}"] = f"Backup von CT {log.stem[4:]} mit Fehler: `{run['error'][:180]}`"
-    for u in ("sanoid.service", "syncoid.service"):
+    for u in snapshot_units():
         if sh("systemctl", "is-failed", u).strip() == "failed":
             out[f"unit:{u}"] = f"`{u}` ist fehlgeschlagen (ZFS-Snapshots/Replikation) – `journalctl -u {u}`"
     # disks: pools, storages, every CT's root disk
@@ -55,16 +56,16 @@ def problems(state):
         name, health = line.split("\t")
         if health != "ONLINE":
             out[f"pool:{name}"] = f"ZFS-Pool **{name}** ist {health} – `zpool status {name}`"
-    for s in js("pvesh", "get", "/nodes/pve/storage", "--output-format", "json") or []:
+    for s in js("pvesh", "get", f"/nodes/{NODE}/storage", "--output-format", "json") or []:
         if s.get("total") and 100 * s["used"] / s["total"] >= FULL:
             out[f"storage:{s['storage']}"] = f"Speicher **{s['storage']}** ist zu {100 * s['used'] / s['total']:.0f} % voll " \
                                              f"({(s['total'] - s['used']) / 1e9:.0f} GB frei)"
-    for c in js("pvesh", "get", "/nodes/pve/lxc", "--output-format", "json") or []:
+    for c in js("pvesh", "get", f"/nodes/{NODE}/lxc", "--output-format", "json") or []:
         if c.get("status") == "running" and c.get("maxdisk") and 100 * c["disk"] / c["maxdisk"] >= FULL:
             out[f"ct:{c['vmid']}"] = f"CT {c['vmid']} **{c.get('name')}**: Disk zu {100 * c['disk'] / c['maxdisk']:.0f} % voll"
     df = sh("df", "-P", "/").splitlines()[-1].split()
     if int(df[4].rstrip("%")) >= FULL:
-        out["root"] = f"pve `/` ist zu {df[4]} voll"
+        out["root"] = f"{NAME} `/` ist zu {df[4]} voll"
     return out
 
 

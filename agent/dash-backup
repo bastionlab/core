@@ -160,7 +160,7 @@ def create(scheduled=False):
     d = backup_dir()
     d.mkdir(parents=True, exist_ok=True)
     os.chmod(d, 0o700)
-    host = re.sub(r"[^a-z0-9-]", "-", str(CFG.get("name") or "pve").lower())[:40] or "pve"
+    host = re.sub(r"[^a-z0-9-]", "-", str(CFG.get("name") or subprocess.run(["hostname", "-s"], capture_output=True, text=True).stdout.strip() or "pve").lower())[:40] or "pve"
     name = f"dash-{host}-{time.strftime('%Y%m%d-%H%M%S')}.tar.gz"
     items, skipped = [], []
     with tempfile.TemporaryDirectory(prefix="dash-backup-") as tmp:

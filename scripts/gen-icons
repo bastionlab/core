@@ -5,7 +5,8 @@ elements, writes the lucide record. Edit ICONS and re-run; missing names are rep
 import re, subprocess, sys, tempfile
 from pathlib import Path
 
-CT = "104"
+import json
+CT = str(json.load(open("/etc/dash/config.json"))["cts"]["dash"]["id"])
 SCRATCH = "/tmp/lucide-gen"
 OUT = Path(__file__).resolve().parent.parent / "web/app/components/icon-paths.ts"
 ICONS = """thumbs-up thumbs-down message-square zap users lock shield clock bookmark scale flame trophy eye-off

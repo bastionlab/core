@@ -18,6 +18,8 @@ export interface Addon {
   license?: string
   /** addon.yaml only: shown before install and on its card, e.g. it scrapes a site whose terms forbid that */
   warning?: string
+  /** addon.yaml only: 'widget' = a widget pack (shown in its own section on /addons) */
+  kind?: string
   /** one or two lines: what it does for you */
   desc: string
   /** what the box needs to run it */

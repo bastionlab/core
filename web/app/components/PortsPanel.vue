@@ -1,7 +1,7 @@
 <script setup lang="ts">
-const { hostIp } = useDashConfig()
+const { hostIp, name: hostName } = useDashConfig()
 const props = defineProps<{ ports: any, cts: any[] }>()
-const name = (id: string | number) => (id === 'pve' ? 'pve' : props.cts.find(c => String(c.vmid) === String(id))?.name ?? id)
+const name = (id: string | number) => (id === 'pve' ? hostName.value : props.cts.find(c => String(c.vmid) === String(id))?.name ?? id)
 const ip = (id: string | number) => (id === 'pve' ? hostIp.value : props.cts.find(c => String(c.vmid) === String(id))?.ip)
 
 const hidden = new Set(['tailscaled'])

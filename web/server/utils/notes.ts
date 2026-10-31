@@ -184,16 +184,17 @@ const SCHEMA = {
   required: ['title', 'body', 'topic', 'kind'],
 }
 
-export async function pickModel() {
-  const ps: any = await $fetch('/api/ps', { baseURL: ollamaBase(), headers: { 'X-Job': 'notes-tidy' }, timeout: 10_000 }).catch(() => null)
-  const warm = (ps?.models ?? []).find((m: any) => Date.parse(m.expires_at) - Date.now() > 24 * 3600_000 && !/abliterated|uncensored|heretic/i.test(m.name))
-  return warm?.name ?? 'qwen3.5:9b'
+/** the model for a job (utils/aiJobs.ts: its own when already loaded, else the warm one) */
+export async function pickModel(job = 'notes') {
+  const model = await jobModel(job)
+  if (!model) throw new Error('No model is available in Ollama')
+  return model
 }
 
-async function chat(messages: any[], format?: any) {
+async function chat(messages: any[], format?: any, job = 'notes') {
   const r: any = await $fetch('/api/chat', {
     baseURL: ollamaBase(), headers: { 'X-Job': 'notes-tidy' }, method: 'POST', timeout: 300_000,
-    body: { model: await pickModel(), stream: false, think: false, messages, options: { temperature: 0.2 }, ...(format ? { format } : {}) },
+    body: { model: await pickModel(job), stream: false, think: false, messages, options: { temperature: 0.2 }, ...(format ? { format } : {}) },
   })
   return String(r?.message?.content ?? '')
 }

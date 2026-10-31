@@ -13,7 +13,7 @@ const CLEAN = 'You clean up voice transcripts. Remove filler words, false starts
 async function tidy(event: any, raw: string) {
   if (raw.split(/\s+/).length < 4) return raw
   try {
-    const model = (await aiModels(event)).find((m: any) => m.warm)?.name
+    const model = await jobModel('voice', event)
     if (!model) return raw
     const r: any = await ollama(event, '/api/chat', { method: 'POST', job: 'voice-tidy', body: {
       model, stream: false, think: false, keep_alive: -1, options: { temperature: 0.1 },

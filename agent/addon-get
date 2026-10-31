@@ -349,6 +349,8 @@ def main_checkout(cmd, aid):
         dest = OLD / f"{aid}-{manifest(here).get('version') or 'x'}-{time.strftime('%Y%m%d-%H%M%S')}"
         shutil.copytree(here, dest)  # a copy, in case it held edits that were never pushed
         sparse("set", *KEEP, *[d for d in installed_dirs() if d != aid])
+        if here.exists():  # never pushed (untracked), so git leaves it behind; the copy above has it
+            shutil.rmtree(here)
         say(f"{aid} left the checkout (still in the repo; a copy is in {dest})")
         return
     e = entry(aid)

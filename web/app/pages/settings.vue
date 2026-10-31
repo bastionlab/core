@@ -29,6 +29,8 @@ const rows = computed(() => [
 const tone = (c: any) => (!c.ok ? 'bad' : c.warn ? 'warn' : 'ok')
 // broken ones first, so the list reads as a to-do
 const sorted = computed(() => [...rows.value].sort((a, b) => ({ bad: 0, warn: 1, ok: 2 } as any)[tone(a)] - ({ bad: 0, warn: 1, ok: 2 } as any)[tone(b)]))
+const bad = computed(() => rows.value.filter(c => !c.ok || c.warn))
+const good = computed(() => rows.value.filter(c => c.ok && !c.warn))
 const problems = computed(() => rows.value.filter(c => !c.ok || c.warn).length)
 const oldSecrets = computed(() => (s.value?.secrets ?? []).filter((r: any) => !r.set || r.old).length)
 /** where the owner fixes a connection: an inline key field, a section on this page, or a hint */
@@ -49,10 +51,10 @@ async function saveKey(key: string) {
 // --- categories ------------------------------------------------------------------------------------------------
 type Cat = 'you' | 'access' | 'connections' | 'system' | 'addons'
 const cats = computed(() => {
-  const all: { key: Cat, icon: string, badge?: number }[] = [
+  const all: { key: Cat, icon: string, badge?: number, tone?: 'warn' }[] = [
     { key: 'you', icon: 'shield' },
-    { key: 'access', icon: 'key', badge: oldSecrets.value },
-    { key: 'connections', icon: 'send', badge: problems.value },
+    { key: 'access', icon: 'key', badge: oldSecrets.value, tone: 'warn' },
+    { key: 'connections', icon: 'send', badge: problems.value, tone: 'warn' },
     { key: 'system', icon: 'settings' },
     { key: 'addons', icon: 'grid' },
   ]
@@ -60,7 +62,7 @@ const cats = computed(() => {
 })
 const tab = usePageTab('you')
 const cat = computed<Cat>(() => (cats.value.some(c => c.key === tab.value) ? tab.value as Cat : 'you'))
-const tabs = computed(() => cats.value.map(c => ({ key: c.key, label: t(`settings.cat.${c.key}`), icon: c.icon, badge: c.badge })))
+const tabs = computed(() => cats.value.map(c => ({ key: c.key, label: t(`settings.cat.${c.key}`), icon: c.icon, badge: c.badge || undefined, tone: c.badge ? c.tone : undefined })))
 
 // panel anchors (old links like /settings#money) → their category
 const ANCHOR: Record<string, Cat> = { account: 'you', language: 'you', notifications: 'you', users: 'access', secrets: 'access', connections: 'connections', discord: 'connections', general: 'system', backup: 'system', deploy: 'system' }
@@ -79,14 +81,14 @@ const index = computed(() => {
   const e: { label: string, sub?: string, cat: Cat, anchor: string }[] = [
     { label: t('auth.acct'), cat: 'you', anchor: 'account' },
     { label: t('prefs.title'), cat: 'you', anchor: 'language' },
-    { label: 'Notifications', sub: 'push', cat: 'you', anchor: 'notifications' },
+    { label: t('settings.notifications'), sub: t('settings.notifications_k'), cat: 'you', anchor: 'notifications' },
   ]
   if (!owner.value) return e
   e.push(
     { label: t('users.title'), sub: 'invite roles', cat: 'access', anchor: 'users' },
-    { label: 'Secrets', sub: 'PIN token key rotate', cat: 'access', anchor: 'secrets' },
+    { label: t('settings.secrets'), sub: t('settings.secrets_k'), cat: 'access', anchor: 'secrets' },
     { label: t('settings.conn.title'), cat: 'connections', anchor: 'connections' },
-    { label: 'Discord', sub: 'webhook', cat: 'connections', anchor: 'discord' },
+    { label: t('settings.discord'), sub: t('settings.discord_k'), cat: 'connections', anchor: 'discord' },
     { label: t('settings.gen.title'), sub: 'config.json', cat: 'system', anchor: 'general' },
     { label: t('backup.title'), cat: 'system', anchor: 'backup' },
     { label: t('deploy.title'), sub: 'github release', cat: 'system', anchor: 'deploy' },
@@ -112,6 +114,7 @@ const hits = computed(() => {
 <template>
   <div class="settings">
     <header class="top">
+      <h1>{{ t('settings.title') }}</h1>
       <div v-if="cats.length > 1" class="find">
         <Icon name="search" :size="15" class="faint" />
         <input v-model="q" type="search" :placeholder="t('settings.search')">
@@ -128,7 +131,7 @@ const hits = computed(() => {
     <PageTabs v-if="cats.length > 1" v-model="tab" :tabs="tabs" />
     <p v-if="cats.length > 1" class="faint small lead">{{ t(`settings.cat.${cat}_d`) }}</p>
 
-      <div class="content">
+    <div class="content">
         <template v-if="cat === 'you'">
           <AccountPanel />
           <LocalePanel />
@@ -144,25 +147,30 @@ const hits = computed(() => {
           <Panel id="connections" :title="t('settings.conn.title')" :sub="problems ? t('settings.needs', { n: problems }) : t('settings.allGood')">
             <Skeleton v-if="!s" kind="rows" :n="5" />
             <p v-else-if="!rows.length" class="faint small">{{ t('settings.conn.none') }}</p>
-            <div v-for="c in sorted" :key="c.key || c.id" class="conn">
-              <span class="dot" :class="tone(c)" />
-              <div class="what">
-                <b>{{ c.name }}</b>
-                <span class="faint small">{{ c.addon ? c.addon.name : c.used_by }}</span>
+            <template v-for="g in [{ k: 'attention', list: bad }, { k: 'working', list: good }]" :key="g.k">
+              <div v-if="g.list.length" class="group">
+                <h3 class="grp">{{ t(`settings.${g.k}`) }}<span class="faint"> {{ g.list.length }}</span></h3>
+                <div v-for="c in g.list" :key="c.key || c.id" class="conn">
+                  <span class="dot" :class="tone(c)" />
+                  <div class="what">
+                    <b>{{ c.name }}</b>
+                    <span class="faint small">{{ c.addon ? c.addon.name : c.used_by }}</span>
+                  </div>
+                  <span class="detail small" :class="tone(c) === 'ok' ? 'muted' : tone(c)">{{ c.detail }}</span>
+                  <div class="fix">
+                    <button v-if="c.set" type="button" class="btn sm" @click="replacing = replacing === c.set ? '' : c.set; keyDraft = ''">{{ t('settings.replace') }}</button>
+                    <a v-else-if="c.id === 'discord' && !c.addon" class="lnk small" href="#discord" @click.prevent="go('connections', 'discord')">{{ t('settings.edit') }}</a>
+                    <button v-else-if="hasSection(c.addon)" type="button" class="lnk small" @click="go('addons', c.addon.id)">{{ t('settings.open') }}</button>
+                  </div>
+                  <div v-if="c.set && replacing === c.set" class="keyedit">
+                    <input v-model="keyDraft" type="password" autocomplete="off" :placeholder="c.id === 'github' ? 'ghp_… or github_pat_…' : 'tskey-…'">
+                    <button type="button" class="btn primary sm" :disabled="!keyDraft" @click="saveKey(c.set)">{{ t('common.save') }}</button>
+                    <div v-if="keyErr" class="errbox small">{{ keyErr }}</div>
+                  </div>
+                  <div v-else-if="c.fix && (!c.ok || c.warn) && !hasSection(c.addon)" class="hint faint small">{{ c.fix }}</div>
+                </div>
               </div>
-              <span class="detail small" :class="tone(c) === 'ok' ? 'muted' : tone(c)">{{ c.detail }}</span>
-              <div class="fix">
-                <button v-if="c.set" type="button" class="btn sm" @click="replacing = replacing === c.set ? '' : c.set; keyDraft = ''">{{ t('settings.replace') }}</button>
-                <a v-else-if="c.id === 'discord' && !c.addon" class="lnk small" href="#discord" @click.prevent="go('connections', 'discord')">{{ t('settings.edit') }}</a>
-                <button v-else-if="hasSection(c.addon)" type="button" class="lnk small" @click="go('addons', c.addon.id)">{{ t('settings.open') }}</button>
-              </div>
-              <div v-if="c.set && replacing === c.set" class="keyedit">
-                <input v-model="keyDraft" type="password" autocomplete="off" :placeholder="c.id === 'github' ? 'ghp_… or github_pat_…' : 'tskey-…'">
-                <button type="button" class="btn primary sm" :disabled="!keyDraft" @click="saveKey(c.set)">{{ t('common.save') }}</button>
-                <div v-if="keyErr" class="errbox small">{{ keyErr }}</div>
-              </div>
-              <div v-else-if="c.fix && (!c.ok || c.warn) && !hasSection(c.addon)" class="hint faint small">{{ c.fix }}</div>
-            </div>
+            </template>
           </Panel>
           <div id="discord"><DiscordPanel /></div>
         </template>
@@ -183,13 +191,16 @@ const hits = computed(() => {
             <component :is="`Settings${pascal(a.id)}`" v-if="a.settingsUi" />
           </Panel>
         </template>
-      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.top { display: flex; justify-content: flex-end; margin-bottom: 10px; }
-.find { position: relative; display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 10px; flex: 0 1 280px; min-width: 0; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.top h1 { font-size: 20px; font-weight: 600; margin: 0; }
+.grp { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 14px 0 2px; }
+.group:first-child .grp { margin-top: 0; }
+.find { position: relative; flex-shrink: 1; display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 10px; flex: 0 1 280px; min-width: 0; }
 .find:focus-within { border-color: var(--accent); }
 .find input { flex: 1; border: 0; background: none; padding: 7px 0; min-width: 0; border-radius: 0; box-shadow: none; outline: none; -webkit-appearance: none; appearance: none; }
 .hits { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 4px; box-shadow: 0 8px 24px rgb(0 0 0 / .3); max-height: 60vh; overflow-y: auto; }
@@ -202,13 +213,14 @@ const hits = computed(() => {
 .jump { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 
 .conn { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 4px 10px; padding: 9px 0; border-top: 1px solid var(--line); }
-.conn:first-of-type { border-top: 0; }
+.grp + .conn { border-top: 0; }
 .what { display: flex; flex-direction: column; min-width: 0; }
 .fix { justify-self: end; }
 .keyedit, .hint { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .keyedit input { flex: 1; min-width: 160px; }
 
 @media (max-width: 640px) {
+  .top h1 { display: none; }
   .find { flex-basis: 100%; }
   .conn { grid-template-columns: auto minmax(0, 1fr) auto; }
   .detail { grid-column: 2 / -1; grid-row: 2; }

@@ -13,16 +13,19 @@ export function addonsOff(): string[] {
   return allAddons().filter(a => a.ct && !ctId(a.ct)).map(a => a.id)
 }
 
+/** runtime config turns an undefined dependsOn into "", so only trust a real list */
+const depsOf = (a: Addon): string[] => Array.isArray(a.dependsOn) ? a.dependsOn : []
+
 export function setAddon(id: string, on: boolean) {
   const a = allAddons().find(x => x.id === id)
   if (!a) throw createError({ statusCode: 400, statusMessage: 'unknown add-on' })
   const off = new Set(addonsOff())
   if (on) {
-    const missing = (a.dependsOn ?? []).filter(d => off.has(d))
+    const missing = depsOf(a).filter(d => off.has(d))
     if (missing.length) throw createError({ statusCode: 400, statusMessage: `turn on ${names(missing)} first` })
     off.delete(id)
   } else {
-    const users = allAddons().filter(x => !off.has(x.id) && x.dependsOn?.includes(id)).map(x => x.id)
+    const users = allAddons().filter(x => !off.has(x.id) && depsOf(x).includes(id)).map(x => x.id)
     if (users.length) throw createError({ statusCode: 400, statusMessage: `${names(users)} need${users.length > 1 ? '' : 's'} it` })
     off.add(id)
   }
