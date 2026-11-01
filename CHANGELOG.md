@@ -11,7 +11,7 @@ What changed in each core release (add-ons keep their own). Newest first.
 - Features: Settings reads like a proper settings page: a title, connections grouped into "Needs attention" and "Working", add-on options as label-left / control-right rows, warning-coloured tab badges, and search labels that are translated.
 - Features: the sidebar and phone menu order can be changed by dragging (Settings → Add-ons → Sidebar order, a separate order per phone / tablet / desktop).
 - Features: code blocks in chat and notes are syntax-highlighted (keywords, strings, comments, numbers; no extra dependency).
-- Fixes: the Jellyfin and Audiobookshelf tiles link their tailnet names (https://jellyfin.<tailnet>, https://books.<tailnet>) instead of LAN addresses, so they open the same away from home; health is still checked on the LAN port.
+- Fixes: the Immich, Jellyfin and Audiobookshelf tiles link their tailnet names (https://immich.<tailnet>, https://jellyfin.<tailnet>, https://books.<tailnet>) instead of LAN addresses, so they open the same away from home; health is still checked on the LAN port.
 - Add-ons → Marketplace: search plus Add-ons / Designs / Widgets filter chips; published designs are browsable there. Installed gets the same sections (Add-ons, Designs, Widgets), search and an On/Off filter.
 
 ## 0.1.2 (2026-10-27)
