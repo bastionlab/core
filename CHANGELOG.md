@@ -4,6 +4,8 @@ What changed in each core release (add-ons keep their own). Newest first.
 
 ## Unreleased
 
+## 0.1.5 (2026-11-07)
+
 ### Fixes
 
 - Consistency cleanup: no decorative symbols in buttons/links, skeletons instead of "Loading…" blocks, dialogs use the kit danger button.
