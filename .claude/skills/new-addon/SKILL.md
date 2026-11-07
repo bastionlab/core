@@ -11,6 +11,8 @@ description: Scaffold a new Bastion add-on in addons/<id> from templates/addon a
 4. Build the feature inside that folder only: pages/components in `web/app/`, API in `web/server/api/`,
    host work in `agent/<id>.py` through `dash_sdk` (`@get`/`@post`, `pct`, `ct`/`ip`). Follow
    `.claude/rules/design.md` and `.claude/rules/build.md`; no hardcoded CT ids, IPs or tailnet names.
+   Quality bar (see "New add-ons" in design.md): premium and usable, not a rough draft; works under all skins;
+   good on phone and PC; an icon that matches the topic, never a placeholder. Screenshot it on both before done.
 5. If it needs its own container, write an idempotent `install.sh` (runs once as root on install, gets
    `DASH_CONFIG`) that creates the CT and adds it to `/etc/dash/config.json` under `cts.<id>`.
 6. Test-build a scratch copy as `CLAUDE.md` describes (`NOTES_DIR` scratch + `LEARN_WORKER=0`), then deploy.

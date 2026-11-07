@@ -30,13 +30,16 @@ const host = (u: string) => { try { return new URL(u).host } catch { return '' }
 .app {
   position: relative; display: flex; align-items: center; gap: 12px; min-width: 0; padding: 12px 14px;
   border-radius: var(--radius); color: var(--text); background: var(--panel); border: 1px solid var(--line);
-  transition: border-color .15s, background .15s, transform .15s;
+  transition: border-color var(--dur-fast), background var(--dur-fast), transform var(--dur-fast) var(--ease-spring);
 }
-.app:hover {
-  text-decoration: none; transform: translateY(-1px);
-  border-color: hsl(var(--h) 60% 60% / .45);
-  background: linear-gradient(135deg, hsl(var(--h) 70% 60% / .08), var(--panel) 70%);
+@media (hover: hover) {
+  .app:hover {
+    text-decoration: none; transform: translateY(-1px);
+    border-color: hsl(var(--h) 60% 60% / .45);
+    background: linear-gradient(135deg, hsl(var(--h) 70% 60% / .08), var(--panel) 70%);
+  }
 }
+.app:active { transform: scale(.97); transition-duration: 60ms; }
 .app.down { opacity: .7; }
 .icon {
   font-size: 21px; width: 42px; height: 42px; display: grid; place-items: center; flex: none;

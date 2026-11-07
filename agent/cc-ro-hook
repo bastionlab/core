@@ -1,0 +1,267 @@
+#!/usr/bin/env python3
+"""PreToolUse hook for read-only chat turns (2026-11-01).
+
+Read-only turns run with --permission-mode dontAsk, which denies any Bash call that doesn't match a fixed allowlist
+entry, so `pct exec 104 -- curl ... | python3 -c ...` (reading a note) was denied. This hook looks at the whole
+command instead: when every piece of it only reads (pipes, &&, loops, $(...), pct exec / bash -c bodies included), it
+answers "allow"; anything it can't prove read-only gets no answer and falls through to dontAsk, which denies it.
+Rule of thumb: may read anything, must not write, delete, move, start/stop or send data.
+Test: echo '{"tool_name":"Bash","tool_input":{"command":"ls | head"}}' | agent/cc-ro-hook
+"""
+import json, re, shlex, sys
+
+# programs that only read, whatever their arguments (output to stdout only)
+PURE = set("""cat head tail grep egrep fgrep rg zgrep zcat bzcat xzcat ls stat file wc cut tr column jq yq nl rev tac
+fold fmt paste join comm diff cmp md5sum sha1sum sha256sum sha512sum b2sum cksum base64 xxd od hexdump strings
+readlink realpath dirname basename pwd echo printf true false test [ date cal uptime whoami id groups hostname uname
+arch nproc printenv which whereis type du df free lsblk blkid lscpu lspci lsusb lsmod findmnt mount vmstat iostat
+mpstat ps pgrep pidof top lsof ss netstat dig nslookup host ping getent tree sleep seq expr bc numfmt locale tty
+sensors pveversion pct-status ls-files local-sum stty ldd file iconv jq gzip-test lsattr getfacl namei
+wait cd export unset set local declare read shift break continue return exit""".split())
+SHELL_WORDS = {"do", "then", "else", "elif", "!", "{", "}", "(", ")", "time"}
+WRAPPERS = {"timeout", "nice", "ionice", "stdbuf", "command", "builtin", "exec", "nohup"}
+GIT_RO = {"log", "status", "diff", "show", "rev-parse", "ls-files", "ls-tree", "blame", "describe", "shortlog",
+          "cat-file", "grep", "rev-list", "merge-base", "name-rev", "for-each-ref", "show-ref", "whatchanged", "count-objects"}
+SYSTEMCTL_RO = {"status", "show", "cat", "list-units", "list-timers", "list-unit-files", "list-sockets", "list-dependencies",
+                "is-active", "is-enabled", "is-failed", "is-system-running", "get-default", "list-jobs", "list-machines"}
+DOCKER_RO = {"ps", "logs", "inspect", "images", "image", "stats", "top", "port", "version", "info", "events", "history", "diff"}
+PY_BAD = re.compile(r"""\bopen\s*\([^)]*['"][rb+]*[wax]|\.write(_text|_bytes)?\s*\(|\b(os|shutil|subprocess|pathlib|socket|requests|urllib|http|ftplib|smtplib|ctypes|pty|signal|sqlite3)\b(?!\.path\b)|\b(exec|eval|compile|__import__|getattr|setattr|globals)\s*\(|\b(unlink|remove|rmdir|rename|replace|mkdir|makedirs|chmod|chown|system|popen|kill|truncate|touch|symlink_to|rmtree)\b""")
+SQL_BAD = re.compile(r"\b(insert|update|delete|drop|create|alter|replace|attach|detach|vacuum|reindex|begin|commit|pragma\s+\w+\s*=)\b|^\s*\.(import|output|once|save|backup|restore|shell|system|load|cd)\b", re.I | re.M)
+
+
+def split_heredocs(cmd):
+    """-> (command without heredoc bodies, [bodies]); bodies become stdin of the line that opened them"""
+    lines, out, bodies, i = cmd.split("\n"), [], [], 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        tags = re.findall(r"<<-?\s*(['\"]?)(\w+)\1", line)
+        i += 1
+        for _, tag in tags:
+            body = []
+            while i < len(lines) and lines[i].strip() != tag:
+                body.append(lines[i]); i += 1
+            i += 1
+            bodies.append("\n".join(body))
+    return "\n".join(out), bodies
+
+
+def pull_subst(cmd):
+    """take out $(...), <(...) and `...` (checked on their own) -> (cmd with a placeholder word, [inner commands])"""
+    inner, out, i, q = [], [], 0, None
+    while i < len(cmd):
+        c = cmd[i]
+        if q == "'":
+            out.append(c); q = None if c == "'" else q; i += 1; continue
+        if c == "\\" and i + 1 < len(cmd):
+            out.append(cmd[i:i + 2]); i += 2; continue
+        if c == "'" and q is None:
+            q = "'"; out.append(c); i += 1; continue
+        if c == '"':
+            q = None if q == '"' else '"'; out.append(c); i += 1; continue
+        if c == "`":
+            j = cmd.find("`", i + 1)
+            if j < 0:
+                raise ValueError("unclosed backtick")
+            inner.append(cmd[i + 1:j]); out.append("SUBST"); i = j + 1; continue
+        if c in "$<>" and cmd[i + 1:i + 2] == "(" and cmd[i + 2:i + 3] != "(":
+            depth, j = 1, i + 2
+            while j < len(cmd) and depth:
+                depth += {"(": 1, ")": -1}.get(cmd[j], 0); j += 1
+            if depth:
+                raise ValueError("unclosed $(")
+            if c == ">":
+                raise ValueError(">(...) writes")
+            inner.append(cmd[i + 2:j - 1]); out.append("SUBST"); i = j; continue
+        out.append(c); i += 1
+    return "".join(out), inner
+
+
+def segments(cmd):
+    """split one shell line into simple commands on | ; && || & and newlines, keeping redirections as tokens"""
+    lex = shlex.shlex(cmd.replace("\n", " ; "), posix=True, punctuation_chars=";&|<>")
+    lex.whitespace_split = True
+    lex.commenters = ""
+    seg, segs = [], []
+    for tok in lex:
+        if tok in (";", "&&", "||", "|", "&", ";;", "|&"):
+            segs.append(seg); seg = []
+        else:
+            seg.append(tok)
+    segs.append(seg)
+    return [s for s in segs if s]
+
+
+def strip_redirs(seg):
+    """drop safe redirections (to /dev/null, fd dups, input) -> argv; raise on a write to a file"""
+    argv, i = [], 0
+    while i < len(seg):
+        t = seg[i]
+        m = re.fullmatch(r"(\d*|&)(>>?|>\||<<<|<<-?|<|>&|<&)", t) if re.fullmatch(r"[\d&]*[<>|&-]+", t) else None
+        if m or (t.isdigit() and i + 1 < len(seg) and re.fullmatch(r"[<>][<>&|-]*", seg[i + 1])):
+            if t.isdigit():
+                i += 1; t = seg[i]
+            op = re.sub(r"^[\d&]*", "", t)
+            target = seg[i + 1] if i + 1 < len(seg) else ""
+            if op.startswith("<"):
+                i += 2; continue  # reading input is fine (<, <<<, heredoc tag)
+            if op in (">&", "<&") and re.fullmatch(r"\d|-", target):
+                i += 2; continue
+            if target == "/dev/null":
+                i += 2; continue
+            raise ValueError(f"writes to {target}")
+        argv.append(t); i += 1
+    return argv
+
+
+def py_ok(code):
+    return code is not None and not PY_BAD.search(code)
+
+
+def ok_argv(argv, stdin_code):
+    while argv and (argv[0] in SHELL_WORDS or re.fullmatch(r"[A-Za-z_]\w*=.*", argv[0])):
+        argv = argv[1:]  # loop keywords and VAR=value prefixes
+    if not argv:
+        return True
+    p = argv[0].rsplit("/", 1)[-1]
+    a = argv[1:]
+    if p in ("for", "while", "until", "if", "case", "in", "esac", "fi", "done", "select", "function"):
+        rest = a if p in ("while", "until", "if") else []
+        return ok_argv(rest, stdin_code)
+    if p in PURE:
+        return True
+    if p in WRAPPERS:
+        while a and (a[0].startswith("-") or re.fullmatch(r"[\d.]+[smhd]?", a[0])):
+            a = a[1:]
+        return ok_argv(a, stdin_code)
+    if p == "xargs":
+        while a and a[0].startswith("-"):
+            a = a[2:] if a[0] in ("-n", "-I", "-P", "-d", "-L", "-s", "-E") else a[1:]
+        return ok_argv(a, None)
+    if p in ("bash", "sh", "zsh", "dash"):
+        if a[:1] == ["-c"] or a[:2] in (["-lc"], ["-ec"]) or (a and a[0] in ("-lc", "-ec", "-c")):
+            return ok_cmd(a[1]) if len(a) > 1 else False
+        return False
+    if p in ("python3", "python"):
+        flags = [x for x in a if x.startswith("-")]
+        if "-c" in a:
+            return py_ok(a[a.index("-c") + 1] if a.index("-c") + 1 < len(a) else None)
+        if a and a[0] in ("-", "-I") and all(f in ("-", "-I", "-u", "-B") for f in flags):
+            return py_ok(stdin_code)
+        return a[:2] == ["-m", "json.tool"] or a == ["--version"]
+    if p == "find":
+        return not any(x in ("-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls") for x in a)
+    if p == "sed":
+        script = " ".join(x for x in a if not x.startswith("-"))
+        return not any(x.startswith(("-i", "--in-place")) for x in a) and not re.search(r"(^|[;/}\s])[wWe]\s|/[wWe]\s*$", script)
+    if p in ("awk", "gawk", "mawk"):
+        return not re.search(r"system|>|\|\s*getline|\|\s*\"|-i\s*inplace|print[f]?\s*[^;}]*\|", " ".join(a))
+    if p in ("sort", "uniq"):
+        if p == "sort":
+            return not any(x.startswith(("-o", "--output")) for x in a)
+        return len([x for x in a if not x.startswith("-")]) <= 1
+    if p in ("less", "more", "tee"):
+        return p != "tee" or all(x == "/dev/null" or x.startswith("-") for x in a)
+    if p == "curl":
+        bad = ("-d", "--data", "-F", "--form", "-T", "--upload-file", "-K", "--config", "--json", "-o", "--output", "-O",
+               "--remote-name", "-c", "--cookie-jar", "-D", "--dump-header", "--trace", "--trace-ascii")
+        for k, x in enumerate(a):
+            if x.startswith(bad) and not (x in ("-o", "--output", "-D", "--dump-header") and a[k + 1:k + 2] in (["/dev/null"], ["-"])):
+                return False
+            if x in ("-X", "--request") and a[k + 1:k + 2] not in (["GET"], ["HEAD"]):
+                return False
+            if re.fullmatch(r"-[a-zA-Z]*[dFTKOoc][a-zA-Z]*", x) and not x.startswith("--") and x not in ("-o",):
+                if re.fullmatch(r"-[sSkLfvIiNnG]+", x) is None:
+                    return False
+        return True
+    if p == "wget":
+        return any(x in ("-O-", "-qO-", "-qO", "--spider") for x in a) and ("-O" not in a or a[a.index("-O") + 1:][:1] == ["-"])
+    if p == "git":
+        while a and a[0] in ("-C", "-c", "--git-dir", "--work-tree", "--no-pager") or (a and a[0].startswith("--git-dir=")):
+            a = a[2:] if a[0] in ("-C", "-c", "--git-dir", "--work-tree") else a[1:]
+        sub, rest = (a[0], a[1:]) if a else ("", [])
+        if sub in GIT_RO:
+            return not any(x.startswith(("--output", "-o")) and sub != "log" for x in rest) and "--output" not in " ".join(rest)
+        if sub == "branch":
+            return all(x in ("-a", "-r", "-v", "-vv", "--list", "--show-current", "--contains", "--merged", "--no-merged") or not x.startswith("-") and len(rest) == 0 for x in rest)
+        if sub in ("remote",):
+            return rest[:1] in ([], ["-v"], ["show"], ["get-url"])
+        if sub in ("tag", "stash", "worktree", "reflog", "notes"):
+            return rest[:1] in ([], ["-l"], ["--list"], ["list"], ["show"]) and sub != "notes" or rest[:1] in (["list"], ["show"])
+        if sub == "config":
+            return bool(rest) and rest[0] in ("--get", "--get-all", "--list", "-l", "--get-regexp", "--show-origin")
+        return False
+    if p == "systemctl":
+        subs = [x for x in a if not x.startswith("-")]
+        return bool(subs) and subs[0] in SYSTEMCTL_RO
+    if p == "journalctl":
+        return not any(x.startswith(("--vacuum", "--rotate", "--flush", "--sync", "--relinquish", "--setup-keys", "--update-catalog")) for x in a)
+    if p == "docker":
+        if a[:1] == ["compose"]:
+            return [x for x in a[1:] if not x.startswith("-")][:1] in (["ps"], ["logs"], ["config"], ["ls"], ["images"], ["top"])
+        return bool(a) and (a[0] in DOCKER_RO or a[:2] in (["image", "ls"], ["container", "ls"], ["network", "ls"], ["volume", "ls"], ["network", "inspect"], ["volume", "inspect"])) and (a[0] != "stats" or "--no-stream" in a)
+    if p == "pct":
+        if a[:1] in (["list"], ["config"], ["status"], ["df"], ["pending"], ["listsnapshot"], ["cpusets"]):
+            return True
+        if a[:1] == ["exec"] and "--" in a:
+            return ok_argv(a[a.index("--") + 1:], stdin_code)
+        return False
+    if p == "qm":
+        return a[:1] in (["list"], ["config"], ["status"], ["pending"], ["listsnapshot"], ["showcmd"])
+    if p == "pvesh":
+        return a[:1] in (["get"], ["ls"], ["usage"])
+    if p == "pvesm":
+        return a[:1] in (["status"], ["list"], ["path"])
+    if p in ("zfs", "zpool"):
+        return a[:1] in (["list"], ["get"], ["status"], ["iostat"], ["history"], ["version"], ["events"])
+    if p == "ip":
+        objs = [x for x in a if not x.startswith("-")]
+        return len(objs) <= 1 or objs[1] in ("show", "list", "ls", "get")
+    if p == "tailscale":
+        return a[:1] in (["status"], ["ip"], ["netcheck"], ["version"], ["ping"], ["whois"], ["dns"]) and a[:2] != ["dns", "set"]
+    if p == "nvidia-smi":
+        return all(x.startswith(("--query", "--format", "-q", "-L", "--list", "-i", "--id", "-d", "--display")) or not x.startswith("-") and x.replace(",", "").isalnum() for x in a)
+    if p == "sqlite3":
+        files = [x for x in a if not x.startswith("-")]
+        sql = " ".join(files[1:]) + "\n" + (stdin_code or "")
+        return "-readonly" in a or not SQL_BAD.search(sql)
+    if p in ("ssh",):
+        return False
+    return False
+
+
+def ok_cmd(cmd, depth=0):
+    if depth > 6:
+        return False
+    try:
+        cmd, bodies = split_heredocs(cmd)
+        cmd, inner = pull_subst(cmd)
+        if not all(ok_cmd(c, depth + 1) for c in inner):
+            return False
+        stdin_code = "\n".join(bodies) if bodies else None
+        for seg in segments(cmd):
+            argv = strip_redirs(seg)
+            if not ok_argv(argv, stdin_code):
+                return False
+        return True
+    except (ValueError, IndexError):
+        return False
+
+
+def main():
+    try:
+        ev = json.load(sys.stdin)
+    except ValueError:
+        return
+    if ev.get("tool_name") != "Bash":
+        return
+    cmd = (ev.get("tool_input") or {}).get("command") or ""
+    if (ev.get("tool_input") or {}).get("run_in_background"):
+        return
+    if cmd and ok_cmd(cmd):
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "allow",
+                                                 "permissionDecisionReason": "read-only command (cc-ro-hook)"}}))
+
+
+if __name__ == "__main__":
+    main()

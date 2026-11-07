@@ -4,6 +4,19 @@ What changed in each core release (add-ons keep their own). Newest first.
 
 ## Unreleased
 
+### Fixes
+
+- Consistency cleanup: no decorative symbols in buttons/links, skeletons instead of "Loading…" blocks, dialogs use the kit danger button.
+- Chat: editing a message after interrupting it keeps its attached images and files.
+
+### Features
+
+- Motion: shared motion tokens and a global reduced-motion rule; buttons press down; the command palette, jobs tray and confirm card fade and rise in and out as one sheet; toasts glide; list rows and page changes ease in; progress bars scale instead of resizing; keyboard focus rings on every control; hover styles only on devices with a mouse. Chat: new messages rise in, the phone chat list slides in from the side, and the slash menu, questions dock, jump button, context popover, queued messages and attachments animate; long chats render faster while an answer streams.
+- Phone: the bottom tab bar slides away while you type or swipe up and gives its space back to the page; it only comes back when you tap the handle at the bottom edge (stock tab bar only).
+- Installable as an app: web manifest + icons, so Chrome/Samsung Internet's "Install app" opens Bastion full-screen without the address bar.
+- Add-ons can take posts from devices without a browser under `/api/ingest/<id>/`: still tailnet/LAN only, the handler checks its own device token.
+- Tab rows: one shared usePageTabs behaviour; on a phone, closed tabs show only their icon when the row would not fit (stock, Material You, Blocky, Synthwave, Tactical, Win11). Settings: narrower content column on desktop and short motion when switching category.
+
 ## 0.1.4 (2026-11-01)
 
 - Maintenance and small fixes.

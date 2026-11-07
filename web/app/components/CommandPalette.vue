@@ -150,6 +150,7 @@ const idx = (it: Item) => flat.value.indexOf(it)
 
 <template>
   <Teleport to="body">
+    <Transition name="sheet">
     <div v-if="open" class="pal-scrim" @click.self="open = false">
       <div class="pal" role="dialog" aria-label="Search">
         <div class="search">
@@ -184,6 +185,7 @@ const idx = (it: Item) => flat.value.indexOf(it)
         </div>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 

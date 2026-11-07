@@ -1,4 +1,5 @@
 {
+ "GET /chat/status": { "live": { "state": "ok" }, "dirty": 0, "untracked": 0, "ahead": 0, "disks": [] },
  "GET /overview": {
   "time": "$now",
   "cts": [

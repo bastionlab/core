@@ -181,6 +181,13 @@ def core_connections():
                     "detail": "signed in" + (" · limit reached" if not ok else ""), "fix": "claude /login in a terminal on pve"})
     except Exception as e:
         out.append({"id": "claude", "name": "Claude login", "ok": False, "detail": str(e)[:120], "fix": "claude /login in a terminal on pve"})
+    try:
+        import google_auth
+        for a in google_auth.accounts():
+            out.append({"id": f"google:{a['email']}", "name": f"Google {a['email']}", "used_by": "Calendar, Mail", "ok": a["ok"],
+                        "detail": a["detail"], "fix": "Settings, Connections, Google: connect again"})
+    except Exception:
+        pass
     return out
 
 

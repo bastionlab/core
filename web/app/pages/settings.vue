@@ -48,6 +48,29 @@ async function saveKey(key: string) {
   } catch (e: any) { keyErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message }
 }
 
+// --- Google accounts (shared by Calendar and Mail) ---------------------------------------------------------------
+const { data: g, refresh: gRefresh } = useFetch<any>('/api/google/accounts', { server: false })
+const gId = ref('')
+const gSecret = ref('')
+const gErr = ref(String(route.query.google_err ?? ''))
+const gSaved = ref(false)
+watch(g, v => { if (v && !gId.value) gId.value = v.client_id }, { immediate: true })
+async function gSave() {
+  gErr.value = ''
+  try {
+    await $fetch('/api/google/client', { method: 'POST', body: { client_id: gId.value, client_secret: gSecret.value } })
+    gSecret.value = ''; gSaved.value = true; gRefresh()
+  } catch (e: any) { gErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message }
+}
+async function gConnect() {
+  gErr.value = ''
+  try { window.location.href = (await $fetch<{ url: string }>('/api/google/start', { method: 'POST' })).url } catch (e: any) { gErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message }
+}
+async function gDisconnect(email: string) {
+  gErr.value = ''
+  try { await $fetch('/api/google/disconnect', { method: 'POST', body: { email } }); gRefresh(); refresh() } catch (e: any) { gErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message }
+}
+
 // --- categories ------------------------------------------------------------------------------------------------
 type Cat = 'you' | 'access' | 'connections' | 'system' | 'addons'
 const cats = computed(() => {
@@ -131,7 +154,7 @@ const hits = computed(() => {
     <PageTabs v-if="cats.length > 1" v-model="tab" :tabs="tabs" />
     <p v-if="cats.length > 1" class="faint small lead">{{ t(`settings.cat.${cat}_d`) }}</p>
 
-    <div class="content">
+    <div :key="cat" class="content">
         <template v-if="cat === 'you'">
           <AccountPanel />
           <LocalePanel />
@@ -172,6 +195,24 @@ const hits = computed(() => {
               </div>
             </template>
           </Panel>
+          <Panel id="google" :title="t('google.title')" :sub="t('google.sub')">
+            <div class="keyedit">
+              <input v-model="gId" type="text" autocomplete="off" :placeholder="t('google.client_id')">
+              <input v-model="gSecret" type="password" autocomplete="off" :placeholder="g?.has_secret ? t('google.secret_set') : t('google.client_secret')">
+              <button type="button" class="btn primary sm" :disabled="!gId && !gSecret" @click="gSave">{{ t('common.save') }}</button>
+            </div>
+            <p class="faint small">{{ t('google.redirect') }} {{ g?.redirect }}</p>
+            <div v-for="a in g?.accounts ?? []" :key="a.email" class="conn">
+              <span class="dot" :class="a.ok ? 'ok' : 'bad'" />
+              <div class="what"><b>{{ a.email }}</b></div>
+              <span class="detail small muted">{{ a.detail }}</span>
+              <div class="fix"><button type="button" class="btn sm" @click="gDisconnect(a.email)">{{ t('google.disconnect') }}</button></div>
+            </div>
+            <div class="keyedit">
+              <button type="button" class="btn primary sm" :disabled="!g?.client_id || !g?.has_secret" @click="gConnect">{{ t('google.connect') }}</button>
+            </div>
+            <div v-if="gErr" class="errbox small">{{ gErr }}</div>
+          </Panel>
           <div id="discord"><DiscordPanel /></div>
         </template>
 
@@ -206,9 +247,11 @@ const hits = computed(() => {
 .hits { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 4px; box-shadow: 0 8px 24px rgb(0 0 0 / .3); max-height: 60vh; overflow-y: auto; }
 .hit { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: var(--radius-sm); }
 .hit:hover { background: var(--panel-2); }
+.hit { transition: background-color .12s; }
 .pad { padding: 8px 10px; margin: 0; }
-.lead { margin: -6px 0 12px; }
-.content { min-width: 0; }
+.lead { margin: -6px 0 12px; max-width: 880px; }
+/* a form-like page: cap the column so labels stay near their controls (header row and tabs stay full width) */
+.content { min-width: 0; max-width: 880px; }
 .content :deep(.panel) { margin-bottom: 14px; }
 .jump { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 
@@ -226,4 +269,18 @@ const hits = computed(() => {
   .detail { grid-column: 2 / -1; grid-row: 2; }
 }
 @media (pointer: coarse) { .lnk { padding: 6px 4px; } }
+@media (max-width: 640px) {
+  .content, .lead { width: auto; max-width: none; }
+}
+
+@keyframes settings-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes hits-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: no-preference) {
+  .content { animation: settings-in 180ms cubic-bezier(.23, 1, .32, 1) both; }
+  .hits { transform-origin: top; animation: hits-in 120ms cubic-bezier(.23, 1, .32, 1) both; }
+  .content :deep(.btn), .content :deep(.seg button), .content :deep(.chip) {
+    transition: transform .12s cubic-bezier(.23, 1, .32, 1), background-color .12s, color .12s, border-color .12s;
+  }
+  .content :deep(.btn):active:not(:disabled), .content :deep(.seg button):active:not(:disabled), .content :deep(.chip):active:not(:disabled) { transform: scale(.97); }
+}
 </style>

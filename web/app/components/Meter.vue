@@ -9,7 +9,7 @@ const v = computed(() => Math.max(0, Math.min(100, props.value || 0)))
       <span class="label">{{ label }}</span>
       <span class="val"><b>{{ v.toFixed(0) }}%</b> <span v-if="detail" class="muted small">{{ detail }}</span></span>
     </div>
-    <div class="track"><div class="fill" :class="tone(v, warn, bad)" :style="{ width: v + '%' }" /></div>
+    <div class="track"><div class="fill" :class="tone(v, warn, bad)" :style="{ transform: `scaleX(${v / 100})` }" /></div>
   </div>
 </template>
 
@@ -18,6 +18,7 @@ const v = computed(() => Math.max(0, Math.min(100, props.value || 0)))
 .row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
 .label { color: var(--muted); font-size: 13px; }
 .track { height: 5px; background: var(--track); border-radius: 3px; overflow: hidden; }
-.fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .6s ease; }
+/* scaled, not resized: the bar only moves transform (no layout work per frame) */
+.fill { width: 100%; height: 100%; border-radius: 3px; background: var(--accent); transform-origin: left center; transition: transform .6s var(--ease-out); }
 .fill.warn { background: var(--warn); } .fill.bad { background: var(--bad); }
 </style>

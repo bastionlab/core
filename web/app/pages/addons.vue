@@ -8,6 +8,8 @@ onMounted(load)
 
 const { t } = useI18n()
 const route = useRoute()
+// a switched-off add-on's page lands here as /addons?off=/path (middleware/pages.global.ts): a short message instead of the list
+const offPath = computed(() => (typeof route.query.off === 'string' && route.query.off.startsWith('/') ? route.query.off : ''))
 // marketplace index (server/utils/marketplace.ts): Update badges here, the not-installed ones below
 const { data: market } = useFetch<any>('/api/marketplace', { server: false })
 const refreshing = ref(false)
@@ -158,6 +160,11 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
 
 <template>
   <div>
+    <div v-if="offPath" class="empty-state">
+      <p>{{ $t('addons.pageOff', { page: offPath }) }}</p>
+      <NuxtLink to="/addons" class="btn sm">{{ $t('addons.backToAddons') }}</NuxtLink>
+    </div>
+    <template v-else>
     <div v-if="error" class="errbox">{{ error }}</div>
     <div v-if="pending" class="card confirm">
       <p class="small">{{ pending.desc }}</p>
@@ -232,7 +239,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
               <button v-if="publishable(a.id)" type="button" class="pill accent lnk-pill" @click="ask('addon_publish', a.id)">
                 {{ publishable(a.id) === 'new' ? 'Publish' : 'Publish changes' }}
               </button>
-              <button v-if="a.version" type="button" class="lnk small rm" @click="ask('addon_remove', a.id)">Remove</button>
+              <button v-if="a.version" type="button" class="btn ghost sm rm" @click="ask('addon_remove', a.id)">Remove</button>
             </div>
           </div>
           <div v-for="d in sec.items.filter((x: any) => x._d)" :key="`d:${d.id}`" class="card">
@@ -310,6 +317,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
     </section>
     </template>
     </template>
+    </template>
   </div>
 </template>
 
@@ -333,5 +341,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
 .scan { display: flex; flex-direction: column; gap: 6px; }
 .finds { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .snip { overflow-wrap: anywhere; font-size: 11px; }
-@media (pointer: coarse) { .tags .rm, .lnk-pill { padding: 6px 10px; } }
+@media (pointer: coarse) { .lnk-pill { padding: 6px 10px; } }
+/* phone: compact rows, the description cut to two lines */
+@media (max-width: 640px) { .desc { display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } }
 </style>

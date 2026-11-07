@@ -14,3 +14,6 @@ docs/my-setup.md
 # demo mode (demo/run)
 .demo-build/
 .demo-data/
+
+# /brag skill output
+brag-output*/

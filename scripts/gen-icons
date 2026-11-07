@@ -15,7 +15,7 @@ info heart wrench bot list-checks panel-left timer alarm-clock rotate-ccw circle
 languages brain flask-conical lightbulb mail-open map-pin building-2 hand-coins paperclip folder terminal mic
 volume-2 cloud-upload qr-code smartphone key-round fingerprint refresh-cw chevron-down chevron-up chevron-right
 chevron-left ellipsis expand maximize-2 external-link target flag gift tag bug rocket bolt eye megaphone share-2
-pause square-pen""".split()
+pause square-pen arrow-left upload square clapperboard trending-up scissors undo-2 settings-2""".split()
 
 def ct(cmd):
     return subprocess.run(["pct", "exec", CT, "--", "sh", "-c", cmd], capture_output=True, text=True)

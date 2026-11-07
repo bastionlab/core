@@ -4,8 +4,9 @@ GitHub Free has no rulesets on private repos).
 
   core    main takes changes through a pull request only, no force-push, no deletion; org admins (the owner)
           bypass, so the Deploy button can still push and tag
-  addons  same, and the GitHub Actions bot bypasses too: publish.yml merges green PRs and both workflows push the
-          rebuilt index.json straight to main
+  addons  no force-push, no deletion, but no pull-request rule: publish.yml merges green PRs and both workflows
+          push the rebuilt index.json straight to main as the Actions bot, and GitHub refuses that bot as a
+          bypass actor on an org repo ("must be part of the ruleset source or owner organization")
 
 Nobody but org admins can merge in either repo anyway (outsiders have no write access); the rules stop accidents
 and a stolen non-admin token. Who may publish which add-on is check.py's job, not this one's.
@@ -20,7 +21,6 @@ from config import CFG, DEVBOX  # noqa: E402
 
 NAME = "bastion-main"
 ADMIN = {"actor_id": 1, "actor_type": "OrganizationAdmin", "bypass_mode": "always"}
-ACTIONS_BOT = {"actor_id": 15368, "actor_type": "Integration", "bypass_mode": "always"}  # the GitHub Actions app
 RULES = [
     {"type": "deletion"},
     {"type": "non_fast_forward"},
@@ -28,7 +28,8 @@ RULES = [
                                             "require_code_owner_review": False, "require_last_push_approval": False,
                                             "required_review_thread_resolution": False}},
 ]
-REPOS = {"core": [ADMIN], "addons": [ADMIN, ACTIONS_BOT]}
+REPOS = {"core": ([ADMIN], RULES), "addons": ([ADMIN], RULES[:2]),  # addons: deletion + non_fast_forward only
+         "deals": ([ADMIN], RULES[:2]), "money": ([ADMIN], RULES[:2])}  # backends: same, Deploy pushes straight to main
 
 
 def token():
@@ -54,10 +55,10 @@ def main():
     ap.add_argument("--org", default="bastionlab")
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
-    for repo, bypass in REPOS.items():
+    for repo, (bypass, rules) in REPOS.items():
         slug = f"{a.org}/{repo}"
         body = {"name": NAME, "target": "branch", "enforcement": "active", "bypass_actors": bypass,
-                "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}}, "rules": RULES}
+                "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}}, "rules": rules}
         if a.dry_run:
             print(slug, json.dumps(body, indent=2))
             continue

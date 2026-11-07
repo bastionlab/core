@@ -4,7 +4,7 @@ const { toasts, close } = useToast()
 
 <template>
   <div class="toasts" role="status" aria-live="polite">
-    <TransitionGroup name="toast">
+    <TransitionGroup name="toast" move-class="toast-move">
       <div v-for="t in toasts" :key="t.id" class="toast" :class="t.tone">
         <span class="txt">{{ t.text }}</span>
         <button v-if="t.action" type="button" class="lnk" @click="t.action.fn(); close(t.id)">{{ t.action.label }}</button>
@@ -28,7 +28,11 @@ const { toasts, close } = useToast()
 .toast.bad { border-left: 3px solid var(--bad); }
 .toast.warn { border-left: 3px solid var(--warn); }
 .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.toast-enter-active, .toast-leave-active { transition: opacity .2s, transform .2s; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(8px); }
+.toast-enter-active { transition: opacity var(--dur) var(--ease-out), transform var(--dur-slow) var(--ease-spring); }
+.toast-leave-active { transition: opacity var(--dur-fast) var(--ease-in), transform var(--dur-fast) var(--ease-in); position: absolute; width: 100%; }
+.toast-enter-from { opacity: 0; transform: translateY(12px) scale(.97); }
+.toast-leave-to { opacity: 0; transform: scale(.96); }
+/* the stack glides when a toast above it leaves */
+.toast-move { transition: transform var(--dur) var(--ease-out); }
 @media (max-width: 640px) { .toasts { bottom: calc(var(--tabbar) + 10px); } }
 </style>

@@ -6,6 +6,8 @@
  * 2. every API route needs a session (account or PIN), except the login endpoints themselves, and the role the
  *    route asks for (server/utils/access.ts, shared/utils/roles.ts). Other tailnet people only get to the
  *    sign-in page when the owner allows guests (Settings → Users).
+ * 2b. /api/ingest/* is for devices (phone, PC script) that post without a browser: it skips the origin and session
+ *    checks above but still passed the tailnet/LAN gate; each handler there must check its own device token.
  * 3. writes must come from the dashboard's own origin (SameSite=strict alone lets sibling *.ts.net apps through)
  */
 export default defineEventHandler((event) => {
@@ -15,6 +17,9 @@ export default defineEventHandler((event) => {
   if (!inside && !ownerLogin(event) && !fromLan(event) && !guest) throw createError({ statusCode: 403, statusMessage: 'not on the owner\'s tailnet login' })
   const path = event.path.split('?')[0]!
   if (!path.startsWith('/api/')) return
+  // device ingest (add-ons, e.g. life): no browser session or Origin; the handler checks the device token. Plain path
+  // characters only, so nothing like `..` or `%2f` can ride the prefix into another route
+  if (/^\/api\/ingest\/[\w\-/]*$/.test(path)) return
   if (event.method !== 'GET' && event.method !== 'HEAD' && !inside && !sameOrigin(event))
     throw createError({ statusCode: 403, statusMessage: 'cross-origin write' })
   if (path.startsWith('/api/auth/')) return

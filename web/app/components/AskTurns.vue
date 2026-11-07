@@ -43,9 +43,15 @@ const usd = (t: Turn) => Object.values(t.usage ?? {}).reduce((s, u) => s + u.usd
 // (a Claude ```action block at the start of a line, even half-streamed, is hidden while the turn runs: when it ends
 // useClaude turns the valid ones into Run cards and cuts them; one that does not parse stays visible)
 const ACTION = /^```action[ \t]*\n[\s\S]*?(?:^```[ \t]*$|(?![\s\S]))/gm
+// (memoised per turn: the template asks for it several times a render and a running answer re-renders every second)
+const viewMemo = new WeakMap<Turn, { a: string, plan: unknown, busy: unknown, v: ReturnType<typeof splitQuestions> }>()
 const view = (t: Turn) => {
+  const raw = toRaw(t), m = viewMemo.get(raw)
+  if (m && m.a === t.a && m.plan === t.plan && m.busy === t.busy) return m.v
   const a = t.plan ? t.a.replace(/\n*PLAN READY\s*$/, '') : t.a
-  return splitQuestions(t.busy ? a.replace(ACTION, '') : a, t.busy)
+  const v = splitQuestions(t.busy ? a.replace(ACTION, '') : a, t.busy)
+  viewMemo.set(raw, { a: t.a, plan: t.plan, busy: t.busy, v })
+  return v
 }
 const picked = (t: Turn) => {
   const qs = view(t).qs ?? []
@@ -67,10 +73,25 @@ const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tool
 // keys, tokens and passwords in it are blurred until tapped (utils/secrets.ts)
 const render = useAnswerRender()
 // what the reader did to a block (wrapped 'w', unfolded 'o') survives the re-render of a streaming answer
-const codeState = new WeakMap<Turn, Record<number, string>>()
+const codeState = new WeakMap<Turn, Record<number, string>>()  // keyed by the raw turn (toRaw)
+// a revealed secret ('sec shown') is remembered by its text, so a streaming re-render keeps it open
+const revealed = new WeakMap<Turn, Set<string>>()
+const escSec = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
+// markdown runs again only when something that changes the output changed (text, busy, plan, the reader's
+// wrap/unfold/reveal, panel button, language, known routes): finished turns stay untouched while another one streams
+const { locale } = useI18n()
+const routes = useAnswerRoutes()
+const htmlMemo = new WeakMap<Turn, { k: unknown[], h: string }>()
 const html = (t: Turn) => {
+  const raw = toRaw(t), st = codeState.get(raw), rv = revealed.get(raw)
+  const k = [t.a, t.plan, t.busy, props.codePanel, st && JSON.stringify(st), rv && [...rv].join('\u0000'), locale.value, routes.value]
+  const m = htmlMemo.get(raw)
+  if (m && m.k.every((x, n) => x === k[n])) return m.h
   const { text, found } = hideSecrets(stripFiles(view(t).text))
-  return render(showSecrets(md(text), found), { busy: t.busy, panel: props.codePanel, state: codeState.get(t) })
+  let h = render(showSecrets(md(text), found), { busy: t.busy, panel: props.codePanel, state: st })
+  if (rv?.size) h = h.replace(/<span class="sec" title="tap to show">([^<]*)<\/span>/g, (m0, v) => (rv.has(v) ? `<span class="sec shown" title="tap to show">${v}</span>` : m0))
+  htmlMemo.set(raw, { k, h })
+  return h
 }
 const copied = ref('')
 async function copy(text: string, key: string) {
@@ -84,7 +105,15 @@ async function copy(text: string, key: string) {
 function onClick(e: MouseEvent) {
   const el = e.target as HTMLElement
   const sec = el.closest('.a .sec')
-  if (sec) return sec.classList.toggle('shown')
+  if (sec) {
+    const on = sec.classList.toggle('shown'), ans = sec.closest('.a') as HTMLElement | null, t = props.turns[Number(ans?.dataset.i)]
+    if (t) {
+      const set = revealed.get(toRaw(t)) ?? new Set<string>(), v = escSec(sec.textContent ?? '')
+      on ? set.add(v) : set.delete(v)
+      revealed.set(toRaw(t), set)
+    }
+    return
+  }
   // a link to a dashboard page (/notes?n=4) opens inside the app instead of reloading it (other sites open in a new tab)
   const href = el.closest('.a a')?.getAttribute('href') ?? ''
   if (/^\/(?!\/|api\/)/.test(href)) { e.preventDefault(); return void navigateTo(href) }
@@ -95,9 +124,9 @@ function onClick(e: MouseEvent) {
   const flag = (f: string, on: boolean) => {
     const ans = box.closest('.a') as HTMLElement | null, t = props.turns[Number(ans?.dataset.i)]
     if (!ans || !t) return
-    const idx = [...ans.querySelectorAll('.code')].indexOf(box), st = codeState.get(t) ?? {}
+    const idx = [...ans.querySelectorAll('.code')].indexOf(box), st = codeState.get(toRaw(t)) ?? {}
     st[idx] = (st[idx] ?? '').replace(f, '') + (on ? f : '')
-    codeState.set(t, st)
+    codeState.set(toRaw(t), st)
   }
   if (b.classList.contains('cp')) {
     copy(pre.textContent ?? '', '')
@@ -115,6 +144,17 @@ function onClick(e: MouseEvent) {
     emit('code', { lang: box.querySelector('.cl')?.textContent ?? '', text: pre.textContent ?? '' })
   }
 }
+
+// a turn that arrives while this chat is open rises in; opening or switching a chat and a sync pull (both hand us
+// another array) do not animate what is already there
+const rise = new WeakSet<Turn>()
+let seen: Turn[] | null = null, seenLen = 0
+watch(() => props.turns.length, (n) => {
+  const arr = toRaw(props.turns)
+  if (arr === seen && n > seenLen) for (let i = seenLen; i < n; i++) rise.add(toRaw(arr[i]!))
+  seen = arr; seenLen = n
+}, { flush: 'pre', immediate: true })
+watch(() => props.turns, (a) => { seen = toRaw(a); seenLen = a.length; })
 
 // while an answer runs: what it is doing right now and for how long
 const now = ref(Date.now())
@@ -182,7 +222,7 @@ function activity(t: Turn) {
       {{ t.compacted ? $t('ask.compacted', { pre: kt(t.compacted.pre), post: kt(t.compacted.post) }) : $t('ask.compactedShort') }}
     </div>
     <div v-else-if="t.cmp" class="turn"><slot name="compare" :turn="t" :index="i" /></div>
-    <div v-else class="turn">
+    <div v-else class="turn" :class="{ rise: rise.has(toRaw(t)) }">
       <div v-if="t.imgs?.length" class="qimgs">
         <a v-for="n in t.imgs" :key="n" :href="`/api/chat/img/${n}`" target="_blank">
           <img v-if="!n.includes('-')" :src="`/api/chat/img/${n}`" alt="screenshot">
@@ -262,7 +302,8 @@ function activity(t: Turn) {
         <pre v-if="p.job?.log?.length" class="log small">{{ p.job.log.slice(-12).join('\n') }}</pre>
       </div>
       <div v-if="t.denied?.length && !t.busy" class="denied small">
-        Read-only blocked {{ t.denied.length === 1 ? 'a change' : `${t.denied.length} changes` }}: <span class="mono">{{ t.denied.slice(0, 3).join(' · ') }}</span>. Switch on <b>Auto</b> to allow it.
+        <template v-if="t.auto">Auto's safety check blocked {{ t.denied.length === 1 ? 'a step' : `${t.denied.length} steps` }}: <span class="mono">{{ t.denied.slice(0, 3).join(' · ') }}</span>.</template>
+        <template v-else>Read-only blocked {{ t.denied.length === 1 ? 'a change' : `${t.denied.length} changes` }}: <span class="mono">{{ t.denied.slice(0, 3).join(' · ') }}</span>. Switch on <b>Auto</b> to allow it.</template>
       </div>
       <div v-if="t.error" class="small bad">{{ t.error }}</div>
       <div v-if="t.plan && !t.busy && !t.error && i === turns.length - 1 && !t.executed" class="plan">
@@ -300,6 +341,8 @@ function activity(t: Turn) {
 .a :deep(.sec.shown) { filter: none; user-select: text; }
 .cleared { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
 .cleared::before, .cleared::after { content: ''; flex: 1; border-top: 1px dashed var(--line-2); }
+.turn.rise { animation: turn-rise var(--dur) var(--ease-out) backwards; }
+@keyframes turn-rise { from { opacity: 0; transform: translateY(6px); } }
 .turn { padding: 12px 0; display: flex; flex-direction: column; gap: 8px; }
 .qimgs { align-self: flex-end; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 85%; }
 .qimgs .fchip { display: flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -351,7 +394,9 @@ function activity(t: Turn) {
 .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0 4px; }
 .acts { display: inline-flex; gap: 2px; margin-right: 6px; }
 .act { background: none; border: 1px solid transparent; border-radius: 6px; color: var(--muted); font: inherit; padding: 1px 6px; cursor: pointer; }
-.act:hover { color: var(--text); border-color: var(--line); background: var(--panel-2); }
+.act { transition: transform var(--dur-fast) var(--ease-out), color var(--dur-fast), background var(--dur-fast); }
+.act:active { transform: scale(.94); }
+@media (hover: hover) { .act:hover { color: var(--text); border-color: var(--line); background: var(--panel-2); } }
 @media (pointer: coarse) { .act { padding: 6px 10px; } }
 .picked { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 10px; background: var(--panel-2); overflow-wrap: anywhere; align-self: flex-start; }
 .picked.warn { color: var(--warn); border-color: var(--warn-soft); background: var(--warn-soft); }
@@ -365,13 +410,14 @@ function activity(t: Turn) {
 .turns .a .code .cl { flex: 1; min-width: 0; font: 11.5px var(--mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .turns .a .code .cbs { display: flex; gap: 2px; flex-shrink: 0; margin-left: auto; }
 .turns .a .code .cb { background: none; border: 1px solid transparent; border-radius: 5px; color: var(--muted); font: inherit; font-size: 11.5px; padding: 2px 8px; cursor: pointer; }
-.turns .a .code .cb:hover { color: var(--text); border-color: var(--line); }
+.turns .a .code .cb:active { transform: scale(.94); }
+@media (hover: hover) { .turns .a .code .cb:hover { color: var(--text); border-color: var(--line); } }
 .turns .a .code .cb[aria-pressed="true"] { color: var(--accent); border-color: var(--accent-soft); background: var(--accent-soft); }
 .turns .a .code pre { margin: 0; border: 0; border-radius: 0; line-height: 1.5; }
 .turns .a .code.wrap pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .turns .a .code.long:not(.open) pre { max-height: calc(16 * 1.5em + 16px); overflow-y: hidden; }
 .turns .a .code .cm { position: relative; display: block; width: 100%; border: 0; border-top: 1px solid var(--line); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12px; padding: 6px 10px; cursor: pointer; }
-.turns .a .code .cm:hover { color: var(--text); }
+@media (hover: hover) { .turns .a .code .cm:hover { color: var(--text); } }
 .turns .a .code.long:not(.open) .cm::before { content: ''; position: absolute; left: 0; right: 0; bottom: 100%; height: 40px; background: linear-gradient(to bottom, transparent, var(--bg)); pointer-events: none; }
 .turns .a a.in { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
 @media (pointer: coarse) {

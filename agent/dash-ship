@@ -48,6 +48,13 @@ m = importlib.util.module_from_spec(importlib.util.spec_from_loader("addon_get",
 print(" ".join(sorted(m.local_changes())))
 EOF
 )
+# /etc/dash/publish-skip: one add-on id per line that is kept off GitHub for now (local to this box, not in the repo)
+if [ -f /etc/dash/publish-skip ] && [ -n "$ids" ]; then
+  kept=$(printf '%s\n' $ids | grep -vxFf /etc/dash/publish-skip | paste -sd' ' -)
+  skipped=$(printf '%s\n' $ids | grep -xFf /etc/dash/publish-skip | paste -sd' ' -)
+  [ -n "$skipped" ] && echo "   held back (publish-skip): $skipped"
+  ids=$kept
+fi
 [ -z "$ids" ] && echo "   nothing changed"
 for id in $ids; do
   echo "   $id"

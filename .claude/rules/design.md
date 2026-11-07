@@ -40,3 +40,19 @@ Use these; don't write page-local copies.
   one-line empty states. No paragraphs explaining how a feature works.
 - `title=""` tooltips don't show on Android: fine for extra help, never for data the owner needs.
 - Short, plain labels; same words for the same thing on every page ("Loading…", "Save", "Delete", "Nothing yet.").
+
+## Look and feel
+- Pages should look and feel good on both phone and PC. Neither comes first: design each layout for both.
+- Not busy, not "AI-looking": quiet panels, aligned figures, colour spent on data and status. No gradient-heavy or
+  decorative chrome unless the active skin asks for it.
+- Motion: short, purposeful, interruptible. Animate transform/opacity only. Respect prefers-reduced-motion.
+- **New add-ons (and new pages) meet this bar before they ship**, no half-finished design:
+  - Premium look and feel: considered spacing, hierarchy and alignment, real empty/loading/error states, polished
+    hover/press/focus states, short purposeful motion. Not a rough first draft that "works".
+  - Works with every existing skin (`addons/skin-*`) and design: only core components (`Panel`, `PageTabs`, …) and
+    tokens, no hex colours or own chrome. Open it under at least a light, a dark and a heavy skin (e.g. Terminal,
+    Glass, Win11) and fix what breaks or looks off.
+  - Equally good on phone (380px, touch, keyboard) and PC (mouse, wide). Design both layouts, test both.
+  - Pick an icon that matches the topic (check `components/icon-paths.ts`; add one via `scripts/gen-icons` if no
+    existing one fits) and use it in `addon.yaml` `icon:` and the page header. No generic placeholder icon.
+- Taste skills (emil-design-eng, animate, review-animations) inform this rule; where they conflict with it, this rule wins.

@@ -24,7 +24,7 @@ const focused = ref(false)
     <div v-if="turns.length" class="body">
       <AskTurns :turns="turns" @run="p => run(p, () => emit('refresh'))" />
       <div class="foot">
-        <NuxtLink to="/chat" class="small muted">continue in chat →</NuxtLink>
+        <NuxtLink to="/chat" class="small muted">continue in chat</NuxtLink>
         <button class="btn ghost sm" type="button" @click="clear">clear</button>
       </div>
     </div>

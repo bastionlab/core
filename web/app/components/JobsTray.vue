@@ -11,6 +11,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <Teleport to="body">
+    <Transition name="sheet">
     <div v-if="tray.open && jobs.length" class="tray-scrim" @click.self="tray = { open: false }">
       <div class="tray" role="dialog" aria-label="Jobs">
         <div class="th">
@@ -21,6 +22,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
         <JobList :jobs="jobs" :focus="tray.focus" @dismiss="dismiss" />
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 

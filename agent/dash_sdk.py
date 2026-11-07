@@ -15,6 +15,7 @@ re-implements the plumbing:
     services({"radarr": ("dl", "docker", "radarr")})   # what service_restart / service_uptime know about
     @on_start
     def reaper(): ...        # runs in a thread once the agent starts
+    scoped_token("/files/pub", "/etc/dash/files-pub.token")   # a second bearer that only opens GET on that one path
 
 The agent answers these next to its own routes, with the same token and allowlist. Only what an installed
 add-on registers exists: removing the add-on removes its routes and actions on the next restart.
@@ -33,6 +34,7 @@ STREAMS: dict[str, callable] = {}
 ACTIONS: dict[str, callable] = {}
 SERVICES: dict[str, tuple[int, str, str]] = {}
 STARTUP: list[callable] = []
+SCOPED: dict[str, str] = {}  # path -> file holding a bearer token that opens only GET on that path
 QUIET: set[str] = set()  # polled GET paths (or prefixes) the access log skips
 
 
@@ -95,6 +97,12 @@ JOB_STALE: set[str] = set()
 def stale_after_jobs(*names):
     """cached functions (by name) that may be out of date once any action finishes"""
     JOB_STALE.update(names)
+
+
+def scoped_token(path, token_file):
+    """accept the token in token_file (read per request, so rotating it applies at once) as a bearer for GET `path` only,
+    for a public-facing helper that must never hold the agent's main token"""
+    SCOPED[path] = str(token_file)
 
 
 def on_start(fn):

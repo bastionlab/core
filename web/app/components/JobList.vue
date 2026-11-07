@@ -16,7 +16,7 @@ const last = (j: Job) => [...j.log].reverse().find(l => l.trim())?.trim() ?? (j.
 </script>
 
 <template>
-  <div v-if="jobs.length" class="jobs">
+  <TransitionGroup v-if="jobs.length" name="list" tag="div" class="jobs">
     <div v-for="j in jobs" :key="j.id ?? j.started" class="job" :class="[j.state, { open: open.has(j) }]">
       <button type="button" class="head" :aria-expanded="open.has(j)" @click="toggle(j)">
         <span v-if="j.state === 'running' || j.state === 'checking'" class="spin" />
@@ -30,7 +30,7 @@ const last = (j: Job) => [...j.log].reverse().find(l => l.trim())?.trim() ?? (j.
       <button type="button" class="btn ghost sm x" aria-label="Dismiss" @click="emit('dismiss', j)"><Icon name="x" :size="14"/></button>
       <pre v-if="open.has(j) && j.log.length" class="log small">{{ j.log.slice(-200).join('\n') }}</pre>
     </div>
-  </div>
+  </TransitionGroup>
 </template>
 
 <style scoped>

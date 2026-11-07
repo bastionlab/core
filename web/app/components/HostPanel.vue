@@ -25,11 +25,16 @@ const at = computed(() => pending.value && new Date(pending.value.at * 1000).toL
   <Panel id="host" title="Host" :sub="host.cpuModel?.replace(/\(R\)|\(TM\)|11th Gen| @.*/g, '').trim()">
     <template #actions>
       <button
-        v-if="!pending" class="btn ghost small" :disabled="busy?.length || step > 0"
+        v-if="!pending" class="btn ghost small shut-d" :disabled="busy?.length || step > 0"
         :title="busy?.length ? `not now — ${busy.join('\n')}` : 'power off the whole server (all containers and this dashboard)'"
         @click="ask"
       ><Icon name="power" :size="14" /> Shut down</button>
     </template>
+    <button
+      v-if="!pending" class="btn ghost small shut-m" :disabled="busy?.length || step > 0"
+      :title="busy?.length ? `not now — ${busy.join('\n')}` : 'power off the whole server (all containers and this dashboard)'"
+      @click="ask"
+    ><Icon name="power" :size="14" /> Shut down</button>
 
     <div v-if="pending" class="warnbox">
       <b>{{ pending.mode === 'reboot' ? 'Rebooting' : 'Powering off' }} at {{ at }}.</b>
@@ -40,7 +45,7 @@ const at = computed(() => pending.value && new Date(pending.value.at * 1000).toL
       <span class="small">Everything stops, this page too. Runs in 1 min — cancelable until then.</span>
       <div class="row">
         <button class="btn ghost" @click="cancel">Keep running</button>
-        <button class="btn solid-bad" :disabled="step !== 2" @click="powerOff">Yes, power off</button>
+        <button class="btn danger" :disabled="step !== 2" @click="powerOff">Yes, power off</button>
       </div>
     </div>
 
@@ -60,8 +65,10 @@ const at = computed(() => pending.value && new Date(pending.value.at * 1000).toL
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
 @media (max-width: 380px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .foot { margin-top: 12px; }
+.shut-m { display: none; }
+/* phone: Shut down moves out of the title row onto its own row, away from the title */
+@media (max-width: 640px) { .shut-d { display: none; } .shut-m { display: inline-flex; margin-bottom: 14px; margin-top: 4px; } }
 .warnbox { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; padding: 12px; border: 1px solid var(--bad); border-radius: var(--radius); background: color-mix(in srgb, var(--bad) 10%, transparent); }
 .warnbox .btn { align-self: flex-start; }
 .row { display: flex; gap: 8px; }
-.btn.solid-bad { background: var(--bad); border-color: var(--bad); color: #fff; }
 </style>

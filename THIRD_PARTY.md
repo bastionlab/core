@@ -9,6 +9,7 @@ The core is AGPL-3.0 ([LICENSE](LICENSE)). It bundles or builds on the following
 | Symbols Nerd Font (icon glyphs for the terminals) | MIT (glyphs from their own projects, mostly MIT / OFL-1.1) | `web/public/fonts/`, license file next to it |
 | Lucide icon shapes | ISC | `web/app/components/Icon.vue` |
 | Contributor Covenant 2.1 | CC-BY-4.0 | `CODE_OF_CONDUCT.md` |
+| brag-slim agent skill (latent-spaces/brag) | MIT | `.claude/skills/brag-slim/`, license file next to it |
 
 ## Installed at build time (npm)
 

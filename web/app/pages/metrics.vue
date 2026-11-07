@@ -67,6 +67,7 @@ watch(o, (v, old) => { if (v && !old && route.hash) follow(route.hash) })
       </div>
       <div v-else-if="tab === 'network'" class="grid">
         <NetPanel :net="o.net" />
+        <ShaperPanel />
         <TailnetPanel :t="o.tailnet" :now="now" />
         <PortsPanel :ports="o.ports" :cts="o.cts" />
       </div>

@@ -1,4 +1,18 @@
 {
+  "addons": {
+    "pageOff": "{page} is turned off.",
+    "backToAddons": "Back to Add-ons"
+  },
+  "google": {
+    "title": "Google accounts",
+    "sub": "Shared by Calendar and Mail",
+    "client_id": "Client ID",
+    "client_secret": "Client secret",
+    "secret_set": "Secret saved (type to replace)",
+    "redirect": "Redirect URI:",
+    "disconnect": "Disconnect",
+    "connect": "Connect Google account"
+  },
   "common": {
     "demo": "Demo: sample data",
     "loading": "Loading…",
@@ -355,6 +369,8 @@
     "planTag": "plan",
     "usageHint": "tokens per model in this answer (lead + subagents); list price ≈ ${usd}, your plan covers it",
     "speakAll": "read it all",
+    "fileOpen": "Open",
+    "fileDownload": "Download",
     "wrap": "Wrap",
     "panel": "Panel",
     "showAll": "Show all {n} lines",

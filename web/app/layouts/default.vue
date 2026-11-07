@@ -44,6 +44,48 @@ const moreBadge = computed(() => nav.value.filter(n => !pinned.value.includes(n.
 const moreMark = computed(() => (pinned.value.includes('/chat') ? '' : overall.value))
 
 const sheet = ref(false)
+// phone: the tab bar slides away while you type or swipe up (scroll down) and only comes back when you tap its handle
+// at the bottom edge (or open the menu): never on its own. Driven by finger movement, not scroll events, so content
+// that scrolls itself never hides it. Phone width only.
+const barHidden = ref(false)
+const phone = () => window.matchMedia('(max-width: 640px)').matches
+let touchY = 0
+function onTouchStart(e: TouchEvent) { touchY = e.touches[0]?.clientY ?? 0 }
+function onTouchMove(e: TouchEvent) {
+  if (!phone() || sheet.value || barHidden.value) return
+  if ((e.touches[0]?.clientY ?? touchY) - touchY < -30) barHidden.value = true
+}
+function onFocusIn(e: FocusEvent) {
+  if (phone() && (e.target as HTMLElement | null)?.matches?.('input:not([type=checkbox]):not([type=radio]), textarea, [contenteditable]')) barHidden.value = true
+}
+onMounted(() => {
+  document.addEventListener('touchstart', onTouchStart, { passive: true })
+  document.addEventListener('touchmove', onTouchMove, { passive: true })
+  document.addEventListener('focusin', onFocusIn)
+})
+onUnmounted(() => {
+  document.removeEventListener('touchstart', onTouchStart)
+  document.removeEventListener('touchmove', onTouchMove)
+  document.removeEventListener('focusin', onFocusIn)
+})
+watch(sheet, v => { if (v) barHidden.value = false })
+// whole-page hooks for things outside .shell and for skin bars: html.bar-hid while the bar is away, and --bar-h = the
+// current bottom bar height (the shell's --tabbar, which each skin sets) so a floating button can sit just above it
+const shellEl = () => document.querySelector('.shell') as HTMLElement | null
+function syncBar() {
+  const root = document.documentElement
+  root.classList.toggle('bar-hid', barHidden.value && !sheet.value)
+  const v = shellEl() && getComputedStyle(shellEl()!).getPropertyValue('--tabbar').trim()
+  if (v) root.style.setProperty('--bar-h', v)
+}
+watch([barHidden, sheet], () => nextTick(syncBar), { flush: 'post' })
+onMounted(() => {
+  syncBar()
+  window.addEventListener('resize', syncBar)
+  const mo = new MutationObserver(syncBar)
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+  onUnmounted(() => { window.removeEventListener('resize', syncBar); mo.disconnect(); document.documentElement.classList.remove('bar-hid') })
+})
 function openSheet() { editing.value = false; sheet.value = !sheet.value }
 function pick(to: string) { if (editing.value) togglePin(to); else { sheet.value = false; navigateTo(to) } }
 watch(() => route.path, () => (sheet.value = false))
@@ -67,7 +109,7 @@ const palette = useState('palette:open', () => false)
 const { restore } = useRuns()
 onMounted(restore)
 // pages that fill the screen and scroll inside themselves: no top bar, no pull
-const FULL = ['/chat']
+const FULL = ['/chat', '/mail']
 const full = computed(() => FULL.includes(route.path))
 const pull = usePull(() => full.value || sheet.value || palette.value || route.path === '/dev')
 const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
@@ -82,8 +124,9 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
 </script>
 
 <template>
-  <div class="shell" :class="{ skinned: SkinNav }">
+  <div class="shell" :class="{ skinned: SkinNav, barhid: barHidden && !sheet }">
     <component :is="SkinBackdrop" v-if="SkinBackdrop" :path="route.path" />
+    <button v-if="barHidden && !sheet" type="button" class="tab-peek" aria-label="Show menu" @click="barHidden = false" />
     <component :is="SkinNav" v-if="SkinNav" :nav="nav" :path="route.path" :badge="badge" :mark="mark" :state="state" :state-text="stateText" :up="upText" :full="full" @search="palette = true" />
     <template v-else>
     <aside class="side">
@@ -107,7 +150,7 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
       </div>
     </aside>
 
-    <div class="tabs" role="navigation" :class="{ lifted: sheet }">
+    <div class="tabs" role="navigation" :class="{ lifted: sheet, hid: barHidden && !sheet }">
       <NuxtLink v-for="n in tabs" :key="n.to" :to="n.to" :class="{ on: route.path === n.to && !sheet }">
         <Icon :name="n.icon" class="i" /><span class="l">{{ n.short ?? n.label }}</span>
         <span v-if="badge(n.to)" class="badge">{{ badge(n.to) }}</span>
@@ -184,12 +227,13 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
 .brand:hover { text-decoration: none; }
 .logo { font-weight: 700; font-size: 19px; letter-spacing: -.02em; }
 nav { display: flex; flex-direction: column; gap: 2px; }
-nav a { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: var(--muted); font-size: 14px; }
-nav a:hover { color: var(--text); text-decoration: none; background: var(--panel); }
+nav a { position: relative; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: var(--muted); font-size: 14px; transition: background-color var(--dur-fast), color var(--dur-fast), transform var(--dur-fast) var(--ease-spring); }
+@media (hover: hover) { nav a:hover { color: var(--text); text-decoration: none; background: var(--panel); } }
+nav a:active { transform: scale(.97); transition-duration: 60ms; }
 nav a.on { color: var(--text); background: var(--panel-2); font-weight: 500; }
 nav a.on .i { color: var(--accent); }
 .i { color: var(--faint); }
-nav a:hover .i { color: var(--muted); }
+@media (hover: hover) { nav a:hover .i { color: var(--muted); } }
 .badge { margin-left: auto; background: var(--bad); color: #fff; border-radius: 999px; font-size: 10px; font-weight: 600; padding: 0 6px; line-height: 16px; }
 .cmark { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .badge + .cmark { margin-left: 6px; }
@@ -203,17 +247,17 @@ nav a:hover .i { color: var(--muted); }
   display: flex; align-items: center; gap: 10px; margin: -6px 0 -8px; padding: 7px 10px; border-radius: 8px;
   border: 1px solid var(--line); background: var(--panel); color: var(--faint); font: inherit; font-size: 13px; cursor: pointer;
 }
-.find:hover { color: var(--text); border-color: var(--line-2); }
+@media (hover: hover) { .find:hover { color: var(--text); border-color: var(--line-2); } }
 .find kbd { margin-left: auto; font: 11px var(--mono); color: var(--faint); }
 .topbar, .ptr { display: none; }
-main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
+main.refreshing { opacity: .55; transition: opacity var(--dur); pointer-events: none; }
 .banner {
   position: fixed; z-index: 60; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 10px); transform: translateX(-50%);
   padding: 6px 14px; border-radius: 999px; white-space: nowrap; pointer-events: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, .35); backdrop-filter: blur(6px);
 }
 .demo-pill { position: fixed; z-index: 59; right: 56px; top: calc(env(safe-area-inset-top, 0px) + 8px); pointer-events: none; opacity: .92; font-size: 11px; }
-.pop-enter-active, .pop-leave-active { transition: opacity .2s, transform .2s; }
+.pop-enter-active, .pop-leave-active { transition: opacity var(--dur), transform var(--dur); }
 .pop-enter-from, .pop-leave-to { opacity: 0; transform: translate(-50%, -8px); }
 .banner.bad { background: var(--bad-soft); color: var(--bad); }
 .banner.warn { background: var(--warn-soft); color: var(--warn); }
@@ -231,10 +275,11 @@ main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
   .cmark { position: absolute; top: 6px; right: 6px; }
 }
 
-.tabs, .scrim { display: none; }
+.tabs, .scrim, .tab-peek { display: none; }
 
 @media (max-width: 640px) {
   .shell { display: block; --tabbar: calc(58px + env(safe-area-inset-bottom)); }
+  .shell.barhid { --tabbar: env(safe-area-inset-bottom, 0px); }
   .side { display: none; }
   .topbar {
     display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top, 0px) + 6px) 8px 0 14px;
@@ -262,12 +307,18 @@ main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
     background: var(--bg);
   }
   .tabs.lifted { background: var(--panel); }
+  .tabs { transition: transform var(--dur) var(--ease-out); }
+  .tabs.hid { transform: translateY(100%); }
+  .tab-peek { display: block; position: fixed; z-index: 70; left: 50%; bottom: 0; width: 64px; height: 18px; transform: translateX(-50%); background: none; border: 0; padding: 0; cursor: pointer; }
+  .tab-peek::after { content: ''; position: absolute; left: 50%; bottom: 4px; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--line-2); }
+  @media (prefers-reduced-motion: reduce) { .tabs { transition: none; } }
   .tabs a, .tabs button {
     position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px;
     padding: 9px 0 8px; font: inherit; font-size: 11px; color: var(--muted); background: none; border: 0; cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
+    -webkit-tap-highlight-color: transparent; transition: color var(--dur-fast), transform var(--dur-fast) var(--ease-spring);
   }
   .tabs a:hover { text-decoration: none; }
+  .tabs a:active, .tabs button:active { transform: scale(.97); transition-duration: 60ms; }
   .tabs .i { width: 22px; height: 22px; color: inherit; }
   .tabs .on { color: var(--accent); }
   .tabs .l { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -279,7 +330,7 @@ main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
   }
   .sheet {
     position: absolute; left: 0; right: 0; bottom: var(--tabbar); max-height: calc(100dvh - var(--tabbar) - 40px); overflow-y: auto;
-    background: var(--panel); border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; padding: 14px 16px 16px;
+    background: var(--panel); border-top: 1px solid var(--line); border-radius: 16px 16px 0 0; padding: 14px 16px 56px;
   }
   .sheet-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .edit { margin-left: auto; font: inherit; font-size: 13px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
@@ -291,7 +342,9 @@ main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
     font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; border-radius: 12px; cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
-  .page:active { background: var(--panel-2); }
+  .page { transition: background-color var(--dur-fast), transform var(--dur-fast) var(--ease-spring); }
+  .page:active { background: var(--panel-2); transform: scale(.97); transition-duration: 60ms; }
+  .page.editing:active { transform: none; }
   .tile { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); }
   .page.on { color: var(--text); }
   .page.on .tile { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
@@ -302,9 +355,19 @@ main.refreshing { opacity: .55; transition: opacity .2s; pointer-events: none; }
   .page .cmark { position: absolute; top: 6px; left: calc(50% + 18px); margin: 0; }
   .pinmark { position: absolute; top: 2px; left: calc(50% + 16px); display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: var(--bg); }
 
-  .sheet-enter-active, .sheet-leave-active { transition: opacity .18s; }
-  .sheet-enter-active .sheet, .sheet-leave-active .sheet { transition: transform .22s cubic-bezier(.2, .8, .2, 1); }
+  .sheet-enter-active, .sheet-leave-active { transition: opacity var(--dur); }
+  .sheet-enter-active .sheet, .sheet-leave-active .sheet { transition: transform var(--dur) var(--ease-out); }
   .sheet-enter-from, .sheet-leave-to { opacity: 0; }
   .sheet-enter-from .sheet, .sheet-leave-to .sheet { transform: translateY(24px); }
+}
+</style>
+
+<style>
+/* skins: the bar is theirs; they mark every bottom-fixed nav piece data-skin-bar and it slides away with the stock one */
+@media (max-width: 640px) {
+  html.bar-hid .shell.skinned { --tabbar: env(safe-area-inset-bottom, 0px) !important; }
+  html.bar-hid [data-skin-bar] { translate: 0 calc(100% + 32px) !important; pointer-events: none; }
+  [data-skin-bar] { transition: translate .2s cubic-bezier(.2, .8, .2, 1); }
+  @media (prefers-reduced-motion: reduce) { [data-skin-bar] { transition: none; } }
 }
 </style>

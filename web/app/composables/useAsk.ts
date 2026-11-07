@@ -149,9 +149,13 @@ export function codeBlocks(html: string, o: { labels: CodeLabels, panel?: boolea
 export function useAnswerRender() {
   const { t: tr } = useI18n()
   const routes = useAnswerRoutes()
-  return (html: string, o: { busy?: boolean, panel?: boolean, state?: Record<number, string> } = {}) => codeBlocks(linkify(html, routes.value), {
-    ...o, labels: { copy: tr('ask.copy'), wrap: tr('ask.wrap'), panel: tr('ask.panel'), all: n => tr('ask.showAll', { n }), less: tr('ask.showLess') },
-  })
+  return (html: string, o: { busy?: boolean, panel?: boolean, state?: Record<number, string> } = {}) => {
+    const out = codeBlocks(linkify(html, routes.value), {
+      ...o, labels: { copy: tr('ask.copy'), wrap: tr('ask.wrap'), panel: tr('ask.panel'), all: n => tr('ask.showAll', { n }), less: tr('ask.showLess') },
+    })
+    // file cards (utils/filecards.ts) only once the answer is complete: a streaming re-render would restart the player
+    return o.busy ? out : fileCards(out, { open: tr('ask.fileOpen'), dl: tr('ask.fileDownload') })
+  }
 }
 
 /** the model picker and the web/think toggles are shared by every page */

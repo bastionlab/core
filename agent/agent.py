@@ -18,7 +18,9 @@ from claude import claude_task_tail, _alive, _cc_turn, claude_send, claude_stop,
 import backup
 import release
 import dash_sdk
+import google_auth  # noqa: F401  (registers /google/* routes)
 import settings
+import shaper
 
 
 BIND = os.environ.get("AGENT_BIND", HOST_IP)
@@ -43,8 +45,19 @@ def overview():
 
 
 class H(BaseHTTPRequestHandler):
+    def _scoped(self):
+        """an add-on's narrow token (dash_sdk.scoped_token): GET on exactly its registered path"""
+        f = dash_sdk.SCOPED.get(urlparse(self.path).path)
+        if not f or self.command != "GET":
+            return False
+        try:
+            tok = open(f).read().strip()
+        except OSError:
+            return False
+        return bool(tok) and secrets.compare_digest(self.headers.get("Authorization", "").encode(), f"Bearer {tok}".encode())
+
     def _auth(self):
-        if self.client_address[0] not in ALLOW or not secrets.compare_digest(self.headers.get("Authorization", ""), f"Bearer {TOKEN}"):
+        if self.client_address[0] not in ALLOW or not (secrets.compare_digest(self.headers.get("Authorization", ""), f"Bearer {TOKEN}") or self._scoped()):
             self._send(403, {"error": "forbidden"})
             return False
         return True
@@ -134,6 +147,8 @@ class H(BaseHTTPRequestHandler):
                                                    body.get("push") is not False, body.get("memory")))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage(refresh=True))
+            if u.path == "/net/shaper":
+                return self._send(200, shaper.save(body) if "enabled" in body else shaper.state())
             if u.path == "/net/speedtest":
                 return self._send(200, speedtest())
             if u.path == "/claude/stop":
@@ -255,6 +270,7 @@ class H(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     cpu_percent()
     net_start()
+    threading.Thread(target=shaper.apply, daemon=True).start()
     threading.Thread(target=claude_watch, daemon=True).start()
     for fn in dash_sdk.STARTUP:  # add-ons' background loops
         threading.Thread(target=fn, daemon=True).start()

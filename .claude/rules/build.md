@@ -63,6 +63,7 @@ marketplace — plan").
   addon-get and backend-install (backend repos are scanned before bootstrap.sh); warnings show on the /addons
   confirm card (`/marketplace/scan`). Own add-ons must pass it: no `eval`/`exec` of decoded data, read only
   `/etc/dash/secrets/<own id>.json`. A false positive → `marketplace.scan_allow: ["<id>:<rule>"]` in config.json.
+- Devices that post without a browser (a phone app, a PC script) use `/api/ingest/<id>/...` (add-on `server/api/ingest/<id>/`): auth.ts skips the Origin and session checks there but keeps the tailnet/LAN gate, so the handler MUST verify its own device token (see addons/life `lifeAuth`).
 - New add-on: `templates/new-addon <id> "<Name>"` (or `/new-addon`); release: `/publish-addon`.
 - Publishing = the Publish button on /addons (`addon_publish` → `agent/addon-publish`): a `publish/<id>` PR that
   `bastionlab/addons/.github/workflows/publish.yml` checks (`.github/check/check.py`: scope, manifest, owner, safety

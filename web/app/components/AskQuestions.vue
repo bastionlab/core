@@ -85,7 +85,7 @@ function submit() {
       <div v-if="tabs && !done" class="nav">
         <button v-if="i > 0" type="button" class="btn ghost" @click="cur = i - 1"><Icon name="chevron-left" :size="16"/> Back</button>
         <button type="button" class="btn" :class="{ primary: has(i) }" @click="has(i) ? advance() : (cur = i + 1)">
-          {{ has(i) ? 'Next →' : 'Skip for now →' }}
+          {{ has(i) ? 'Next' : 'Skip for now' }}<Icon name="chevron-right" :size="16"/>
         </button>
       </div>
     </div>

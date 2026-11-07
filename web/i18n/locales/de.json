@@ -1,4 +1,14 @@
 {
+  "google": {
+    "title": "Google-Konten",
+    "sub": "Gemeinsam fuer Kalender und Mail",
+    "client_id": "Client-ID",
+    "client_secret": "Client-Secret",
+    "secret_set": "Secret gespeichert (zum Ersetzen tippen)",
+    "redirect": "Redirect-URI:",
+    "disconnect": "Trennen",
+    "connect": "Google-Konto verbinden"
+  },
   "common": {
     "demo": "Demo: Beispieldaten",
     "loading": "Lädt…",
@@ -355,6 +365,8 @@
     "planTag": "Plan",
     "usageHint": "Tokens pro Modell in dieser Antwort (Lead + Subagenten); Listenpreis ≈ ${usd}, vom Abo gedeckt",
     "speakAll": "alles vorlesen",
+    "fileOpen": "Öffnen",
+    "fileDownload": "Herunterladen",
     "wrap": "Umbruch",
     "panel": "Panel",
     "showAll": "Alle {n} Zeilen zeigen",

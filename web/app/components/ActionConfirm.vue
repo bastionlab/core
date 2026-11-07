@@ -28,17 +28,20 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); clearTimeout(a
 
 <template>
   <Teleport to="body">
+    <Transition name="sheet">
     <div v-if="pending" class="ac-scrim" @click.self="cancel">
       <div class="ac" role="dialog" aria-label="Confirm action">
         <b>{{ pending.label }}</b>
         <p v-if="err" class="errbox small">{{ err }}</p>
-        <p v-else class="muted small">{{ desc || 'Loading…' }}</p>
+        <p v-else-if="desc" class="muted small">{{ desc }}</p>
+        <Skeleton v-else kind="lines" :n="2" />
         <div class="row">
           <button type="button" class="btn ghost sm" @click="cancel">Cancel</button>
           <button type="button" class="btn primary sm" :disabled="!armed || !!err" @click="go">Run</button>
         </div>
       </div>
     </div>
+    </Transition>
   </Teleport>
 </template>
 

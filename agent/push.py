@@ -24,7 +24,7 @@ STATE = Path("/var/lib/dash/push.json")
 # topic → (label, page a tap opens). Discord channel = the topic, except backups (posted to #alerts)
 TOPICS = {"alerts": ("Alerts", "/metrics"), "backups": ("Backups", "/metrics#backups"), "deals": ("Deals", "/deals"),
           "wohnungen": ("Flats", "/wohnungen"), "jobs": ("Jobs", "/jobs"), "money": ("Money", "/money"),
-          "chat": ("Chat", "/chat")}
+          "chat": ("Chat", "/chat"), "media": ("Media", "/media?s=discover")}
 ROUTES = ("discord", "push", "both")
 _lock = threading.Lock()
 

@@ -17,13 +17,13 @@ const totalPending = computed(() => (props.all ? hostPending.value : 0)
         :title="`apt update && apt upgrade on the host and every running container (${totalPending} package updates pending)`"
         @click="emit('action', 'apt_upgrade_all', {})"
       >
-        ⟳ Update all<span v-if="totalPending" class="pill warn">{{ totalPending }}</span>
+        Update all<span v-if="totalPending" class="pill warn">{{ totalPending }}</span>
       </button>
       <button
         v-if="all" class="btn" :class="{ primary: hostPending }" title="apt upgrade on the host itself"
         @click="emit('action', 'apt_upgrade', { target: 'host' })"
       >
-        ⟳ Host<span v-if="hostPending" class="pill warn">{{ hostPending }}</span>
+        Host<span v-if="hostPending" class="pill warn">{{ hostPending }}</span>
       </button>
     </template>
 
@@ -68,7 +68,7 @@ const totalPending = computed(() => (props.all ? hostPending.value : 0)
                 :disabled="c.status !== 'running'"
                 :title="c.status === 'running' ? `apt update && apt upgrade in CT ${c.vmid} ${c.name}` : 'container is not running'"
                 @click="emit('action', 'apt_upgrade', { target: c.vmid })"
-              >⟳ Update</button>
+              >Update</button>
             </td>
           </tr>
         </tbody>
@@ -85,7 +85,7 @@ const totalPending = computed(() => (props.all ? hostPending.value : 0)
           <button
             class="btn ghost small upd" :class="{ warn: pending(c.vmid) }" :disabled="c.status !== 'running'"
             @click="emit('action', 'apt_upgrade', { target: c.vmid })"
-          >⟳<span v-if="pending(c.vmid)"> {{ pending(c.vmid) }}</span></button>
+          ><Icon name="refresh-cw" :size="14" /><span v-if="pending(c.vmid)"> {{ pending(c.vmid) }}</span></button>
         </div>
         <div class="bars">
           <div :title="`${(c.cpu * 100).toFixed(0)}% of ${c.cpus}`"><span class="faint small">CPU</span><div class="mini"><i :class="tone(c.cpu * 100)" :style="{ width: Math.min(100, c.cpu * 100) + '%' }" /></div></div>

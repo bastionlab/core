@@ -45,11 +45,17 @@ export default defineNuxtConfig({
     head: {
       title: 'Bastion',
       meta: [
-        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content' },
         { name: 'color-scheme', content: 'dark' },
         { name: 'theme-color', content: '#0a0c10' },
+        { name: 'mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
       ],
-      link: [{ rel: 'icon', href: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>" }],
+      link: [
+        { rel: 'manifest', href: '/manifest.webmanifest', crossorigin: 'use-credentials' },
+        { rel: 'apple-touch-icon', href: '/pwa/apple-touch-180.png' },
+        { rel: 'icon', href: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>" },
+      ],
     },
   },
   css: ['~/assets/main.css'],

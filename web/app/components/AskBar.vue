@@ -21,7 +21,7 @@ function loadDraft(k?: string) {
   imgs.value = d?.imgs ?? []
 }
 onMounted(() => loadDraft(props.draftKey))
-watch(() => props.draftKey, k => loadDraft(k))
+watch(() => props.draftKey, k => { if (k) loadDraft(k) }) // a key that blinks to undefined while chats sync must not wipe what is being typed
 watch([q, imgs], () => {
   if (!loaded) return
   try { q.value || imgs.value.length ? localStorage.setItem(loaded, JSON.stringify({ q: q.value, imgs: imgs.value })) : localStorage.removeItem(loaded) } catch {}
@@ -173,11 +173,12 @@ async function mic() {
 onBeforeUnmount(() => { if (mr?.state === 'recording') { recSecs.value = 0; mr.stop() } })
 const mmss = (n: number) => `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`
 
-defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: string) => { q.value = v; nextTick(() => { box.value?.focus(); fit() }) } })
+defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: string, files?: string[]) => { q.value = v; if (files) imgs.value = [...files]; nextTick(() => { box.value?.focus(); fit() }) } })
 </script>
 
 <template>
   <form class="askbar" @submit.prevent="send" @dragover.prevent @drop.prevent="onDrop">
+    <Transition name="cmds">
     <div v-if="items.length" ref="list" class="cmds" role="listbox">
       <button
         v-for="(it, i) in items" :key="it.cmd.name + (it.choice ?? '') + (it.verb ?? '')" type="button" role="option" class="cmd" :class="{ on: i === sel }"
@@ -192,16 +193,17 @@ defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: str
         </template>
       </button>
     </div>
+    </Transition>
     <div v-if="voiceErr" class="att"><span class="small bad">{{ voiceErr }}</span></div>
-    <div v-if="images && (imgs.length || uploading || imgErr)" class="att">
+    <TransitionGroup v-if="images && (imgs.length || uploading || imgErr)" name="list" tag="div" class="att">
       <span v-for="(n, i) in imgs" :key="n" class="th">
         <img v-if="isImg(n)" :src="`/api/chat/img/${n}`" alt="screenshot">
         <span v-else class="fchip small" :title="fileLabel(n)"><Icon name="clip" :size="13" /> {{ fileLabel(n) }}</span>
         <button type="button" title="remove" @click="imgs.splice(i, 1)"><Icon name="x" :size="12"/></button>
       </span>
-      <span v-if="uploading" class="small faint">uploading…</span>
-      <span v-if="imgErr" class="small bad">{{ imgErr }}</span>
-    </div>
+      <span v-if="uploading" key="up" class="small faint">uploading…</span>
+      <span v-if="imgErr" key="err" class="small bad">{{ imgErr }}</span>
+    </TransitionGroup>
     <div class="line">
       <Icon name="spark" :size="17" class="spark" />
       <textarea
@@ -248,6 +250,9 @@ defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: str
 .cmds { position: absolute; left: 0; right: 0; bottom: calc(100% + 10px); z-index: 20; display: flex; flex-direction: column; max-height: min(320px, 45dvh); overflow-y: auto; padding: 4px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: var(--radius-sm); box-shadow: 0 8px 28px rgba(0, 0, 0, .45); }
 .cmd { display: flex; align-items: baseline; gap: 10px; text-align: left; font: inherit; color: var(--text); background: transparent; border: 0; border-radius: 7px; padding: 7px 10px; cursor: pointer; min-width: 0; }
 .cmd.on { background: var(--accent-soft); }
+.cmds-enter-active { transition: opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out); }
+.cmds-leave-active { transition: opacity var(--dur-fast) var(--ease-in), transform var(--dur-fast) var(--ease-in); }
+.cmds-enter-from, .cmds-leave-to { opacity: 0; transform: translateY(6px); }
 .cmd .nm { flex-shrink: 0; font-size: 13px; }
 .cmd .ds { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmd .tag { flex-shrink: 0; }
@@ -262,6 +267,8 @@ defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: str
 .th img { display: block; height: 52px; max-width: 110px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
 .fchip { display: flex; align-items: center; gap: 5px; height: 30px; max-width: 180px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .th button { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel-2); color: var(--muted); font-size: 10px; line-height: 1; padding: 0; cursor: pointer; }
+.th button { transition: transform var(--dur-fast) var(--ease-out); }
+.th button:active { transform: scale(.94); }
 @media (pointer: coarse) { .th button { width: 26px; height: 26px; top: -10px; right: -10px; font-size: 12px; } .th button::after { content: ''; position: absolute; inset: -4px; } }
 @media (max-width: 640px) { .att { padding-left: 0; } .askbar textarea.q { font-size: 16px; } } /* under 16px iOS zooms in on focus */
 .line { display: flex; align-items: flex-end; gap: 6px; }

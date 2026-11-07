@@ -31,6 +31,16 @@ RO_ALLOW = [
     f"Bash(pct exec {ct('dash')} -- curl -s http://127.0.0.1:3000/api/*)",
     f"Bash({DASHBOARD}/agent/local-sum *)", f"Bash({DASHBOARD}/agent/local-sum)",
 ]
+# read-only turns (2026-11-01): agent/cc-ro-hook judges each whole Bash command, so pipes, pct exec, python3 -c and
+# heredocs that only read are allowed; RO_ALLOW's exact patterns alone denied even "summarize my note"
+CC_RO_SETTINGS = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": f"{DASHBOARD}/agent/cc-ro-hook", "timeout": 10}]}]}}
+# Auto turns: facts for the auto-mode classifier (the global ones say "no git remotes"), chat turns only
+CC_AUTO_SETTINGS = {"autoMode": {"environment": [
+    "### Dashboard chat (Auto on)",
+    "The owner of this single-user homelab switched on Auto in the dashboard chat: write access for this message was granted explicitly by the owner.",
+    f"**Trusted repos**: the owner's GitHub org bastionlab (core = {DASHBOARD}, addons = {DASHBOARD}/addons, deals, money) and user MaxJC0. Pushing the owner's work there is routine.",
+    "**Routine here**: editing and restarting the dashboard and its services, apt installs from Debian/Proxmox repos, deleting temporary files this session created, pct exec into the owner's own containers.",
+]}}
 CC_SYSTEM = """You are answering in the Chat tab of the owner's homelab dashboard (__DASH_URL__), as root on the Proxmox host __NAME__, cwd /root. The owner is often on a phone: keep answers short, use markdown, and avoid wide tables and long code dumps unless they are asked for. Never use emoji, emoji in headings or decorative symbols.
 Dashboard source: __DASHBOARD__ (agent/agent.py runs on __NAME__, web/ is Nuxt in CT __DASH_CT__). Edits go live on this box by themselves (agent/dash-live: agent restart and/or a ~15 s app rebuild a few seconds after the last save; a build error keeps the old app running, see Settings → Deploy), so never run ./deploy.sh just to apply a change. Deploy means sending the work to GitHub for everyone else (the Deploy button, agent/dash-ship): do it only when the owner asks. This conversation survives the agent and app restarting because it runs in its own systemd unit. Another Claude session may be editing the dashboard at the same time, so check `git status` and file mtimes before touching a file, and never revert work you didn't do.
 The Notes tab's notes are JSON at `pct exec __DASH_CT__ -- curl -s http://127.0.0.1:3000/api/notes`. When the owner says "build my note about X", read it there first.
@@ -40,6 +50,7 @@ QUESTIONS: you have no AskUserQuestion tool here. When the owner should decide s
   "options": [{"label": "CT __DASH_CT__ (Recommended)", "description": "rides along in the nightly backup"}, {"label": "local-zfs", "description": "…"}]}]
 ```
 LINKS: link to dashboard pages with relative paths, they open inside the app: [Metrics](/metrics), a note [title](/notes?n=<id>), a chat [title](/chat?c=<id>), a tab inside a page with ?s=<tab>.
+FILES: when you produce something for the owner to look at or download (video, image, PDF, audio, archive, export), save it under /srv/bastion-files/<short-topic>/ (writable shared folder shown in the Files tab) and link each file in your answer as [name](/files?p=<short-topic>/<name>); the chat renders such links as a preview card with download. Read-only bookmarks may be linked as /files?r=<root>&p=<path>.
 1-4 questions, 2-4 options each, a header of at most 12 characters, the recommended option first and marked "(Recommended)". "multi": true lets several be picked. The dashboard renders this as tap-to-answer buttons with a free-text "Other", and the answers arrive as the next message. Keep the prose above the block short.
 ACTIONS: you cannot run host actions from here. To propose one (restart a service, backup, apt upgrade, git push, ...), do NOT run it yourself: end your answer with a fenced block and the owner gets a Run button.
 ```action
@@ -47,9 +58,9 @@ ACTIONS: you cannot run host actions from here. To propose one (restart a servic
 ```
 Use only action names from CATALOG in __DASHBOARD__/web/server/utils/actions.ts (Read it for the exact args); anything else is dropped. At most 3 blocks, never say it has run.
 """.replace("__DASH_URL__", DASH_URL).replace("__DASHBOARD__", DASHBOARD).replace("__DASH_CT__", str(ct("dash"))).replace("__NAME__", NAME)
-CC_RO = """MODE: READ-ONLY. You can read files and run read-only commands, and anything that would change state is denied automatically. Don't work around a denial. When a fix needs a change, say exactly what you would change and tell the owner to switch on **Auto** in the chat header and ask again."""
+CC_RO = """MODE: READ-ONLY. You can read files and run read-only commands, and anything that would change state is denied automatically. Reading anything is fine, also through pipes, `pct exec`, `python3 -c` or a heredoc that only reads; no `>` into files, no `sleep N` first. Don't work around a denial. When a fix needs a change, say exactly what you would change and tell the owner to switch on **Auto** in the chat header and ask again."""
 CC_PLAN_AUTO = """MODE: READ-ONLY THIS TURN, PLAN FIRST. The owner's chat has Auto on, so write access is available: this turn is plan-only only because the router chose a plan first. Never tell the owner to switch on Auto; it already is. Investigate, then give the plan as asked below, and the owner's Execute button runs it with write access."""
-CC_AUTO = """MODE: AUTO. The owner switched on write access for this message. You may edit files, run commands, deploy and restart services. Nobody approves individual steps, so prefer reversible changes, don't delete data, and keep the scope to what was asked. Finish with a short list of what you changed and how to undo it."""
+CC_AUTO = """MODE: AUTO. The owner switched on write access for this message. You may edit files, run commands, deploy and restart services. Nobody approves individual steps, so prefer reversible changes, don't delete data, and keep the scope to what was asked. Finish with a short list of what you changed and how to undo it. Never start a command with a plain `sleep N` (Claude Code blocks it): wait with `until <check>; do sleep 3; done`. A denial in this mode comes from the auto-mode safety check, never from read-only: name the step in one line and offer it as an action block when the catalog has it."""
 # --- team mode (2026-10-26, like /ship on the dev boxes): the chosen model leads and hands the reading and the typing
 # to cheaper subagents, so the expensive context stays small. The lead decides by task size; a quick question it
 # just answers. Read-only turns get no builder (its edits would be denied anyway).
@@ -220,9 +231,10 @@ def claude_send(chat, session, prompt, auto, model=None, effort=None, images=Non
     cmd += ["--model", model] if model else []
     cmd += ["--effort", effort] if effort else []
     if auto and not plan:
-        cmd += ["--permission-mode", "auto"]
+        cmd += ["--permission-mode", "auto", "--settings", json.dumps(CC_AUTO_SETTINGS)]
     else:
-        cmd += ["--permission-mode", "dontAsk", "--allowedTools", *RO_ALLOW,
+        # cc-ro-hook allows any Bash command it can prove only reads; the rest falls through to dontAsk (denied)
+        cmd += ["--permission-mode", "dontAsk", "--allowedTools", *RO_ALLOW, "--settings", json.dumps(CC_RO_SETTINGS),
                 "--disallowedTools", "Write", "Edit", "NotebookEdit"]
     out = CC_DIR / f"{turn}.jsonl"
     r = subprocess.run(["systemd-run", "--unit", unit, "--collect", "--quiet",

@@ -39,8 +39,10 @@ function toggle() {
 header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; min-height: 26px; flex-wrap: wrap; }
 .folded header { margin-bottom: 0; }
 header.toggle { cursor: pointer; user-select: none; margin-left: -4px; }
-header.toggle:hover h2 { color: var(--accent); }
-.chev { color: var(--faint); transform: rotate(90deg); transition: transform .15s; }
+header.toggle h2 { transition: color var(--dur-fast); }
+@media (hover: hover) { header.toggle:hover h2 { color: var(--accent); } }
+header.toggle:active h2 { color: var(--accent); }
+.chev { color: var(--faint); transform: rotate(90deg); transition: transform var(--dur) var(--ease-out); }
 .folded .chev { transform: none; }
 h2 { font-size: 14px; font-weight: 600; margin: 0; color: var(--text); }
 .sub { font-size: 12px; color: var(--faint); min-width: 0; }
