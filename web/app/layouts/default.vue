@@ -3,6 +3,9 @@ const { data: o, error, updated, refresh } = useOverview()
 usePoll(refresh, 5000)
 
 const route = useRoute()
+const newBuild = useState<boolean>('newBuild', () => false) // set by plugins/fresh.client.ts
+const reload = () => window.location.reload()
+const { t: tr } = useI18n()
 // the core pages; every other tab is an add-on (addons/<id>/addon.yaml) and slots in by its `order`
 const NAV: { to: string, icon: string, label: string }[] = [
   { to: '/', icon: 'home', label: 'Home' },
@@ -34,7 +37,7 @@ watch(() => chats.value.flatMap(c => c.turns.filter(t => t.ct && !t.fin && !t.bu
   for (const c of chats.value) for (const t of c.turns) if (t.ct && !t.fin && !t.busy) claude.attach(t)
 })
 const mark = (to: string) => (to === '/chat' ? overall.value : '')
-const markTitle = (m: string) => (m === 'input' ? 'a chat is waiting for your answer' : 'a chat is working')
+const markTitle = (m: string) => (m === 'input' ? tr('nav.chatInput') : tr('nav.chatWorking'))
 
 // phone: four pinned tabs + "More" (a sheet with every page). Which four is the viewer's choice (useNavPins, shared with skins).
 const { keys: pinned, pinned: tabs, toggle: togglePin, editing, max: MAX_PINS } = useNavPins(() => nav.value)
@@ -113,20 +116,20 @@ const FULL = ['/chat', '/mail']
 const full = computed(() => FULL.includes(route.path))
 const pull = usePull(() => full.value || sheet.value || palette.value || route.path === '/dev')
 const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
-const stateText = computed(() => (down.value ? 'agent unreachable' : stale.value ? 'stale' : 'live'))
+const stateText = computed(() => (down.value ? tr('nav.down') : stale.value ? tr('nav.stale') : tr('nav.live')))
 // a skin (Designs add-on) may bring its own navigation; it gets the same pages, badges and live state
 const demo = useRuntimeConfig().public.demo // demo mode (demo/README.md): the sample-data note
 const SkinNav = useSkinned('Nav')
 // …and may paint a full-page backdrop behind everything, and frame each page (title, chrome, layout)
 const SkinBackdrop = useSkinned('Backdrop')
 const SkinFrame = useSkinned('Frame')
-const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === 'running').length ?? '–'}/${o.value?.cts?.length ?? '–'} up`)
+const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === 'running').length ?? '–'}/${o.value?.cts?.length ?? '–'} ${tr('nav.up')}`)
 </script>
 
 <template>
   <div class="shell" :class="{ skinned: SkinNav, barhid: barHidden && !sheet }">
     <component :is="SkinBackdrop" v-if="SkinBackdrop" :path="route.path" />
-    <button v-if="barHidden && !sheet" type="button" class="tab-peek" aria-label="Show menu" @click="barHidden = false" />
+    <button v-if="barHidden && !sheet" type="button" class="tab-peek" :aria-label="$t('nav.showMenu')" @click="barHidden = false" />
     <component :is="SkinNav" v-if="SkinNav" :nav="nav" :path="route.path" :badge="badge" :mark="mark" :state="state" :state-text="stateText" :up="upText" :full="full" @search="palette = true" />
     <template v-else>
     <aside class="side">
@@ -135,10 +138,10 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
         <span class="dot" :class="state" :title="stateText" />
       </NuxtLink>
       <button type="button" class="find" @click="palette = true">
-        <Icon name="search" :size="16" class="i" /><span class="l">Search</span><kbd class="l">{{ mac ? 'Cmd' : 'Ctrl' }} K</kbd>
+        <Icon name="search" :size="16" class="i" /><span class="l">{{ $t('common.search') }}</span><kbd class="l">{{ mac ? 'Cmd' : 'Ctrl' }} K</kbd>
       </button>
       <nav>
-        <NuxtLink v-for="n in nav" :key="n.to" :to="n.to" :class="{ on: route.path === n.to }">
+        <NuxtLink v-for="n in nav" :key="n.to" :to="n.to" :aria-label="n.label" :class="{ on: route.path === n.to }">
           <Icon :name="n.icon" class="i" /><span class="l">{{ n.label }}</span>
           <span v-if="badge(n.to)" class="badge">{{ badge(n.to) }}</span>
           <span v-if="mark(n.to)" class="cmark" :class="mark(n.to)" :title="markTitle(mark(n.to))" />
@@ -146,7 +149,7 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
       </nav>
       <div class="side-jobs"><JobsButton /></div>
       <div class="foot small faint" :title="updated ? new Date(updated).toLocaleString() : ''">
-        {{ o?.cts?.filter((c: any) => c.status === 'running').length ?? '–' }}/{{ o?.cts?.length ?? '–' }} up · {{ stateText }}
+        {{ o?.cts?.filter((c: any) => c.status === 'running').length ?? '–' }}/{{ o?.cts?.length ?? '–' }} {{ $t('nav.up') }} · {{ stateText }}
       </div>
     </aside>
 
@@ -157,7 +160,7 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
         <span v-if="mark(n.to)" class="cmark" :class="mark(n.to)" />
       </NuxtLink>
       <button type="button" :class="{ on: offTab || sheet }" :aria-expanded="sheet" @click="openSheet">
-        <Icon :name="offTab && !sheet ? offTab.icon : 'grid'" class="i" /><span class="l">{{ offTab && !sheet ? (offTab.short ?? offTab.label) : 'More' }}</span>
+        <Icon :name="offTab && !sheet ? offTab.icon : 'grid'" class="i" /><span class="l">{{ offTab && !sheet ? (offTab.short ?? offTab.label) : $t('nav.more') }}</span>
         <span v-if="moreBadge" class="badge">{{ moreBadge }}</span>
         <span v-else-if="moreMark" class="cmark" :class="moreMark" />
       </button>
@@ -165,14 +168,14 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
 
     <Transition name="sheet">
       <div v-if="sheet" class="scrim" @click.self="sheet = false">
-        <div class="sheet" role="dialog" aria-label="All pages">
+        <div class="sheet" role="dialog" :aria-label="$t('nav.allPages')">
           <div class="sheet-head">
             <span class="dot" :class="state" />
-            <span class="small faint">{{ o?.cts?.filter((c: any) => c.status === 'running').length ?? '–' }}/{{ o?.cts?.length ?? '–' }} up · {{ stateText }}</span>
-            <button type="button" class="edit" aria-label="Search" @click="sheet = false; palette = true"><Icon name="search" :size="15" /></button>
-            <button type="button" class="edit" :class="{ on: editing }" @click="editing = !editing">{{ editing ? 'Done' : 'Edit tabs' }}</button>
+            <span class="small faint">{{ o?.cts?.filter((c: any) => c.status === 'running').length ?? '–' }}/{{ o?.cts?.length ?? '–' }} {{ $t('nav.up') }} · {{ stateText }}</span>
+            <button type="button" class="edit" :aria-label="$t('common.search')" @click="sheet = false; palette = true"><Icon name="search" :size="15" /></button>
+            <button type="button" class="edit" :class="{ on: editing }" @click="editing = !editing">{{ editing ? $t('common.done') : $t('nav.editTabs') }}</button>
           </div>
-          <div v-if="editing" class="hint small faint">Tap to pin up to {{ MAX_PINS }} pages to the bar · {{ pinned.length }}/{{ MAX_PINS }}</div>
+          <div v-if="editing" class="hint small faint">{{ $t('nav.pinHint', { max: MAX_PINS, n: pinned.length }) }}</div>
           <div class="pages">
             <button v-for="n in nav" :key="n.to" type="button" class="page"
               :class="{ on: route.path === n.to, pinned: pinned.includes(n.to), editing, full: editing && !pinned.includes(n.to) && pinned.length >= MAX_PINS }"
@@ -191,7 +194,7 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
     <div v-if="!full" class="topbar">
       <NuxtLink to="/" class="brand"><span class="logo">bastion</span><span class="dot" :class="state" /></NuxtLink>
       <JobsButton />
-      <button type="button" class="btn icon ghost" aria-label="Search" @click="palette = true"><Icon name="search" :size="19" /></button>
+      <button type="button" class="btn icon ghost" :aria-label="$t('common.search')" @click="palette = true"><Icon name="search" :size="19" /></button>
     </div>
     </template>
     <div v-if="pull.dist.value" class="ptr" :class="{ ready: pull.ready.value, busy: pull.busy.value }" :style="{ transform: `translate(-50%, ${pull.dist.value}px)` }">
@@ -203,12 +206,18 @@ const upText = computed(() => `${o.value?.cts?.filter((c: any) => c.status === '
     <ActionConfirm />
     <Toasts />
     <OfflinePill />
+    <Transition name="nb">
+      <div v-if="newBuild" class="newbuild small" role="status">
+        <span>{{ $t('app.newVersion') }}</span>
+        <button type="button" class="btn sm primary" @click="reload">{{ $t('app.reload') }}</button>
+      </div>
+    </Transition>
 
     <main class="wrap" :class="{ refreshing: pull.busy.value }">
       <div v-if="demo" class="pill accent demo-pill small" role="note">{{ $t('common.demo') }}</div>
       <!-- floats over the page so it never shifts content (chat scroll etc.) -->
       <Transition name="pop">
-        <div v-if="state !== 'ok'" class="banner small" :class="state" role="status">{{ down ? 'Agent unreachable — data may be old' : 'Data is stale' }}</div>
+        <div v-if="state !== 'ok'" class="banner small" :class="state" role="status">{{ down ? $t('nav.bannerDown') : $t('nav.bannerStale') }}</div>
       </Transition>
       <component :is="SkinFrame" v-if="SkinFrame" :path="route.path" :title="here?.label ?? ''" :icon="here?.icon ?? ''"><slot /></component>
       <slot v-else />
@@ -234,7 +243,7 @@ nav a.on { color: var(--text); background: var(--panel-2); font-weight: 500; }
 nav a.on .i { color: var(--accent); }
 .i { color: var(--faint); }
 @media (hover: hover) { nav a:hover .i { color: var(--muted); } }
-.badge { margin-left: auto; background: var(--bad); color: #fff; border-radius: 999px; font-size: 10px; font-weight: 600; padding: 0 6px; line-height: 16px; }
+.badge { margin-left: auto; background: var(--bad); color: var(--bg); border-radius: 999px; font-size: 10px; font-weight: 600; padding: 0 6px; line-height: 16px; }
 .cmark { margin-left: auto; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .badge + .cmark { margin-left: 6px; }
 .cmark.busy { background: var(--accent); animation: cpulse 1.4s ease-in-out infinite; }
@@ -297,7 +306,6 @@ main.refreshing { opacity: .55; transition: opacity var(--dur); pointer-events: 
   }
   .ptr.ready { color: var(--accent); }
   .ptr.busy svg { animation: spin .8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
   .sheet-head .edit:first-of-type { margin-left: auto; display: grid; place-items: center; padding: 5px 9px; }
   .sheet-head .edit + .edit { margin-left: 0; }
   .tabs {
@@ -335,6 +343,7 @@ main.refreshing { opacity: .55; transition: opacity var(--dur); pointer-events: 
   .sheet-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .edit { margin-left: auto; font: inherit; font-size: 13px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
   .edit.on { color: var(--accent); border-color: var(--accent); }
+  @media (pointer: coarse) { .edit { min-height: 40px; } }
   .hint { margin: -4px 0 10px; }
   .pages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px 4px; }
   .page {
@@ -360,14 +369,28 @@ main.refreshing { opacity: .55; transition: opacity var(--dur); pointer-events: 
   .sheet-enter-from, .sheet-leave-to { opacity: 0; }
   .sheet-enter-from .sheet, .sheet-leave-to .sheet { transform: translateY(24px); }
 }
+
+/* "new version" bar: above the phone tab bar, bottom-right on desktop; hidden while the keyboard is open */
+.newbuild {
+  position: fixed; z-index: 60; right: 16px; bottom: 16px; max-width: calc(100% - 32px);
+  display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--text);
+}
+@media (max-width: 640px) {
+  .newbuild { left: 12px; right: 12px; bottom: calc(var(--tabbar) + 10px); max-width: none; justify-content: space-between; }
+}
+.nb-enter-active, .nb-leave-active { transition: opacity .18s ease, transform .18s ease; }
+.nb-enter-from, .nb-leave-to { opacity: 0; transform: translateY(8px); }
+@media (prefers-reduced-motion: reduce) { .nb-enter-active, .nb-leave-active { transition: opacity .1s; } .nb-enter-from, .nb-leave-to { transform: none; } }
 </style>
 
 <style>
+html.kb .newbuild { display: none; }
 /* skins: the bar is theirs; they mark every bottom-fixed nav piece data-skin-bar and it slides away with the stock one */
 @media (max-width: 640px) {
   html.bar-hid .shell.skinned { --tabbar: env(safe-area-inset-bottom, 0px) !important; }
   html.bar-hid [data-skin-bar] { translate: 0 calc(100% + 32px) !important; pointer-events: none; }
-  [data-skin-bar] { transition: translate .2s cubic-bezier(.2, .8, .2, 1); }
+  [data-skin-bar] { transition: translate var(--dur) var(--ease-out); }
   @media (prefers-reduced-motion: reduce) { [data-skin-bar] { transition: none; } }
 }
 </style>

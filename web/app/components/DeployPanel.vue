@@ -54,6 +54,5 @@ const liveText = computed(() => {
 .log.ok { border-left-color: var(--ok); } .log.bad { border-left-color: var(--bad); } .log.running { border-left-color: var(--accent); }
 .live { margin: 0 0 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .spin { display: inline-block; width: 11px; height: 11px; margin-right: 8px; vertical-align: -1px; border-radius: 50%; border: 2px solid var(--accent-soft); border-top-color: var(--accent); animation: spin .8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
 p { margin: 0; }
 </style>

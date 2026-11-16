@@ -6,7 +6,9 @@ entry, so `pct exec 104 -- curl ... | python3 -c ...` (reading a note) was denie
 command instead: when every piece of it only reads (pipes, &&, loops, $(...), pct exec / bash -c bodies included), it
 answers "allow"; anything it can't prove read-only gets no answer and falls through to dontAsk, which denies it.
 Rule of thumb: may read anything, must not write, delete, move, start/stop or send data.
-Test: echo '{"tool_name":"Bash","tool_input":{"command":"ls | head"}}' | agent/cc-ro-hook
+Also allowed: bare `systemctl --failed`-style listings, smartctl/dmesg/timedatectl/apt list/dpkg -l/pveam list/pvenode task
+list/pvecm status/ha-manager status without their writing options (11-08).
+Test: agent/cc-ro-hook-test (table of must-allow / must-deny commands), or by hand: echo '{"tool_name":"Bash","tool_input":{"command":"ls | head"}}' | agent/cc-ro-hook
 """
 import json, re, shlex, sys
 
@@ -14,7 +16,7 @@ import json, re, shlex, sys
 PURE = set("""cat head tail grep egrep fgrep rg zgrep zcat bzcat xzcat ls stat file wc cut tr column jq yq nl rev tac
 fold fmt paste join comm diff cmp md5sum sha1sum sha256sum sha512sum b2sum cksum base64 xxd od hexdump strings
 readlink realpath dirname basename pwd echo printf true false test [ date cal uptime whoami id groups hostname uname
-arch nproc printenv which whereis type du df free lsblk blkid lscpu lspci lsusb lsmod findmnt mount vmstat iostat
+last who w arch nproc printenv which whereis type du df free lsblk blkid lscpu lspci lsusb lsmod findmnt mount vmstat iostat
 mpstat ps pgrep pidof top lsof ss netstat dig nslookup host ping getent tree sleep seq expr bc numfmt locale tty
 sensors pveversion pct-status ls-files local-sum stty ldd file iconv jq gzip-test lsattr getfacl namei
 wait cd export unset set local declare read shift break continue return exit""".split())
@@ -24,6 +26,20 @@ GIT_RO = {"log", "status", "diff", "show", "rev-parse", "ls-files", "ls-tree", "
           "cat-file", "grep", "rev-list", "merge-base", "name-rev", "for-each-ref", "show-ref", "whatchanged", "count-objects"}
 SYSTEMCTL_RO = {"status", "show", "cat", "list-units", "list-timers", "list-unit-files", "list-sockets", "list-dependencies",
                 "is-active", "is-enabled", "is-failed", "is-system-running", "get-default", "list-jobs", "list-machines"}
+SYSTEMCTL_LIST = {"--failed", "--all", "-a", "--no-pager", "--no-legend", "--plain", "--full", "-l", "-q", "--quiet"}
+SMARTCTL_LONG = {"all", "xall", "info", "health", "attributes", "capabilities", "scan", "scan-open", "json", "get", "log",
+                 "device", "version", "help", "badsectors", "report", "nocheck", "firmwarebug", "vendorattribute", "quietmode"}
+DMESG_LONG = {"ctime", "human", "level", "facility", "kernel", "userspace", "reltime", "time-format", "nopager", "noescape",
+              "color", "json", "decode", "since", "until", "raw", "show-delta", "buffer-size", "syslog", "help", "version"}
+SYSTEMCTL_VALUE = {"-p", "--property", "-t", "--type", "--state", "-n", "--lines", "-o", "--output", "-s", "--signal",
+                   "--kill-whom", "--job-mode", "--root", "--what", "-P"}
+SYSTEMCTL_BOOL = {"--no-pager", "--no-legend", "--plain", "--full", "--all", "--failed", "--quiet", "--value", "--reverse",
+                  "--after", "--before", "--recursive", "--no-ask-password", "--show-types", "--system", "--user"}
+APT_LIST_FLAGS = {"--upgradable", "--installed", "--all-versions", "-a", "--manual-installed"}
+APT_CACHE_FLAGS = {"-f", "--full", "--no-all-versions", "-n", "--names-only"}
+APT_CACHE_RO = {"policy", "show", "search", "depends", "rdepends", "madison", "showpkg", "stats"}
+DPKG_RO = {"-l", "-s", "-L", "-S", "--list", "--status", "--listfiles", "--search", "--get-selections", "-V", "--verify", "--print-architecture"}
+TIMEDATECTL_RO = {"status", "show", "timesync-status", "show-timesync"}
 DOCKER_RO = {"ps", "logs", "inspect", "images", "image", "stats", "top", "port", "version", "info", "events", "history", "diff"}
 PY_BAD = re.compile(r"""\bopen\s*\([^)]*['"][rb+]*[wax]|\.write(_text|_bytes)?\s*\(|\b(os|shutil|subprocess|pathlib|socket|requests|urllib|http|ftplib|smtplib|ctypes|pty|signal|sqlite3)\b(?!\.path\b)|\b(exec|eval|compile|__import__|getattr|setattr|globals)\s*\(|\b(unlink|remove|rmdir|rename|replace|mkdir|makedirs|chmod|chown|system|popen|kill|truncate|touch|symlink_to|rmtree)\b""")
 SQL_BAD = re.compile(r"\b(insert|update|delete|drop|create|alter|replace|attach|detach|vacuum|reindex|begin|commit|pragma\s+\w+\s*=)\b|^\s*\.(import|output|once|save|backup|restore|shell|system|load|cd)\b", re.I | re.M)
@@ -118,8 +134,21 @@ def py_ok(code):
     return code is not None and not PY_BAD.search(code)
 
 
+def remote(a):
+    """-H/-M (alone or in a short cluster) and any --h*/--m* long option: remote host / container"""
+    return any((x.startswith("-") and not x.startswith("--") and re.search(r"[HM]", x[1:])) or x.startswith(("--h", "--m")) for x in a)
+
+
+def env_ok(w):
+    """VAR=value prefix that can't change what a program loads or runs"""
+    name = w.split("=")[0]
+    return bool(re.fullmatch(r"(LANG|LC_\w+|TZ|COLUMNS|LINES|SYSTEMD_COLORS|NO_COLOR|TERM)", name)) or w in ("SYSTEMD_PAGER=cat", "SYSTEMD_PAGER=", "PAGER=cat")
+
+
 def ok_argv(argv, stdin_code):
     while argv and (argv[0] in SHELL_WORDS or re.fullmatch(r"[A-Za-z_]\w*=.*", argv[0])):
+        if "=" in argv[0] and argv[0] not in SHELL_WORDS and not env_ok(argv[0]):
+            return False
         argv = argv[1:]  # loop keywords and VAR=value prefixes
     if not argv:
         return True
@@ -129,7 +158,7 @@ def ok_argv(argv, stdin_code):
         rest = a if p in ("while", "until", "if") else []
         return ok_argv(rest, stdin_code)
     if p in PURE:
-        return True
+        return not (p in ("export", "declare", "local", "set") and any(re.fullmatch(r"[A-Za-z_]\w*=.*", x) and not env_ok(x) for x in a))
     if p in WRAPPERS:
         while a and (a[0].startswith("-") or re.fullmatch(r"[\d.]+[smhd]?", a[0])):
             a = a[1:]
@@ -177,11 +206,17 @@ def ok_argv(argv, stdin_code):
     if p == "wget":
         return any(x in ("-O-", "-qO-", "-qO", "--spider") for x in a) and ("-O" not in a or a[a.index("-O") + 1:][:1] == ["-"])
     if p == "git":
-        while a and a[0] in ("-C", "-c", "--git-dir", "--work-tree", "--no-pager") or (a and a[0].startswith("--git-dir=")):
-            a = a[2:] if a[0] in ("-C", "-c", "--git-dir", "--work-tree") else a[1:]
+        while a and a[0].startswith("-"):  # global options: -c / --config-env / --exec-path can run programs
+            if a[0] in ("-C", "--git-dir", "--work-tree"):
+                a = a[2:]
+            elif a[0] == "--no-pager" or a[0].startswith(("--git-dir=", "--work-tree=")):
+                a = a[1:]
+            else:
+                return False
         sub, rest = (a[0], a[1:]) if a else ("", [])
         if sub in GIT_RO:
-            return not any(x.startswith(("--output", "-o")) and sub != "log" for x in rest) and "--output" not in " ".join(rest)
+            return not any(x.startswith(("--output", "-o")) and sub != "log" for x in rest) and "--output" not in " ".join(rest) \
+                and not any(x in ("--ext-diff", "--textconv") for x in rest)
         if sub == "branch":
             return all(x in ("-a", "-r", "-v", "-vv", "--list", "--show-current", "--contains", "--merged", "--no-merged") or not x.startswith("-") and len(rest) == 0 for x in rest)
         if sub in ("remote",):
@@ -192,8 +227,66 @@ def ok_argv(argv, stdin_code):
             return bool(rest) and rest[0] in ("--get", "--get-all", "--list", "-l", "--get-regexp", "--show-origin")
         return False
     if p == "systemctl":
-        subs = [x for x in a if not x.startswith("-")]
-        return bool(subs) and subs[0] in SYSTEMCTL_RO
+        if remote(a):
+            return False  # remote hosts / containers
+        subs, k = [], 0
+        while k < len(a):  # flags that take a value consume the next word; unknown bare flags are denied
+            x = a[k]
+            if x.startswith("--"):
+                if x in SYSTEMCTL_VALUE:
+                    k += 1
+                elif "=" not in x and x not in SYSTEMCTL_BOOL:
+                    return False
+            elif x.startswith("-") and len(x) > 1:
+                if x in SYSTEMCTL_VALUE:
+                    k += 1
+                elif not re.fullmatch(r"-[alqr]+", x):
+                    return False
+            else:
+                subs.append(x)
+            k += 1
+        if not subs:  # `systemctl --failed`: only list flags, no value-taking ones (-t x, --state x)
+            return all(x in SYSTEMCTL_LIST or x.startswith(("--state=", "--type=")) or re.fullmatch(r"-[alq]+", x) for x in a)
+        return subs[0] in SYSTEMCTL_RO
+    if p == "smartctl":  # no self-tests, no switching SMART/offline/autosave on, no SCT writes, no drivedb files
+        for x in a:
+            if x.startswith("--"):
+                if x[2:].split("=")[0] not in SMARTCTL_LONG:
+                    return False
+            elif x.startswith("-") and re.search(r"[stXoSCB]", x[1:]):
+                return False
+            if "scterc," in x or "scttempint," in x:
+                return False
+        return True
+    if p == "dmesg":  # no clearing, console level/on/off, no follow
+        for x in a:
+            if x.startswith("--"):
+                if x[2:].split("=")[0] not in DMESG_LONG:
+                    return False
+            elif x.startswith("-") and re.search(r"[cCDEnwW]", x[1:]):
+                return False
+        return True
+    if p == "pveam":
+        return a[:1] in (["list"], ["available"])
+    if p == "apt":
+        return a[:1] == ["list"] and all(x in APT_LIST_FLAGS or not x.startswith("-") for x in a[1:])
+    if p == "apt-cache":
+        return bool(a) and a[0] in APT_CACHE_RO and all(x in APT_CACHE_FLAGS or not x.startswith("-") for x in a[1:])
+    if p == "dpkg":
+        return bool(a) and a[0] in DPKG_RO and not any(x.startswith(("--pre-invoke", "--post-invoke")) for x in a)
+    if p == "dpkg-query":
+        return not any(x.startswith(("--pre-invoke", "--post-invoke")) for x in a)
+    if p == "pvenode":
+        return a[:2] in (["task", "list"], ["task", "log"], ["task", "status"])
+    if p == "pvecm":
+        return a[:1] in (["status"], ["nodes"])
+    if p == "ha-manager":
+        return a[:1] == ["status"]
+    if p == "timedatectl":
+        if remote(a):
+            return False
+        words = [x for x in a if not x.startswith("-")]
+        return not words or (len(words) == 1 and words[0] in TIMEDATECTL_RO)
     if p == "journalctl":
         return not any(x.startswith(("--vacuum", "--rotate", "--flush", "--sync", "--relinquish", "--setup-keys", "--update-catalog")) for x in a)
     if p == "docker":

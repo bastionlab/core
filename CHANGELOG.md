@@ -4,6 +4,23 @@ What changed in each core release (add-ons keep their own). Newest first.
 
 ## Unreleased
 
+### Features
+
+- Claude sign-in from the browser (Settings, Access, and /login in chat).
+- Remote access choice: Tailscale, Headscale, NetBird, WireGuard (own keys, per-device configs) or home network only, in Settings and a first-run setup wizard (/setup: account, remote access, optional Claude login).
+- Chat: tool calls and the text between them fold into one "N steps" line per answer, thinking into a quiet "Thought" line, both remembering open/closed; a clearer live line while working and "Done" when finished.
+- A "New version available" bar with Reload replaces the silent reload after an update.
+- Alerts keep a log (`/var/lib/dash/alerts.json` `log` + `checked`) that add-ons can read; the Alert watch add-on uses it. Read-only chat turns may now also run diagnosis commands: `systemctl --failed`, `smartctl`, `dmesg`, `last`, `pveam list`, `apt list`, `dpkg -l`, `pvenode task`, `timedatectl` (tests in `agent/cc-ro-hook-test`).
+
+### Fixes
+
+- Read-only chat: closed holes in the command check (`git -c`, environment prefixes such as `PAGER=`/`GIT_*`, `systemctl -p <x> restart`, remote `-H`/`-M`).
+- Chat sync: a chat skipped during a running turn is fetched again afterwards instead of being lost; chats over 5 MB are reported instead of silently dropped; future timestamps are clamped.
+- Chat turns: a stalled stream re-attaches once, then shows as interrupted; Stop clears the working state and reports when the kill failed; a send that timed out attaches to the turn the server started instead of sending it twice.
+- Chat files in `/var/lib/dash-claude` are private (0600) and swept daily.
+- Overview, Media and Projects answer from a background-refreshed cache (warm calls under 0.1 s instead of 3–8 s).
+- Settings, Add-ons, Home, Metrics: confirm before Disconnect/Remove/Clear, busy buttons while saving, error line with Retry instead of an endless skeleton; better contrast for faint text, labels for icon buttons and nav links, larger phone tap targets; a 5th pinned tab explains the 4-tab limit.
+
 ## 0.1.5 (2026-11-07)
 
 ### Fixes
@@ -13,7 +30,7 @@ What changed in each core release (add-ons keep their own). Newest first.
 
 ### Features
 
-- Motion: shared motion tokens and a global reduced-motion rule; buttons press down; the command palette, jobs tray and confirm card fade and rise in and out as one sheet; toasts glide; list rows and page changes ease in; progress bars scale instead of resizing; keyboard focus rings on every control; hover styles only on devices with a mouse. Chat: new messages rise in, the phone chat list slides in from the side, and the slash menu, questions dock, jump button, context popover, queued messages and attachments animate; long chats render faster while an answer streams.
+- Motion: shared motion tokens and a global reduced-motion rule; buttons press down; the command palette, jobs tray and confirm card fade and rise in and out as one sheet; toasts glide; list rows and page changes ease in; progress bars scale instead of resizing; keyboard focus rings on every control; hover styles only on devices with a mouse (one build-time rule moves every :hover into a hover media query, add-ons and skins included); segmented controls, chips, pill buttons and tappable rows press down and ease their colours; one shared spinner and the same durations and easings everywhere; the open section of a tabbed page fades in with a small rise on every skin; the Ask box eases to its new height as you type and when you send; settings search results and the jobs button animate in and out; meters keep clean ends at low values. Chat: the context ring sweeps to its value, the more menu animates, the assistant button glides with the phone tab bar, new messages rise in, the phone chat list slides in from the side, and the slash menu, questions dock, jump button, context popover, queued messages and attachments animate; long chats render faster while an answer streams.
 - Phone: the bottom tab bar slides away while you type or swipe up and gives its space back to the page; it only comes back when you tap the handle at the bottom edge (stock tab bar only).
 - Installable as an app: web manifest + icons, so Chrome/Samsung Internet's "Install app" opens Bastion full-screen without the address bar.
 - Add-ons can take posts from devices without a browser under `/api/ingest/<id>/`: still tailnet/LAN only, the handler checks its own device token.

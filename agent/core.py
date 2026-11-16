@@ -35,6 +35,7 @@ def js(*args, timeout=20, default=None):
 
 
 _cache, _lock = {}, threading.Lock()
+_gen = {}  # per cache key: bumped by invalidate() so a refresh already running can't store its older result
 
 
 def invalidate(*names):
@@ -42,20 +43,42 @@ def invalidate(*names):
     with _lock:
         for k in [k for k in _cache if k[0] in names]:
             del _cache[k]
+        for k in [k for k in _gen if k[0] in names]:
+            _gen[k] += 1
 
 
-def cached(ttl):
+def cached(ttl, stale=0):
+    """memoise by args for ttl seconds; with stale=N an entry up to N seconds old is returned at once while one
+    background thread refreshes it (so slow calls never block a request after the first)"""
     def deco(fn):
+        busy = set()
+
+        def run(key, a):
+            with _lock:
+                gen = _gen.setdefault(key, 0)
+            try:
+                val = fn(*a)
+                with _lock:
+                    if _gen.get(key, 0) == gen:
+                        _cache[key] = (time.time(), val)
+                return val
+            finally:
+                with _lock:
+                    busy.discard(key)
+
         def wrap(*a):
             key = (fn.__name__, a)
             with _lock:
                 hit = _cache.get(key)
-            if hit and time.time() - hit[0] < ttl:
-                return hit[1]
-            val = fn(*a)
-            with _lock:
-                _cache[key] = (time.time(), val)
-            return val
+                age = time.time() - hit[0] if hit else None
+                if hit and age < ttl:
+                    return hit[1]
+                if hit and age < ttl + stale:
+                    if key not in busy:
+                        busy.add(key)
+                        threading.Thread(target=run, args=(key, a), daemon=True).start()
+                    return hit[1]
+            return run(key, a)
         wrap.__name__ = fn.__name__
         return wrap
     return deco

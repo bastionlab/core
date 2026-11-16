@@ -65,7 +65,7 @@ function submit() {
       <div class="title"><span v-if="q.header && !tabs" class="pill accent">{{ q.header }}</span> {{ q.q }}<span v-if="q.multi" class="faint small"> · pick any</span></div>
       <div class="opts">
         <button
-          v-for="o in q.options" :key="o.label" type="button" class="opt" :class="{ on: picked(i, o.label), multi: q.multi }"
+          v-for="o in q.options" :key="o.label" type="button" class="opt press" :class="{ on: picked(i, o.label), multi: q.multi }"
           :disabled="done || disabled" @click="toggle(i, o.label)"
         >
           <span v-if="q.multi" class="box" aria-hidden="true" />
@@ -91,7 +91,7 @@ function submit() {
     </div>
     </template>
     <div v-if="tabs && cur === qs.length" class="review">
-      <button v-for="(q, i) in qs" :key="i" type="button" class="line" :disabled="done" @click="cur = i">
+      <button v-for="(q, i) in qs" :key="i" type="button" class="line press" :disabled="done" @click="cur = i">
         <span class="muted">{{ q.header || q.q }}</span>
         <b v-if="answerOf(i).length">{{ answerOf(i).join(', ') }}</b>
         <span v-else class="warn">not answered yet</span>
@@ -114,10 +114,10 @@ function submit() {
 .opt:hover:not(:disabled) { border-color: var(--faint); }
 .opt.on { border-color: var(--accent); background: var(--accent-soft); }
 .opt .txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.opt .box { flex-shrink: 0; position: relative; width: 18px; height: 18px; border: 1.5px solid var(--line-2); border-radius: 5px; background: var(--bg); transition: background .12s, border-color .12s; }
+.opt .box { flex-shrink: 0; position: relative; width: 18px; height: 18px; border: 1.5px solid var(--line-2); border-radius: 5px; background: var(--bg); transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
 .opt:hover:not(:disabled) .box { border-color: var(--faint); }
 .opt.on .box { background: var(--accent); border-color: var(--accent); }
-.opt .box::after { content: ''; position: absolute; left: 5px; top: 1.5px; width: 5px; height: 10px; border: solid var(--bg); border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .12s; }
+.opt .box::after { content: ''; position: absolute; left: 5px; top: 1.5px; width: 5px; height: 10px; border: solid var(--bg); border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform var(--dur-fast) var(--ease-out); }
 .opt.on .box::after { transform: rotate(45deg) scale(1); }
 .opt:disabled { cursor: default; }
 .done .opt:not(.on) { opacity: .45; }

@@ -34,7 +34,7 @@ pct exec $CT -- sh -c "umask 077; printf 'NUXT_AGENT_URL=http://%s:7070\nNUXT_OL
 # the app's user: a fixed one (both instances share /var/lib/dash); uid 65506 is what the state files already belong to
 pct exec $CT -- sh -c 'getent group dash >/dev/null || groupadd -g 65506 dash; getent passwd dash >/dev/null || useradd -u 65506 -g dash -M -d /var/lib/dash -s /usr/sbin/nologin dash'
 # the standby instance: port 3001, no background workers (those run only on the main :3000 instance)
-pct exec $CT -- sh -c "printf 'PORT=3001\nLEARN_WORKER=0\nRESEARCH_WORKER=0\n' > /etc/dash-standby.env; chmod 600 /etc/dash-standby.env"
+pct exec $CT -- sh -c "printf 'PORT=3001\nLEARN_WORKER=0\nRESEARCH_WORKER=0\nBRIEFING_WORKER=0\n' > /etc/dash-standby.env; chmod 600 /etc/dash-standby.env"
 pct push $CT "$DIR/dash.service" /etc/systemd/system/dash.service
 pct push $CT "$DIR/dash-b.service" /etc/systemd/system/dash-b.service
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
-useHead({ title: 'Locked · Bastion' })
+const { t } = useI18n()
+useHead({ title: () => `${t('auth.locked')} · Bastion` })
 const route = useRoute()
 const pin = ref('')
 const err = ref('')
@@ -17,14 +18,13 @@ async function submit() {
     const next = String(route.query.next || '/')
     await navigateTo(next.startsWith('/') && !next.startsWith('//') ? next : '/')
   } catch (e: any) {
-    err.value = e?.statusMessage || e?.data?.statusMessage || 'failed'
+    err.value = e?.statusMessage || e?.data?.statusMessage || t('auth.failed')
     pin.value = ''
   } finally {
     busy.value = false
   }
 }
 // accounts: name + password (+ code) or a passkey; the PIN pad stays for the owner's quick unlock
-const { t } = useI18n()
 const st = ref<{ configured: boolean, accounts: boolean, passkeys: boolean } | null>(null)
 const mode = ref<'pin' | 'account' | 'invite'>('pin')
 // an invite link (/login?invite=…): pick a name and password, signed in right away
@@ -147,13 +147,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', key))
     <form v-else class="card" @submit.prevent="submit">
       <div class="icon"><Icon name="shield" :size="34"/></div>
       <b>{{ $t('auth.title') }}</b>
-      <div class="dots" :class="{ shake: err }" role="status" :aria-label="`${pin.length} digits entered`">
+      <div class="dots" :class="{ shake: err }" role="status" :aria-label="$t('auth.digits', { n: pin.length })">
         <span v-for="i in Math.max(4, pin.length)" :key="i" :class="{ on: i <= pin.length }" />
       </div>
       <div class="err small">{{ err || ' ' }}</div>
       <div class="pad">
         <button v-for="d in ['1', '2', '3', '4', '5', '6', '7', '8', '9']" :key="d" type="button" @click="press(d)">{{ d }}</button>
-        <button type="button" class="fn" :disabled="!pin" title="delete" @click="back" aria-label="delete"><Icon name="x" :size="18"/></button>
+        <button type="button" class="fn" :disabled="!pin" :title="$t('auth.delete')" @click="back" :aria-label="$t('auth.delete')"><Icon name="x" :size="18"/></button>
         <button type="button" @click="press('0')">0</button>
         <button type="submit" class="fn go" :disabled="!pin || busy" :title="$t('auth.unlock')" :aria-label="$t('auth.unlock')"><Icon name="arrow" :size="18"/></button>
       </div>
@@ -168,7 +168,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', key))
 .dots { display: flex; gap: 12px; margin-top: 12px; min-height: 14px; }
 .dots span { width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line-2); }
 .dots span.on { background: var(--accent); border-color: var(--accent); }
-.shake { animation: shake .3s; }
+.shake { animation: shake var(--dur-slow) var(--ease-out); }
 @keyframes shake { 25% { transform: translateX(-6px) } 75% { transform: translateX(6px) } }
 .err { color: var(--bad); min-height: 18px; text-align: center; }
 .pad { display: grid; grid-template-columns: repeat(3, 72px); gap: 12px; }

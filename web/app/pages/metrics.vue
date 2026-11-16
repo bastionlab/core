@@ -34,6 +34,7 @@ watch(o, (v, old) => { if (v && !old && route.hash) follow(route.hash) })
 
 <template>
   <div>
+    <h1 class="sr-only">{{ $t('nav.metrics') }}</h1>
     <AskPanel
       scope="metrics" placeholder="Ask about the machine…"
       :examples="['How is my server doing?', 'Back up all services now', 'Anything I should fix or update?', 'What is using the GPU?', 'Which local models can I run well?']"
@@ -41,7 +42,10 @@ watch(o, (v, old) => { if (v && !old && route.hash) follow(route.hash) })
     />
     <AlertsBar :items="list" />
     <JobList :jobs="jobs" @dismiss="dismiss" />
-    <div v-if="error && !o" class="bad pad">Could not reach the agent: {{ error.statusMessage || error.message }}</div>
+    <div v-if="error && !o" class="bad pad">
+      {{ $t('common.agentErr', { msg: error.statusMessage || error.message }) }}
+      <div><button type="button" class="btn sm" @click="refresh()">{{ $t('common.retry') }}</button></div>
+    </div>
     <PageTabs v-model="tab" :tabs="tabs" />
     <template v-if="!o && !error">
       <Skeleton kind="cards" :n="3" class="sk" />
@@ -56,7 +60,7 @@ watch(o, (v, old) => { if (v && !old && route.hash) follow(route.hash) })
       <div v-else-if="tab === 'backups'" class="grid"><BackupsPanel :b="o.backups" :now="now" @action="(n, a) => run(n, a, refresh)" /></div>
       <template v-else-if="tab === 'services'">
         <div class="grid"><UptimePanel :uptime="o.uptime ?? []" :services="o.services" :now="now" @action="(n, a) => run(n, a, refresh)" /></div>
-        <h2 id="infra" class="sec">Infrastructure</h2>
+        <h2 id="infra" class="sec">{{ $t('metrics.infra') }}</h2>
         <ServicesPanel :services="o.services.filter((s: any) => s.group === 'infra' || s.group === 'ai')" />
       </template>
       <div v-else-if="tab === 'containers'" class="grid">

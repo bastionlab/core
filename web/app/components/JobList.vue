@@ -18,7 +18,7 @@ const last = (j: Job) => [...j.log].reverse().find(l => l.trim())?.trim() ?? (j.
 <template>
   <TransitionGroup v-if="jobs.length" name="list" tag="div" class="jobs">
     <div v-for="j in jobs" :key="j.id ?? j.started" class="job" :class="[j.state, { open: open.has(j) }]">
-      <button type="button" class="head" :aria-expanded="open.has(j)" @click="toggle(j)">
+      <button type="button" class="head press" :aria-expanded="open.has(j)" @click="toggle(j)">
         <span v-if="j.state === 'running' || j.state === 'checking'" class="spin" />
         <span v-else class="mark"><Icon :name="j.state === 'done' ? 'check' : 'x'" :size="14"/></span>
         <span class="what">
@@ -51,7 +51,6 @@ const last = (j: Job) => [...j.log].reverse().find(l => l.trim())?.trim() ?? (j.
 .mark { width: 16px; text-align: center; font-weight: 700; }
 .done .mark { color: var(--ok); } .failed .mark { color: var(--bad); }
 .spin { width: 14px; height: 14px; margin: 0 1px; border-radius: 50%; border: 2px solid var(--accent-soft); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
-@keyframes spin { to { transform: rotate(360deg); } }
 .x { border-radius: 999px; }
 .log { grid-column: 1 / -1; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow-y: auto; background: var(--panel-2); border-radius: 6px; padding: 6px 8px; margin: 2px 6px 6px; font-family: var(--mono); }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }

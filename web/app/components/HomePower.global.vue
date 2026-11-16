@@ -82,4 +82,5 @@ const when = computed(() => pending.value && new Date(pending.value.at * 1000).t
 @container tile (max-width: 129px) and (max-height: 139px) {
   .body { display: none; }
 }
+@media (pointer: coarse) { .row .btn, .state .btn { min-height: 40px; } }
 </style>

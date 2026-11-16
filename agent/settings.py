@@ -178,9 +178,9 @@ def core_connections():
         u = claude_usage()
         ok = u.get("status") != "rejected"
         out.append({"id": "claude", "name": "Claude login", "used_by": "Chat, Ask bar, Learn", "ok": ok,
-                    "detail": "signed in" + (" · limit reached" if not ok else ""), "fix": "claude /login in a terminal on pve"})
+                    "detail": "signed in" + (" · limit reached" if not ok else ""), "fix": "Settings, Access, Claude login: sign in"})
     except Exception as e:
-        out.append({"id": "claude", "name": "Claude login", "ok": False, "detail": str(e)[:120], "fix": "claude /login in a terminal on pve"})
+        out.append({"id": "claude", "name": "Claude login", "ok": False, "detail": str(e)[:120], "fix": "Settings, Access, Claude login: sign in"})
     try:
         import google_auth
         for a in google_auth.accounts():

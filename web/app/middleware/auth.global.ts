@@ -9,4 +9,9 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (!s.ok) return navigateTo({ path: '/login', query: to.fullPath !== '/' ? { next: to.fullPath } : {} })
   ok.value = true
   role.value = s.role ?? 'owner'
+  // a fresh install (no account yet, setup never finished) goes to the wizard once
+  if (!s.accounts && to.path !== '/setup' && !import.meta.server) {
+    const st: any = await $fetch('/api/setup').catch(() => null)
+    if (st && !st.accounts && !st.done) return navigateTo('/setup')
+  }
 })

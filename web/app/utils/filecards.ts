@@ -6,7 +6,6 @@ const EXT: Record<string, 'video' | 'audio' | 'image'> = {
   mp3: 'audio', wav: 'audio', ogg: 'audio', m4a: 'audio', flac: 'audio', opus: 'audio',
   png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', avif: 'image',
 }
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 const unesc = (s: string) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 
 const A = /<a\s[^>]*?href="(\/files\?[^"]*)"[^>]*>[\s\S]*?<\/a>/g
@@ -28,12 +27,12 @@ export function fileCards(html: string, label: { open: string, dl: string }) {
     seen.add(root + '\0' + p)
     const raw = `/api/files/raw?root=${encodeURIComponent(root)}&p=${encodeURIComponent(p)}`
     const kind = EXT[ext]
-    const media = kind === 'video' ? `<video controls preload="metadata" playsinline src="${esc(raw)}"></video>`
-      : kind === 'audio' ? `<audio controls preload="metadata" src="${esc(raw)}"></audio>`
-      : kind === 'image' ? `<img loading="lazy" alt="${esc(name)}" src="${esc(raw)}">` : ''
+    const media = kind === 'video' ? `<video controls preload="metadata" playsinline src="${escHtml(raw)}"></video>`
+      : kind === 'audio' ? `<audio controls preload="metadata" src="${escHtml(raw)}"></audio>`
+      : kind === 'image' ? `<img loading="lazy" alt="${escHtml(name)}" src="${escHtml(raw)}">` : ''
     const page = `/files?${root === 'files' ? '' : `r=${encodeURIComponent(root)}&`}p=${encodeURIComponent(p).replace(/%2F/gi, '/')}`
-    const card = `<div class="fcard"><div class="fch"><b>${esc(name)}</b><span>${esc(ext.toUpperCase())}</span></div>${media}`
-      + `<div class="fca"><a class="in" href="${esc(page)}">${esc(label.open)}</a><a href="${esc(raw)}&amp;dl=1" download="${esc(name)}">${esc(label.dl)}</a></div></div>`
+    const card = `<div class="fcard"><div class="fch"><b>${escHtml(name)}</b><span>${escHtml(ext.toUpperCase())}</span></div>${media}`
+      + `<div class="fca"><a class="in" href="${escHtml(page)}">${escHtml(label.open)}</a><a href="${escHtml(raw)}&amp;dl=1" download="${escHtml(name)}">${escHtml(label.dl)}</a></div></div>`
     const end = m.index + m[0].length
     const close = /<\/(?:p|li)>/.exec(html.slice(end))
     adds.push({ at: close ? end + close.index + close[0].length : end, card })

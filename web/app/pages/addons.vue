@@ -11,7 +11,7 @@ const route = useRoute()
 // a switched-off add-on's page lands here as /addons?off=/path (middleware/pages.global.ts): a short message instead of the list
 const offPath = computed(() => (typeof route.query.off === 'string' && route.query.off.startsWith('/') ? route.query.off : ''))
 // marketplace index (server/utils/marketplace.ts): Update badges here, the not-installed ones below
-const { data: market } = useFetch<any>('/api/marketplace', { server: false })
+const { data: market, error: marketErr, refresh: marketRetry } = useFetch<any>('/api/marketplace', { server: false })
 const refreshing = ref(false)
 async function refreshMarket(fresh = true) {
   refreshing.value = fresh
@@ -106,8 +106,12 @@ async function check(id: string) {
 }
 const armed = ref(false)
 let armTimer: any
+// the safety check request is in flight: the buttons that start one wait
+const asking = ref(false)
 async function ask(name: string, id: string) {
+  if (asking.value) return
   error.value = ''
+  asking.value = true
   try {
     const r = await $fetch<{ desc: string }>('/api/ai/action/check', { method: 'POST', body: { name, args: { id } } })
     pending.value = { name, id, desc: r.desc }
@@ -116,7 +120,7 @@ async function ask(name: string, id: string) {
     armed.value = false
     clearTimeout(armTimer)
     armTimer = setTimeout(() => (armed.value = true), 1500)
-  } catch (e: any) { error.value = e?.data?.statusMessage || e?.statusMessage || e?.message }
+  } catch (e: any) { error.value = e?.data?.statusMessage || e?.statusMessage || e?.message } finally { asking.value = false }
 }
 function go() {
   const p = pending.value
@@ -160,6 +164,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
 
 <template>
   <div>
+    <h1 class="sr-only">{{ $t('nav.addons') }}</h1>
     <div v-if="offPath" class="empty-state">
       <p>{{ $t('addons.pageOff', { page: offPath }) }}</p>
       <NuxtLink to="/addons" class="btn sm">{{ $t('addons.backToAddons') }}</NuxtLink>
@@ -169,14 +174,14 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
     <div v-if="pending" class="card confirm">
       <p class="small">{{ pending.desc }}</p>
       <div v-if="scan" class="scan small">
-        <div v-if="scan.state === 'loading'" class="faint">Safety check: fetching and reading the code…</div>
-        <div v-else-if="scan.state === 'error'" class="warn">Safety check failed: {{ scan.error }} (it runs again on Run)</div>
+        <div v-if="scan.state === 'loading'" class="faint">{{ $t('addons.scanLoading') }}</div>
+        <div v-else-if="scan.state === 'error'" class="warn">{{ $t('addons.scanFailed', { error: scan.error }) }}</div>
         <template v-else>
           <div>
             <span class="pill" :class="scan.rep.ok ? (scan.rep.count.warn ? 'warn' : 'ok') : 'bad'">
-              {{ scan.rep.ok ? (scan.rep.count.warn ? `${scan.rep.count.warn} warning${scan.rep.count.warn === 1 ? '' : 's'}` : 'Safety check passed') : `Blocked: ${scan.rep.count.block} finding${scan.rep.count.block === 1 ? '' : 's'}` }}
+              {{ scan.rep.ok ? (scan.rep.count.warn ? $t('addons.warnings', scan.rep.count.warn) : $t('addons.passed')) : $t('addons.blocked', scan.rep.count.block) }}
             </span>
-            <span class="faint"> ClamAV {{ scan.rep.clamav }}</span>
+            <span class="faint">{{ ' ' + $t('addons.clamav', { v: scan.rep.clamav }) }}</span>
           </div>
           <div v-if="scan.rep.core_block" class="bad">{{ scan.rep.core_block }}</div>
           <ul v-if="shown.length" class="finds">
@@ -185,18 +190,18 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
               <div v-if="f.text" class="mono faint snip">{{ f.text }}</div>
             </li>
           </ul>
-          <div v-if="notes.length" class="faint">Also: {{ [...new Set(notes.map((f: any) => f.why))].join('; ') }}</div>
-          <div v-if="scan.rep.domains?.length" class="faint">Talks to: {{ scan.rep.domains.join(', ') }}</div>
-          <div v-if="scan.rep.changed?.length" class="faint">{{ scan.rep.changed.length }} file{{ scan.rep.changed.length === 1 ? '' : 's' }} changed: <span class="mono">{{ scan.rep.changed.slice(0, 12).join(', ') }}{{ scan.rep.changed.length > 12 ? ' …' : '' }}</span></div>
+          <div v-if="notes.length" class="faint">{{ $t('addons.also') }} {{ [...new Set(notes.map((f: any) => f.why))].join('; ') }}</div>
+          <div v-if="scan.rep.domains?.length" class="faint">{{ $t('addons.talksTo') }} {{ scan.rep.domains.join(', ') }}</div>
+          <div v-if="scan.rep.changed?.length" class="faint">{{ $t('addons.filesChanged', scan.rep.changed.length) }} <span class="mono">{{ scan.rep.changed.slice(0, 12).join(', ') }}{{ scan.rep.changed.length > 12 ? ' …' : '' }}</span></div>
         </template>
       </div>
       <div class="row">
-        <button type="button" class="btn primary sm" :disabled="!armed || blocked" @click="go">Run</button>
-        <button type="button" class="btn ghost sm" @click="pending = null">Cancel</button>
+        <button type="button" class="btn primary sm" :disabled="!armed || blocked" @click="go">{{ $t('common.run') }}</button>
+        <button type="button" class="btn ghost sm" @click="pending = null">{{ $t('common.cancel') }}</button>
       </div>
     </div>
     <JobList :jobs="jobs" @dismiss="dismiss" />
-    <div v-if="rebuilding" class="small warn">Rebuilding: the dashboard is back in a few minutes; reload then.</div>
+    <div v-if="rebuilding" class="small warn">{{ $t('addons.rebuilding') }}</div>
     <PageTabs v-model="tab" :tabs="tabs" />
     <template v-if="tab === 'installed'">
     <AddonFilters v-model:q="iq" :kinds="iKinds" :kind="kind" @kind="setKind">
@@ -219,10 +224,10 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
               <Icon :name="a.icon" :size="18" class="i" />
               <div class="who">
                 <b>{{ a.name }}</b>
-                <span class="faint small">by {{ a.author }}</span>
+                <span class="faint small">{{ $t('market.by', { name: a.author }) }}</span>
               </div>
               <button type="button" class="btn sm" :class="isOn(a.id) ? 'ghost' : 'primary'" :disabled="busy === a.id || off === null" @click="toggle(a.id)">
-                {{ isOn(a.id) ? 'Turn off' : 'Turn on' }}
+                {{ isOn(a.id) ? $t('addons.turnOff') : $t('addons.turnOn') }}
               </button>
             </div>
             <p class="small muted desc">{{ a.desc }}</p>
@@ -230,16 +235,16 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
               <span v-if="kindOf(a) === 'widget'" class="pill accent">{{ $t('market.widgetPill') }}</span>
               <span v-if="a.version" class="pill">v{{ a.version }}</span>
               <span v-if="a.license" class="pill">{{ a.license }}</span>
-              <span v-if="a.warning" class="pill warn" :title="a.warning">terms risk</span>
-              <button v-if="entry(a.id)?.update" type="button" class="pill accent lnk-pill" @click="ask('addon_update', a.id)">update to v{{ entry(a.id).version }}</button>
+              <span v-if="a.warning" class="pill warn" :title="a.warning">{{ $t('addons.termsRisk') }}</span>
+              <button v-if="entry(a.id)?.update" type="button" class="pill accent lnk-pill" :disabled="asking" @click="ask('addon_update', a.id)">{{ $t('addons.updateTo', { v: entry(a.id).version }) }}</button>
               <span v-if="count(entry(a.id)?.installs ?? null)" class="pill">{{ count(entry(a.id).installs) }}</span>
               <span v-if="ctState(a.ct)" class="pill" :class="ctState(a.ct)!.tone">{{ ctState(a.ct)!.text }}</span>
               <span v-for="n in a.needs" :key="n" class="pill">{{ n }}</span>
-              <span v-if="a.dependsOn" class="pill accent">needs {{ names(a.dependsOn) }}</span>
-              <button v-if="publishable(a.id)" type="button" class="pill accent lnk-pill" @click="ask('addon_publish', a.id)">
-                {{ publishable(a.id) === 'new' ? 'Publish' : 'Publish changes' }}
+              <span v-if="a.dependsOn" class="pill accent">{{ $t('addons.needs', { names: names(a.dependsOn) }) }}</span>
+              <button v-if="publishable(a.id)" type="button" class="pill accent lnk-pill" :disabled="asking" @click="ask('addon_publish', a.id)">
+                {{ publishable(a.id) === 'new' ? $t('addons.publish') : $t('addons.publishChanges') }}
               </button>
-              <button v-if="a.version" type="button" class="btn ghost sm rm" @click="ask('addon_remove', a.id)">Remove</button>
+              <button v-if="a.version" type="button" class="btn danger sm rm" :disabled="asking" @click="ask('addon_remove', a.id)">{{ $t('auth.remove') }}</button>
             </div>
           </div>
           <div v-for="d in sec.items.filter((x: any) => x._d)" :key="`d:${d.id}`" class="card">
@@ -256,7 +261,7 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
             </div>
           </div>
       </div>
-      <p v-if="sec.key === 'addon'" class="faint small">Always on: Home, Notes, Chat, Metrics. Turning an add-on off hides it here; its container keeps running.</p>
+      <p v-if="sec.key === 'addon'" class="faint small">{{ $t('addons.alwaysOn') }}</p>
     </section>
 
     </template>
@@ -265,11 +270,15 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
 
     <template v-else>
     <h2 class="sec mk">
-      <span>Marketplace <span v-if="market?.source === 'local'" class="faint small">offline copy</span></span>
-      <button type="button" class="btn ghost sm" :disabled="refreshing" @click="refreshMarket()">{{ refreshing ? 'Checking…' : 'Refresh' }}</button>
+      <span>{{ $t('tabs.marketplace') }} <span v-if="market?.source === 'local'" class="faint small">{{ $t('addons.offline') }}</span></span>
+      <button type="button" class="btn ghost sm" :disabled="refreshing" @click="refreshMarket()">{{ refreshing ? $t('common.checking') : $t('common.refresh') }}</button>
     </h2>
     <AddonFilters v-model:q="mq" :kinds="mKinds" :kind="kind" @kind="setKind" />
-    <Skeleton v-if="!market" kind="rows" :n="4" />
+    <Skeleton v-if="!market && !marketErr" kind="rows" :n="4" />
+    <div v-else-if="!market" class="errbox">
+      {{ marketErr?.statusMessage || marketErr?.message }}
+      <button type="button" class="btn sm" @click="marketRetry()">{{ $t('common.retry') }}</button>
+    </div>
     <div v-else-if="!mSections.length" class="empty-state">{{ mq.trim() ? $t('market.noMatch') : $t('market.nothing') }}</div>
     <template v-else>
     <section v-for="sec in mSections" :key="sec.key" class="kindsec">
@@ -280,9 +289,9 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
               <Icon :name="e.icon || 'grid'" :size="18" class="i" />
               <div class="who">
                 <b>{{ e.name }}</b>
-                <span class="faint small">by {{ e.author }}</span>
+                <span class="faint small">{{ $t('market.by', { name: e.author }) }}</span>
               </div>
-              <button type="button" class="btn primary sm" @click="ask('addon_install', e.id)">Install</button>
+              <button type="button" class="btn primary sm" :disabled="asking" @click="ask('addon_install', e.id)">{{ $t('addons.install') }}</button>
             </div>
             <p class="small muted desc">{{ e.desc }}</p>
             <p v-if="e.warning" class="small warn desc"><Icon name="triangle-alert" :size="14"/> {{ e.warning }}</p>
@@ -292,8 +301,8 @@ const names = (ids?: string[]) => (ids ?? []).map(i => list.find(a => a.id === i
               <span v-if="e.license" class="pill">{{ e.license }}</span>
               <span v-if="count(e.installs)" class="pill">{{ count(e.installs) }}</span>
               <span v-for="n in e.needs" :key="n" class="pill">{{ n }}</span>
-              <span v-if="e.depends_on?.length" class="pill accent">needs {{ names(e.depends_on) }}</span>
-              <span v-if="!coreSatisfies(coreVersion, e.core)" class="pill bad">needs core {{ e.core }}</span>
+              <span v-if="e.depends_on?.length" class="pill accent">{{ $t('addons.needs', { names: names(e.depends_on) }) }}</span>
+              <span v-if="!coreSatisfies(coreVersion, e.core)" class="pill bad">{{ $t('addons.needsCore', { v: e.core }) }}</span>
             </div>
           </div>
           <div v-for="d in sec.items.filter((x: any) => x._d)" :key="`d:${d.slug}`" class="card">

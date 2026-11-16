@@ -32,13 +32,53 @@ export function chatsSince(since: number) {
   }
 }
 
-/** only lands if it is newer than what is stored, and never resurrects a deleted chat */
-export function putChat(id: string, upd: number, data: string) {
-  const cur = db.prepare('SELECT upd, gone FROM chats WHERE id = ?').get(id) as any
-  if (cur && (cur.gone || cur.upd >= upd)) return false
+export function chatsByIds(ids: string[]) {
+  const rows = ids.length ? db.prepare(`SELECT id, data, upd, gone FROM chats WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids) as any[] : []
+  return {
+    seq: chatSeq(),
+    chats: rows.filter(r => !r.gone).map(r => ({ ...JSON.parse(r.data), upd: r.upd })),
+    gone: rows.filter(r => r.gone).map(r => r.id as string),
+  }
+}
+
+/** a turn's identity: its id, or (old turns) the same fallback the app computes */
+const turnKey = (t: any) => t?.id || `l${t?.at ?? 0}-${t?.q?.length ?? 0}`
+
+/** union of two turn lists by id; on a clash the longer answer wins (stored copy on a tie); ordered by time */
+function mergeTurns(stored: any[], incoming: any[], preferIncoming = false) {
+  const m = new Map<string, any>()
+  for (const t of [...stored, ...incoming]) {
+    const k = turnKey(t), old = m.get(k)
+    if (!old || (preferIncoming && incoming.includes(t)) || (t.a?.length ?? 0) + (t.r?.length ?? 0) > (old.a?.length ?? 0) + (old.r?.length ?? 0)) m.set(k, { ...t, id: t.id || k })
+  }
+  return [...m.values()].map((t, i) => ({ t, i })).sort((x, y) => (x.t.at ?? 0) - (y.t.at ?? 0) || x.i - y.i).map(x => x.t)
+}
+
+/** only lands if it is newer than what is stored, and never resurrects a deleted chat; an older or equal edit is merged turn by turn instead of dropped */
+export type PutResult = { ok: true } | { ok: false, reason: 'size' | 'tombstone' | 'stale' }
+export function putChat(id: string, upd: number, data: string): PutResult {
+  const cur = db.prepare('SELECT data, upd, gone FROM chats WHERE id = ?').get(id) as any
+  if (cur?.gone) return { ok: false, reason: 'tombstone' }
+  if (cur && cur.upd >= upd) {
+    try {
+      const have = JSON.parse(cur.data), inc = JSON.parse(data)
+      if (!Array.isArray(have.turns) || !Array.isArray(inc.turns)) return { ok: false, reason: 'stale' }
+      const turns = mergeTurns(have.turns, inc.turns)
+      if (JSON.stringify(turns) === JSON.stringify(have.turns)) return { ok: false, reason: 'stale' }
+      db.prepare('UPDATE chats SET data = ?, upd = ?, seq = ? WHERE id = ?').run(JSON.stringify({ ...have, turns }), cur.upd + 1, nextSeq(), id)
+      return { ok: true }
+    } catch { return { ok: false, reason: 'stale' } }
+  }
+  if (cur?.data) {
+    // newer edit: take it, but keep turns another device added meanwhile
+    try {
+      const have = JSON.parse(cur.data), inc = JSON.parse(data)
+      if (Array.isArray(have.turns) && Array.isArray(inc.turns)) data = JSON.stringify({ ...inc, turns: mergeTurns(have.turns, inc.turns, true) })
+    } catch { /* unreadable stored copy: the newer one replaces it */ }
+  }
   db.prepare('INSERT INTO chats (id, data, upd, seq) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data, upd = excluded.upd, seq = excluded.seq')
     .run(id, data, upd, nextSeq())
-  return true
+  return { ok: true }
 }
 
 export function dropChat(id: string) {

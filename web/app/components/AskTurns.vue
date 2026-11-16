@@ -58,15 +58,29 @@ const picked = (t: Turn) => {
   const a = (j: number) => t.answered?.[j]?.join(', ') || '—'
   return qs.length === 1 ? a(0) : qs.map((q, j) => `${q.header || q.q}: ${a(j)}`).join(' · ')
 }
-// Claude can make dozens of tool calls in one answer: show the latest few, the rest behind a click
-const SHOW = 6
-const expanded = ref(new Set<number>())
+// Claude can make dozens of tool calls in one answer: one collapsed "N steps" line per turn, the list behind a tap
+const stepDot = (t: Turn) => (t.busy && t.tools?.some(x => !x.done) ? 'warn' : t.tools?.some(x => x.error) ? 'bad' : 'ok')
+const stepNow = (t: Turn) => { const x = t.tools?.findLast(y => !y.done); return x ? (x.label || x.name) : '' }
+// open/closed state of a turn's steps and reasoning survives re-renders and reloads (localStorage chat:steps:<at> / chat:reason:<at>)
+const foldState = reactive<Record<string, '1' | '0'>>({})
+const foldKey = (kind: 'steps' | 'reason', t: Turn) => (t.at ? `chat:${kind}:${t.at}` : '')
+function foldOpen(kind: 'steps' | 'reason', t: Turn) {
+  const k = foldKey(kind, t)
+  if (!k) return false
+  if (!(k in foldState)) { let v = '0'; try { if (import.meta.client) v = localStorage.getItem(k) || '0' } catch {} ; foldState[k] = v === '1' ? '1' : '0' }
+  return foldState[k] === '1'
+}
+function foldToggle(kind: 'steps' | 'reason', t: Turn, e: Event) {
+  const k = foldKey(kind, t), on = (e.target as HTMLDetailsElement).open
+  if (!k || foldOpen(kind, t) === on) return
+  foldState[k] = on ? '1' : '0'
+  try { localStorage.setItem(k, foldState[k]) } catch {}
+}
 // web pages the answer used: first 3 as chips, the rest behind "+N"
 const SRC = 3
 const srcOpen = ref(new Set<number>())
 const srcShown = (t: Turn, i: number) => (srcOpen.value.has(i) ? t.sources! : t.sources!.slice(0, SRC))
 const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u } }
-const shown = (t: Turn, i: number) => (expanded.value.has(i) ? t.tools! : t.tools!.slice(-SHOW))
 
 // code blocks get a header (copy / wrap / open in panel) and long ones fold, dashboard pages become links (useAsk.ts);
 // clicks are caught once on the list instead of per block
@@ -147,14 +161,20 @@ function onClick(e: MouseEvent) {
 
 // a turn that arrives while this chat is open rises in; opening or switching a chat and a sync pull (both hand us
 // another array) do not animate what is already there
-const rise = new WeakSet<Turn>()
+let rise = new WeakSet<Turn>()
+// the marker is one-shot: gone once the animation ends, so a reused element (:key="i") never replays it
+function riseEnd(t: Turn, e: AnimationEvent) {
+  if (e.target !== e.currentTarget || !e.animationName.includes('turn-rise')) return
+  rise.delete(toRaw(t))
+  ;(e.currentTarget as HTMLElement).classList.remove('rise')
+}
 let seen: Turn[] | null = null, seenLen = 0
 watch(() => props.turns.length, (n) => {
   const arr = toRaw(props.turns)
   if (arr === seen && n > seenLen) for (let i = seenLen; i < n; i++) rise.add(toRaw(arr[i]!))
   seen = arr; seenLen = n
 }, { flush: 'pre', immediate: true })
-watch(() => props.turns, (a) => { seen = toRaw(a); seenLen = a.length; })
+watch(() => props.turns, (a) => { seen = toRaw(a); seenLen = a.length; rise = new WeakSet() })
 
 // while an answer runs: what it is doing right now and for how long
 const now = ref(Date.now())
@@ -222,7 +242,7 @@ function activity(t: Turn) {
       {{ t.compacted ? $t('ask.compacted', { pre: kt(t.compacted.pre), post: kt(t.compacted.post) }) : $t('ask.compactedShort') }}
     </div>
     <div v-else-if="t.cmp" class="turn"><slot name="compare" :turn="t" :index="i" /></div>
-    <div v-else class="turn" :class="{ rise: rise.has(toRaw(t)) }">
+    <div v-else class="turn" :class="{ rise: rise.has(toRaw(t)) }" @animationend="riseEnd(t, $event)">
       <div v-if="t.imgs?.length" class="qimgs">
         <a v-for="n in t.imgs" :key="n" :href="`/api/chat/img/${n}`" target="_blank">
           <img v-if="!n.includes('-')" :src="`/api/chat/img/${n}`" alt="screenshot">
@@ -230,14 +250,17 @@ function activity(t: Turn) {
         </a>
       </div>
       <div v-if="t.q" class="q">{{ t.q }}</div>
-      <div v-if="t.tools?.length" class="tools small muted">
-        <button v-if="t.tools.length > SHOW && !expanded.has(i)" class="pill more" @click="expanded.add(i)">+{{ t.tools.length - SHOW }} earlier</button>
-        <span v-for="(tl, j) in shown(t, i)" :key="j" class="pill" :class="{ bad: tl.error }" :title="tl.label">
-          <span class="dot" :class="tl.error ? 'bad' : tl.done || !t.busy ? 'ok' : 'warn'" />
-          {{ tl.label ? tl.label : tl.name === 'web_search' ? `searched “${tl.args?.query}”` : tl.name === 'fetch_page' ? `read ${(tl.args?.url || '').replace(/^https?:\/\//, '').slice(0, 40)}` : tl.name === 'weather' ? `weather ${tl.args?.location || ''}` : tl.name }}{{ tl.error ? ` — ${tl.error}` : '' }}
-        </span>
-      </div>
-      <details v-if="t.r" class="reason small muted"><summary>reasoning{{ t.busy && !t.a ? '…' : '' }}</summary><div class="pre">{{ t.r }}</div></details>
+      <details v-if="t.tools?.length || t.narr?.length" class="steps small muted" :open="foldOpen('steps', t)" @toggle="foldToggle('steps', t, $event)">
+        <summary><span class="dot" :class="stepDot(t)" /><span>{{ t.tools?.length ? `${t.tools.length} ${t.tools.length === 1 ? 'step' : 'steps'}` : 'notes' }}</span><span v-if="t.busy && stepNow(t)" class="faint cur">· {{ stepNow(t) }}</span></summary>
+        <div v-for="(n, k) in t.narr" :key="'n' + k" class="narr">{{ n }}</div>
+        <div class="tools">
+          <span v-for="(tl, j) in t.tools" :key="j" class="pill" :class="{ bad: tl.error }" :title="tl.label">
+            <span class="dot" :class="tl.error ? 'bad' : tl.done || !t.busy ? 'ok' : 'warn'" />
+            {{ tl.label ? tl.label : tl.name === 'web_search' ? `searched “${tl.args?.query}”` : tl.name === 'fetch_page' ? `read ${(tl.args?.url || '').replace(/^https?:\/\//, '').slice(0, 40)}` : tl.name === 'weather' ? `weather ${tl.args?.location || ''}` : tl.name }}{{ tl.error ? ` — ${tl.error}` : '' }}
+          </span>
+        </div>
+      </details>
+      <details v-if="t.r" class="reason small faint" :open="foldOpen('reason', t)" @toggle="foldToggle('reason', t, $event)"><summary>{{ t.busy && !t.a ? 'Thinking' : 'Thought' }}</summary><div class="pre">{{ t.r }}</div></details>
       <div v-if="t.a" class="a" :data-i="i" v-html="html(t)" />
       <div v-if="t.sources?.length && !t.busy" class="sources small">
         <span class="faint">{{ $t('ask.sources') }}</span>
@@ -264,9 +287,10 @@ function activity(t: Turn) {
         @answer="(text, picked) => { t.answered = picked; emit('answer', text) }"
       />
       <div v-if="t.compacted && t.q !== '/compact'" class="cleared small faint">{{ $t('ask.compacted', { pre: kt(t.compacted.pre), post: kt(t.compacted.post) }) }}</div>
-      <div v-if="t.busy" class="live small muted">
+      <div v-if="t.busy" class="live">
         <span class="spin" /><span class="what">{{ activity(t) }}</span><span v-if="running(t)" class="faint">· {{ running(t) }} background</span><span class="faint">· {{ elapsed(t) }}</span><span v-if="eta(t)" class="faint eta">· {{ eta(t) }}</span>
       </div>
+      <div v-else-if="t.fin" class="done small faint">Done<template v-if="t.secs"> · {{ clock(t.secs) }}</template></div>
       <div v-if="t.bg?.length" class="bgs small">
         <button v-for="b in t.bg" :key="b.id" type="button" class="pill" :class="{ warn: b.status === 'running' && t.busy }" @click="toggleBg(b)">
           <span class="dot" :class="b.status === 'running' && t.busy ? 'warn' : b.status === 'completed' ? 'ok' : 'bad'" />{{ b.desc }}
@@ -337,7 +361,7 @@ function activity(t: Turn) {
 .bgout pre { margin: 0; white-space: pre-wrap; word-break: break-all; }
 .stall .btn { font-size: 12px; padding: 3px 9px; }
 .act.ic { display: inline-flex; align-items: center; gap: 4px; }
-.a :deep(.sec) { filter: blur(5px); cursor: pointer; user-select: none; transition: filter .15s; }
+.a :deep(.sec) { filter: blur(5px); cursor: pointer; user-select: none; transition: filter var(--dur) var(--ease-out); }
 .a :deep(.sec.shown) { filter: none; user-select: text; }
 .cleared { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
 .cleared::before, .cleared::after { content: ''; flex: 1; border-top: 1px dashed var(--line-2); }
@@ -357,9 +381,15 @@ function activity(t: Turn) {
 .a :deep(:not(pre) > code) { background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
 .a :deep(table) { display: block; max-width: 100%; overflow-x: auto; margin-bottom: 8px; font-size: 13px; }
 .a :deep(h1), .a :deep(h2), .a :deep(h3) { font-size: 14px; margin: 10px 0 4px; }
+.steps summary, .reason summary { cursor: pointer; display: flex; align-items: center; gap: 6px; min-width: 0; list-style: none; }
+.steps summary::-webkit-details-marker, .reason summary::-webkit-details-marker { display: none; }
+.steps .cur { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.steps .narr { white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 6px; }
+.steps[open] summary { margin-bottom: 6px; }
+.reason summary { font-size: 12px; }
+@media (pointer: coarse) { .steps summary, .reason summary { min-height: 32px; } }
 .tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .tools .pill { gap: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tools .more { cursor: pointer; font: inherit; }
 .sources { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .sources .src { gap: 6px; max-width: 100%; min-width: 0; text-decoration: none; color: var(--text); }
 .sources .st { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
@@ -385,12 +415,14 @@ function activity(t: Turn) {
 .proposal .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .proposal .btns { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .log { white-space: pre-wrap; max-height: 160px; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 0; font-family: var(--mono); }
-.reason summary { cursor: pointer; }
-.live { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.live { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: var(--text); background: var(--accent-soft); border-radius: var(--radius-sm); padding: 8px 12px 8px 14px; overflow: hidden; }
+.live::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); animation: live-pulse 1.6s ease-in-out infinite; }
+@keyframes live-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .live::before { animation: none; } }
+.done { padding: 2px 0; }
 .live .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .live .faint { flex-shrink: 0; }
-.spin { width: 12px; height: 12px; flex-shrink: 0; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: tspin .8s linear infinite; }
-@keyframes tspin { to { transform: rotate(360deg) } }
+.spin { width: 12px; height: 12px; flex-shrink: 0; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: spin .8s linear infinite; }
 .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0 4px; }
 .acts { display: inline-flex; gap: 2px; margin-right: 6px; }
 .act { background: none; border: 1px solid transparent; border-radius: 6px; color: var(--muted); font: inherit; padding: 1px 6px; cursor: pointer; }

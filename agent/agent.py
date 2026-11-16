@@ -14,8 +14,10 @@ import push
 from core import HERE, POOL, cached, invalidate
 from metrics import all_updates, backups, cpu_percent, cts, datasets, gpu, host, net, net_start, pools, ports, smart, speedtest, tailnet
 from actions import deploy_status, check_action, job_status, marketplace_index, marketplace_local, marketplace_scan, service_uptime, start_action
-from claude import claude_task_tail, _alive, _cc_turn, claude_send, claude_stop, claude_usage, claude_watch
+from claude import claude_task_tail, _alive, _cc_turn, claude_latest, claude_send, claude_stop, claude_usage, claude_watch
 import backup
+import claude_login
+import vpn
 import release
 import dash_sdk
 import google_auth  # noqa: F401  (registers /google/* routes)
@@ -34,7 +36,7 @@ dash_sdk.load_addons(HERE.parent / "addons")
 
 
 # --- http -------------------------------------------------------------------
-@cached(3)
+@cached(3, stale=60)  # stale-while-revalidate: the slow parts (backups, ports, updates) refresh in the background
 def overview():
     c = cts()
     parts = {"host": POOL.submit(host), "gpu": POOL.submit(gpu), "pools": POOL.submit(pools),
@@ -88,6 +90,12 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, job_status(q["id"]))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage())
+            if u.path == "/vpn":
+                return self._send(200, vpn.view())
+            if u.path == "/claude/auth":
+                return self._send(200, claude_login.view())
+            if u.path == "/claude/latest":
+                return self._send(200, claude_latest(q["chat"], q.get("nonce", "")))
             if u.path == "/claude/task":
                 return self._send(200, claude_task_tail(q["file"]))
             if u.path == "/claude/stream":
@@ -144,13 +152,28 @@ class H(BaseHTTPRequestHandler):
                                                    body.get("auto") is True, body.get("model"), body.get("effort"),
                                                    [i for i in body.get("images") or [] if isinstance(i, dict)], body.get("fork"),
                                                    body.get("team") is True, body.get("plan") is True, body.get("quiet") is True,
-                                                   body.get("push") is not False, body.get("memory")))
+                                                   body.get("push") is not False, body.get("memory"),
+                                                   str(body.get("nonce") or "")[:64]))
             if u.path == "/claude/usage":
                 return self._send(200, claude_usage(refresh=True))
             if u.path == "/net/shaper":
                 return self._send(200, shaper.save(body) if "enabled" in body else shaper.state())
             if u.path == "/net/speedtest":
                 return self._send(200, speedtest())
+            if u.path == "/vpn/provider":
+                return self._send(200, vpn.set_provider(str(body.get("provider"))))
+            if u.path == "/vpn/connect":
+                return self._send(200, vpn.connect(str(body.get("provider")), body))
+            if u.path == "/vpn/wg/init":
+                return self._send(200, vpn.wg_init())
+            if u.path == "/vpn/wg/peer":
+                return self._send(200, vpn.wg_peer(str(body.get("name") or ""), str(body.get("endpoint") or "")))
+            if u.path == "/claude/auth/start":
+                return self._send(200, claude_login.start(str(body.get("mode") or "claudeai")))
+            if u.path == "/claude/auth/code":
+                return self._send(200, claude_login.code(str(body.get("code") or "")))
+            if u.path == "/claude/auth/cancel":
+                return self._send(200, claude_login.cancel())
             if u.path == "/claude/stop":
                 return self._send(200, claude_stop(str(body.get("chat"))))
             if u.path == "/discord":
@@ -272,6 +295,7 @@ if __name__ == "__main__":
     net_start()
     threading.Thread(target=shaper.apply, daemon=True).start()
     threading.Thread(target=claude_watch, daemon=True).start()
+    threading.Thread(target=overview, daemon=True).start()  # warm the cache so the first page load is quick
     for fn in dash_sdk.STARTUP:  # add-ons' background loops
         threading.Thread(target=fn, daemon=True).start()
     ThreadingHTTPServer((BIND, PORT), H).serve_forever()

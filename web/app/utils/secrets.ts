@@ -27,12 +27,11 @@ export function hideSecrets(text: string) {
   return { text, found }
 }
 
-const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
 const MARK = new RegExp(`${A}(\\d+)${Z}`, 'g')
 
 export function showSecrets(html: string, found: string[]) {
   if (!found.length) return html
   return html
-    .replace(/="[^"]*"/g, attr => attr.replace(MARK, (_, i) => esc(found[+i] ?? '')))
-    .replace(MARK, (_, i) => `<span class="sec" title="tap to show">${esc(found[+i] ?? '')}</span>`)
+    .replace(/="[^"]*"/g, attr => attr.replace(MARK, (_, i) => escHtml(found[+i] ?? '')))
+    .replace(MARK, (_, i) => `<span class="sec" title="tap to show">${escHtml(found[+i] ?? '')}</span>`)
 }

@@ -81,7 +81,7 @@ onBeforeUnmount(() => clearTimeout(armTimer))
           <button type="button" class="btn primary sm" @click="review()">{{ t('settings.review') }}</button>
           <button type="button" class="btn ghost sm" @click="edit = null">{{ t('common.cancel') }}</button>
         </div>
-        <button v-else type="button" class="val" @click="startEdit(r.path, r.value)">
+        <button v-else type="button" class="val press" @click="startEdit(r.path, r.value)">
           <span class="mono small">{{ r.value || '—' }}</span>
           <span class="lnk small">{{ t('settings.edit') }}</span>
         </button>

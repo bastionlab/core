@@ -40,12 +40,14 @@ const addonSections = computed(() => on.value.filter(hasSection))
 const replacing = ref('')
 const keyDraft = ref('')
 const keyErr = ref('')
+const keyBusy = ref(false)
 async function saveKey(key: string) {
   keyErr.value = ''
+  keyBusy.value = true
   try {
     await $fetch('/api/settings/core', { method: 'POST', body: { key, value: keyDraft.value } })
     replacing.value = ''; keyDraft.value = ''; refresh()
-  } catch (e: any) { keyErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message }
+  } catch (e: any) { keyErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message } finally { keyBusy.value = false }
 }
 
 // --- Google accounts (shared by Calendar and Mail) ---------------------------------------------------------------
@@ -54,21 +56,26 @@ const gId = ref('')
 const gSecret = ref('')
 const gErr = ref(String(route.query.google_err ?? ''))
 const gSaved = ref(false)
+const gBusy = ref('') // 'save' | 'connect' | the email being disconnected
+const { armed, arm } = useArm()
 watch(g, v => { if (v && !gId.value) gId.value = v.client_id }, { immediate: true })
 async function gSave() {
   gErr.value = ''
+  gBusy.value = 'save'
   try {
     await $fetch('/api/google/client', { method: 'POST', body: { client_id: gId.value, client_secret: gSecret.value } })
     gSecret.value = ''; gSaved.value = true; gRefresh()
-  } catch (e: any) { gErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message }
+  } catch (e: any) { gErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message } finally { gBusy.value = '' }
 }
 async function gConnect() {
   gErr.value = ''
-  try { window.location.href = (await $fetch<{ url: string }>('/api/google/start', { method: 'POST' })).url } catch (e: any) { gErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message }
+  gBusy.value = 'connect'
+  try { window.location.href = (await $fetch<{ url: string }>('/api/google/start', { method: 'POST' })).url } catch (e: any) { gErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message; gBusy.value = '' }
 }
 async function gDisconnect(email: string) {
   gErr.value = ''
-  try { await $fetch('/api/google/disconnect', { method: 'POST', body: { email } }); gRefresh(); refresh() } catch (e: any) { gErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message }
+  gBusy.value = email
+  try { await $fetch('/api/google/disconnect', { method: 'POST', body: { email } }); gRefresh(); refresh() } catch (e: any) { gErr.value = e?.data?.statusMessage || e?.statusMessage || e?.message } finally { gBusy.value = '' }
 }
 
 // --- categories ------------------------------------------------------------------------------------------------
@@ -108,13 +115,13 @@ const index = computed(() => {
   ]
   if (!owner.value) return e
   e.push(
-    { label: t('users.title'), sub: 'invite roles', cat: 'access', anchor: 'users' },
+    { label: t('users.title'), sub: t('settings.users_k'), cat: 'access', anchor: 'users' },
     { label: t('settings.secrets'), sub: t('settings.secrets_k'), cat: 'access', anchor: 'secrets' },
     { label: t('settings.conn.title'), cat: 'connections', anchor: 'connections' },
     { label: t('settings.discord'), sub: t('settings.discord_k'), cat: 'connections', anchor: 'discord' },
     { label: t('settings.gen.title'), sub: 'config.json', cat: 'system', anchor: 'general' },
     { label: t('backup.title'), cat: 'system', anchor: 'backup' },
-    { label: t('deploy.title'), sub: 'github release', cat: 'system', anchor: 'deploy' },
+    { label: t('deploy.title'), sub: t('settings.deploy_k'), cat: 'system', anchor: 'deploy' },
     ...['name', 'tailnet', 'logins', 'subnet', 'hostip', 'dbids', 'dbips', 'index', 'repo', 'counter', 'share', 'auto', 'cts']
       .map(k => ({ label: t(`settings.gen.${k}`), sub: t(`settings.gen.${k}_h`), cat: 'system' as Cat, anchor: 'general' })),
     ...rows.value.map((c: any) => ({ label: c.name, sub: c.addon?.name ?? c.used_by, cat: 'connections' as Cat, anchor: 'connections' })),
@@ -140,17 +147,22 @@ const hits = computed(() => {
       <h1>{{ t('settings.title') }}</h1>
       <div v-if="cats.length > 1" class="find">
         <Icon name="search" :size="15" class="faint" />
-        <input v-model="q" type="search" :placeholder="t('settings.search')">
+        <input v-model="q" type="search" :placeholder="t('settings.search')" :aria-label="t('settings.search')">
+        <Transition name="hits">
         <div v-if="q.trim()" class="hits">
-          <button v-for="h in hits" :key="`${h.label}|${h.anchor}`" type="button" class="hit" @click="go(h.cat, h.anchor)">
+          <button v-for="h in hits" :key="`${h.label}|${h.anchor}`" type="button" class="hit press" @click="go(h.cat, h.anchor)">
             <span>{{ h.label }}</span>
             <span class="faint small">{{ t(`settings.cat.${h.cat}`) }}{{ h.sub ? ` · ${h.sub}` : '' }}</span>
           </button>
           <p v-if="!hits.length" class="faint small pad">{{ t('settings.noHits', { q: q.trim() }) }}</p>
         </div>
+        </Transition>
       </div>
     </header>
-    <div v-if="error && !s && owner" class="errbox">{{ error.statusMessage || error.message }}</div>
+    <div v-if="error && !s && owner" class="errbox">
+      {{ error.statusMessage || error.message }}
+      <button type="button" class="btn sm" @click="refresh()">{{ t('common.retry') }}</button>
+    </div>
     <PageTabs v-if="cats.length > 1" v-model="tab" :tabs="tabs" />
     <p v-if="cats.length > 1" class="faint small lead">{{ t(`settings.cat.${cat}_d`) }}</p>
 
@@ -187,7 +199,7 @@ const hits = computed(() => {
                   </div>
                   <div v-if="c.set && replacing === c.set" class="keyedit">
                     <input v-model="keyDraft" type="password" autocomplete="off" :placeholder="c.id === 'github' ? 'ghp_… or github_pat_…' : 'tskey-…'">
-                    <button type="button" class="btn primary sm" :disabled="!keyDraft" @click="saveKey(c.set)">{{ t('common.save') }}</button>
+                    <button type="button" class="btn primary sm" :disabled="!keyDraft || keyBusy" @click="saveKey(c.set)">{{ t('common.save') }}</button>
                     <div v-if="keyErr" class="errbox small">{{ keyErr }}</div>
                   </div>
                   <div v-else-if="c.fix && (!c.ok || c.warn) && !hasSection(c.addon)" class="hint faint small">{{ c.fix }}</div>
@@ -199,17 +211,17 @@ const hits = computed(() => {
             <div class="keyedit">
               <input v-model="gId" type="text" autocomplete="off" :placeholder="t('google.client_id')">
               <input v-model="gSecret" type="password" autocomplete="off" :placeholder="g?.has_secret ? t('google.secret_set') : t('google.client_secret')">
-              <button type="button" class="btn primary sm" :disabled="!gId && !gSecret" @click="gSave">{{ t('common.save') }}</button>
+              <button type="button" class="btn primary sm" :disabled="(!gId && !gSecret) || !!gBusy" @click="gSave">{{ t('common.save') }}</button>
             </div>
             <p class="faint small">{{ t('google.redirect') }} {{ g?.redirect }}</p>
             <div v-for="a in g?.accounts ?? []" :key="a.email" class="conn">
               <span class="dot" :class="a.ok ? 'ok' : 'bad'" />
               <div class="what"><b>{{ a.email }}</b></div>
               <span class="detail small muted">{{ a.detail }}</span>
-              <div class="fix"><button type="button" class="btn sm" @click="gDisconnect(a.email)">{{ t('google.disconnect') }}</button></div>
+              <div class="fix"><button type="button" class="btn sm" :class="{ sure: armed === `g${a.email}` }" :disabled="!!gBusy" @click="arm(`g${a.email}`) && gDisconnect(a.email)">{{ armed === `g${a.email}` ? t('common.sure') : t('google.disconnect') }}</button></div>
             </div>
             <div class="keyedit">
-              <button type="button" class="btn primary sm" :disabled="!g?.client_id || !g?.has_secret" @click="gConnect">{{ t('google.connect') }}</button>
+              <button type="button" class="btn primary sm" :disabled="!g?.client_id || !g?.has_secret || !!gBusy" @click="gConnect">{{ t('google.connect') }}</button>
             </div>
             <div v-if="gErr" class="errbox small">{{ gErr }}</div>
           </Panel>
@@ -247,7 +259,7 @@ const hits = computed(() => {
 .hits { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 4px; box-shadow: 0 8px 24px rgb(0 0 0 / .3); max-height: 60vh; overflow-y: auto; }
 .hit { all: unset; box-sizing: border-box; cursor: pointer; display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: var(--radius-sm); }
 .hit:hover { background: var(--panel-2); }
-.hit { transition: background-color .12s; }
+.hit { transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .pad { padding: 8px 10px; margin: 0; }
 .lead { margin: -6px 0 12px; max-width: 880px; }
 /* a form-like page: cap the column so labels stay near their controls (header row and tabs stay full width) */
@@ -263,7 +275,8 @@ const hits = computed(() => {
 .keyedit input { flex: 1; min-width: 160px; }
 
 @media (max-width: 640px) {
-  .top h1 { display: none; }
+  /* off screen on phones, still the page's h1 for screen readers */
+  .top h1 { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .find { flex-basis: 100%; }
   .conn { grid-template-columns: auto minmax(0, 1fr) auto; }
   .detail { grid-column: 2 / -1; grid-row: 2; }
@@ -273,14 +286,14 @@ const hits = computed(() => {
   .content, .lead { width: auto; max-width: none; }
 }
 
-@keyframes settings-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-@keyframes hits-in { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }
+/* opacity only: a transform here would re-anchor fixed children for the duration */
+@keyframes settings-in { from { opacity: 0; } to { opacity: 1; } }
+/* the search results drop in and fade out (the box is v-if on the query) */
+.hits { transform-origin: top; }
+.hits-enter-active { transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.hits-leave-active { transition: opacity var(--dur-fast) var(--ease-in), transform var(--dur-fast) var(--ease-in); }
+.hits-enter-from, .hits-leave-to { opacity: 0; transform: scale(.98); }
 @media (prefers-reduced-motion: no-preference) {
-  .content { animation: settings-in 180ms cubic-bezier(.23, 1, .32, 1) both; }
-  .hits { transform-origin: top; animation: hits-in 120ms cubic-bezier(.23, 1, .32, 1) both; }
-  .content :deep(.btn), .content :deep(.seg button), .content :deep(.chip) {
-    transition: transform .12s cubic-bezier(.23, 1, .32, 1), background-color .12s, color .12s, border-color .12s;
-  }
-  .content :deep(.btn):active:not(:disabled), .content :deep(.seg button):active:not(:disabled), .content :deep(.chip):active:not(:disabled) { transform: scale(.97); }
+  .content { animation: settings-in var(--dur) var(--ease-out) both; }
 }
 </style>

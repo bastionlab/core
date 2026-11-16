@@ -4,7 +4,9 @@ import { highlight } from '../utils/highlight'
 export interface Tool { name: string, args: any, done?: boolean, error?: string, id?: string, label?: string }
 export interface Proposal { action: string, args: any, desc: string, why?: string, state?: 'idle' | 'running' | 'done' | 'failed' | 'dismissed' | /** was running when stored: not runnable again */ 'sent', job?: any }
 export interface Turn {
-  q: string, a: string, r: string, /** screenshots sent with the question (chat image names) */ imgs?: string[], tools?: Tool[], proposals?: Proposal[], model?: string, tps?: number | null, error?: string, busy?: boolean, at?: number
+  /** stable id, so two devices' copies of a chat merge turn by turn */
+  id?: string
+  q: string, a: string, r: string, /** screenshots sent with the question (chat image names) */ imgs?: string[], tools?: Tool[], /** text written between tool calls, folded into the steps */ narr?: string[], proposals?: Proposal[], model?: string, tps?: number | null, error?: string, busy?: boolean, at?: number
   /** Claude turns: agent turn id, whether it ran with write access, how long it took, what read-only mode blocked */
   ct?: string, auto?: boolean, effort?: string, secs?: number, denied?: string[], fin?: boolean, stopped?: boolean
   /** a ```questions block the owner already answered: question index → picked labels */
@@ -47,11 +49,10 @@ export function addSources(t: Turn, list: any) {
 export const sinceClear = (turns: Turn[]) => turns.slice(turns.findLastIndex(t => t.clear) + 1)
 
 // model output is untrusted: render markdown but show any raw HTML as text
-const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
 marked.use({
   renderer: {
-    html: ({ text }: any) => esc(text),
-    code: ({ text, lang }: any) => `<pre><code class="language-${esc(String(lang || '').split(/\s/)[0])}">${highlight(text, lang || '')}</code></pre>\n`,
+    html: ({ text }: any) => escHtml(text),
+    code: ({ text, lang }: any) => `<pre><code class="language-${escHtml(String(lang || '').split(/\s/)[0])}">${highlight(text, lang || '')}</code></pre>\n`,
   },
 })
 export const md = (s: string) => marked.parse(s, { async: false }) as string
@@ -203,8 +204,9 @@ export function useAsk(scope: string, turns: Ref<Turn[]>, onChange?: () => void,
     text = text.trim()
     if (!text || busy.value) return
     const history = sinceClear(turns.value).filter(t => !t.error).flatMap(t => [{ role: 'user', content: t.q }, { role: 'assistant', content: t.a }])
-    turns.value.push({ q: text, a: '', r: '', tools: [], proposals: [], busy: true, at: Date.now() })
+    turns.value.push({ id: Math.random().toString(36).slice(2, 10) + Date.now().toString(36), q: text, a: '', r: '', tools: [], proposals: [], busy: true, at: Date.now() })
     const t = turns.value[turns.value.length - 1]!
+    onChange?.() // the question goes to the other devices now, not with the first answer chunk
     const ctl = controllers[scope] = new AbortController()
     let saved = 0
     try {

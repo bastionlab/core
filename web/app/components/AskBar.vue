@@ -53,8 +53,46 @@ const box = ref<HTMLTextAreaElement>()
 // on a touchscreen Enter is a new line (no Shift there); the send button sends
 const touch = ref(false)
 onMounted(() => { touch.value = matchMedia('(pointer: coarse)').matches })
-const fit = () => { const el = box.value; if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px' }
-watch(q, () => nextTick(fit))
+// the height eases to its new value (--dur-fast, set in the style block). It is measured on a hidden clone, so the real box is never
+// collapsed (no flicker) and fast typing just retargets a running transition instead of restarting it from a jump
+let ruler: HTMLTextAreaElement | null = null
+const fit = (instant = false) => {
+  const el = box.value
+  if (!el || !el.offsetWidth) return // hidden: nothing to measure
+  if (!ruler || ruler.parentElement !== el.parentElement) {
+    ruler?.remove()
+    ruler = el.cloneNode(false) as HTMLTextAreaElement
+    ruler.removeAttribute('placeholder'); ruler.setAttribute('aria-hidden', 'true'); ruler.tabIndex = -1
+    ruler.style.cssText = 'position:absolute;visibility:hidden;pointer-events:none;height:0;min-height:0;transition:none;flex:none;order:0'
+    el.parentElement!.append(ruler)
+  }
+  ruler.style.width = el.offsetWidth + 'px'
+  // a trailing newline adds no line to a measured textarea; a zero-width char gives that last (empty) line a box
+  ruler.value = el.value.endsWith('\n') ? el.value + '\u200b' : el.value
+  ruler.style.height = 'auto'
+  const h = Math.min(ruler.scrollHeight, 200) + 'px'
+  ruler.style.height = '0'
+  if (el.style.height === h) return
+  if (!instant) { el.style.height = h; return }
+  // no easing: switch the transition off, apply, flush, and put it back two frames later (not in the same tick)
+  el.style.transition = 'none'
+  el.style.height = h
+  void el.offsetHeight
+  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transition = '' }))
+}
+watch(q, () => nextTick(() => fit()))
+// no easing while the window, the phone keyboard, or a sidebar/panel toggle changes the width (re-wrapped text must not animate)
+let ro: ResizeObserver | undefined, lastW = 0
+const onResize = () => fit(true)
+onMounted(() => {
+  window.addEventListener('resize', onResize); window.visualViewport?.addEventListener('resize', onResize)
+  if (box.value && typeof ResizeObserver !== 'undefined') {
+    lastW = box.value.offsetWidth
+    ro = new ResizeObserver(() => { const w = box.value?.offsetWidth ?? 0; if (w !== lastW) { lastW = w; fit(true) } })
+    ro.observe(box.value)
+  }
+})
+onBeforeUnmount(() => { window.removeEventListener('resize', onResize); window.visualViewport?.removeEventListener('resize', onResize); ro?.disconnect(); ruler?.remove() })
 
 // typing / opens the command list, like Claude Code; after "/model " it offers the choices
 interface Item { cmd: Cmd, choice?: string, verb?: string }
@@ -181,7 +219,7 @@ defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: str
     <Transition name="cmds">
     <div v-if="items.length" ref="list" class="cmds" role="listbox">
       <button
-        v-for="(it, i) in items" :key="it.cmd.name + (it.choice ?? '') + (it.verb ?? '')" type="button" role="option" class="cmd" :class="{ on: i === sel }"
+        v-for="(it, i) in items" :key="it.cmd.name + (it.choice ?? '') + (it.verb ?? '')" type="button" role="option" class="cmd press" :class="{ on: i === sel }"
         :aria-selected="i === sel" @mousedown.prevent @mouseenter="sel = i" @click="pick(it)"
       >
         <template v-if="it.verb != null"><span class="mono faint">/{{ it.cmd.name }}</span> <b>{{ it.verb }}</b></template>
@@ -199,7 +237,7 @@ defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: str
       <span v-for="(n, i) in imgs" :key="n" class="th">
         <img v-if="isImg(n)" :src="`/api/chat/img/${n}`" alt="screenshot">
         <span v-else class="fchip small" :title="fileLabel(n)"><Icon name="clip" :size="13" /> {{ fileLabel(n) }}</span>
-        <button type="button" title="remove" @click="imgs.splice(i, 1)"><Icon name="x" :size="12"/></button>
+        <button type="button" :title="$t('ask.removeImage')" :aria-label="$t('ask.removeImage')" @click="imgs.splice(i, 1)"><Icon name="x" :size="12"/></button>
       </span>
       <span v-if="uploading" key="up" class="small faint">uploading…</span>
       <span v-if="imgErr" key="err" class="small bad">{{ imgErr }}</span>
@@ -219,18 +257,18 @@ defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: str
       </template>
       <button
         v-if="voice" type="button" class="btn ghost ico mic" :class="{ rec: rec === 'rec' }" :disabled="rec === 'busy'"
-        :title="rec === 'rec' ? $t('ask.micStop') : $t('ask.mic')" @click="mic"
+        :title="rec === 'rec' ? $t('ask.micStop') : $t('ask.mic')" :aria-label="rec === 'rec' ? $t('ask.micStop') : $t('ask.mic')" @click="mic"
       >
         <span v-if="rec === 'busy'" class="mspin" />
         <span v-else-if="rec === 'rec'" class="mono small">{{ mmss(recSecs) }}</span>
         <Icon v-else name="mic" :size="16" />
       </button>
-      <button type="button" class="btn ghost ico" :class="{ on: opts }" title="model and tools" @click="opts = !opts">
+      <button type="button" class="btn ghost ico" :class="{ on: opts }" :title="$t('ask.options')" :aria-label="$t('ask.options')" :aria-expanded="opts" @click="opts = !opts">
         <Icon name="settings" :size="16" />
       </button>
-      <button v-if="busy && queue && (q.trim() || (images && imgs.length))" class="btn primary ico" :title="$t('ask.queue')" :disabled="!!uploading"><Icon name="send" :size="16" /></button>
-      <button v-if="busy" type="button" class="btn ico" title="stop" @click="emit('stop')"><Icon name="stop" :size="15" /></button>
-      <button v-else class="btn primary ico" title="ask" :disabled="(!q.trim() && !(images && imgs.length)) || !!uploading || !models.length"><Icon name="send" :size="16" /></button>
+      <button v-if="busy && queue && (q.trim() || (images && imgs.length))" class="btn primary ico" :title="$t('ask.queue')" :aria-label="$t('ask.queue')" :disabled="!!uploading"><Icon name="send" :size="16" /></button>
+      <button v-if="busy" type="button" class="btn ico" :title="$t('ask.stop')" :aria-label="$t('ask.stop')" @click="emit('stop')"><Icon name="stop" :size="15" /></button>
+      <button v-else class="btn primary ico" :title="$t('ask.send')" :aria-label="$t('ask.send')" :disabled="(!q.trim() && !(images && imgs.length)) || !!uploading || !models.length"><Icon name="send" :size="16" /></button>
     </div>
     <div v-if="opts" class="opts small">
       <slot name="opts">
@@ -274,7 +312,7 @@ defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: str
 .line { display: flex; align-items: flex-end; gap: 6px; }
 .line > .spark { align-self: center; }
 .spark { color: var(--accent); margin: 0 4px 0 2px; }
-.askbar textarea.q { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; line-height: 20px; padding: 7px 0; outline: none; resize: none; max-height: 200px; overflow-y: auto; }
+.askbar textarea.q { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; line-height: 20px; padding: 7px 0; outline: none; resize: none; max-height: 200px; overflow-y: auto; transition: height var(--dur-fast) var(--ease-out); }
 .askbar textarea.q::placeholder { color: var(--faint); }
 /* phone: the text gets the whole width, the buttons drop to their own row below it */
 @media (max-width: 640px) {
@@ -287,8 +325,7 @@ defineExpose({ attach: (name: string) => imgs.value.push(name), setText: (v: str
 .vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 .mic.rec { width: auto; padding: 0 8px; color: var(--bad); background: var(--bad-soft); animation: mpulse 1.2s ease-in-out infinite; }
 @keyframes mpulse { 50% { opacity: .65 } }
-.mspin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: mrot .8s linear infinite; }
-@keyframes mrot { to { transform: rotate(360deg) } }
+.mspin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: spin .8s linear infinite; }
 .ghost.on { color: var(--accent); background: var(--accent-soft); }
 .opts { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 0 2px 31px; color: var(--muted); }
 .opts select { padding: 5px 8px; font-size: 12px; max-width: 220px; }

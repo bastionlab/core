@@ -61,6 +61,7 @@ export function newAddonPrompt(arg: string) {
 export const COMMANDS: Cmd[] = [
   { name: 'help', desc: 'list the commands', busy: true },
   { name: 'clear', desc: 'clear this chat and start fresh' },
+  { name: 'login', desc: 'sign in to Claude (link + code)', busy: true },
   { name: 'new', desc: 'open a new chat', busy: true },
   { name: 'model', arg: 'name', desc: 'switch the model for this chat' },
   { name: 'effort', arg: 'level', desc: 'how long Claude thinks', claude: true },

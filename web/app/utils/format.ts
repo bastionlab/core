@@ -39,3 +39,6 @@ export const clock = (ts?: number | null) =>
 /** tone for a 0–100 usage value */
 export const tone = (v: number, warn = 75, bad = 90) => (v >= bad ? 'bad' : v >= warn ? 'warn' : 'ok')
 
+
+/** escape text for HTML (& < > " ') — for strings built into v-html / innerHTML */
+export const escHtml = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!))

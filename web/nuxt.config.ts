@@ -59,6 +59,8 @@ export default defineNuxtConfig({
     },
   },
   css: ['~/assets/main.css'],
+  // every :hover rule (core, add-on layers, skins, scoped SFC styles) is moved into @media (hover: hover): postcss/hover-guard.mjs
+  postcss: { plugins: { [join(here, 'postcss', 'hover-guard.mjs')]: {} } },
   // the SPA shell must be revalidated or phones (iOS home-screen apps especially) keep showing the old build after a deploy;
   // /_nuxt/* is content-hashed and keeps its long cache
   routeRules: {

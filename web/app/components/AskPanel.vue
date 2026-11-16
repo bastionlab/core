@@ -32,7 +32,7 @@ const focused = ref(false)
 </template>
 
 <style scoped>
-.ask { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 5px 6px 5px 10px; margin-bottom: 16px; scroll-margin-top: 16px; transition: border-color .15s; }
+.ask { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 5px 6px 5px 10px; margin-bottom: 16px; scroll-margin-top: 16px; transition: border-color var(--dur) var(--ease-out); }
 .ask.active { border-color: var(--line-2); }
 .examples { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 0 6px 31px; }
 .examples .pill { cursor: pointer; font: inherit; font-size: 12px; padding: 3px 10px; }

@@ -18,7 +18,8 @@ const v = computed(() => Math.max(0, Math.min(100, props.value || 0)))
 .row { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
 .label { color: var(--muted); font-size: 13px; }
 .track { height: 5px; background: var(--track); border-radius: 3px; overflow: hidden; }
-/* scaled, not resized: the bar only moves transform (no layout work per frame) */
-.fill { width: 100%; height: 100%; border-radius: 3px; background: var(--accent); transform-origin: left center; transition: transform .6s var(--ease-out); }
+/* scaled, not resized: the bar only moves transform (no layout work per frame). The fill is square on purpose: scaling a rounded
+   end squashes it to a sliver at low values; the track (rounded, overflow hidden) rounds the start */
+.fill { width: 100%; height: 100%; background: var(--accent); transform-origin: left center; transition: transform var(--dur-slow) var(--ease-out); }
 .fill.warn { background: var(--warn); } .fill.bad { background: var(--bad); }
 </style>

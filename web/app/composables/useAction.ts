@@ -2,6 +2,8 @@ export interface Job { id?: string, desc?: string, name: string, args: any, stat
 
 const KEY = 'jobs:recent'
 const KEEP = 12
+/** finished jobs leave the log after this long (running ones never do) */
+const CLEAR_AFTER = 60 * 60e3
 
 /**
  * Every action the owner ran, on any page: the header's jobs tray lists them, a toast says when one ends, and a page's
@@ -11,6 +13,17 @@ export function useRuns() {
   const jobs = useState<Job[]>('jobs:all', () => [])
   const tray = useState<{ open: boolean, focus?: string | number }>('jobs:tray', () => ({ open: false }))
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(jobs.value.slice(0, KEEP))) } catch {} }
+
+  /** drop finished jobs older than CLEAR_AFTER; a timer started once per page does this while it is open */
+  function prune() {
+    const cutoff = Date.now() - CLEAR_AFTER
+    const kept = jobs.value.filter(j => j.state === 'running' || j.state === 'checking' || (j.ended ?? j.started) > cutoff)
+    if (kept.length !== jobs.value.length) { jobs.value = kept; save() }
+  }
+  if (import.meta.client) {
+    const timer = useState<any>('jobs:prune-timer', () => null)
+    if (!timer.value) timer.value = setInterval(prune, 60e3)
+  }
 
   function add(j: Omit<Job, 'started' | 'log' | 'state'> & Partial<Job>) {
     const job = reactive<Job>({ state: 'running', log: [], started: Date.now(), ...j })
@@ -53,13 +66,14 @@ export function useRuns() {
     try {
       const saved: Job[] = JSON.parse(localStorage.getItem(KEY) || '[]')
       jobs.value = saved.map(j => reactive(j))
+      prune()
       for (const j of jobs.value) if (j.state === 'running' && j.id) follow(j)
     } catch {}
   }
 
   const dismiss = (job: Job) => { jobs.value = jobs.value.filter(j => j !== job); save() }
   const running = computed(() => jobs.value.filter(j => j.state === 'running' || j.state === 'checking'))
-  return { jobs, tray, add, finish, follow, restore, dismiss, running }
+  return { jobs, tray, add, finish, follow, restore, dismiss, prune, running }
 }
 
 /**

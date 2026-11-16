@@ -165,7 +165,7 @@ const idx = (it: Item) => flat.value.indexOf(it)
           <div v-for="g in results" :key="g.name" class="grp">
             <div class="gh small faint">{{ g.name }}</div>
             <button
-              v-for="it in g.items" :key="it.key" type="button" class="it" :class="{ sel: idx(it) === sel }"
+              v-for="it in g.items" :key="it.key" type="button" class="it press" :class="{ sel: idx(it) === sel }"
               @click="choose(it)" @mousemove="sel = idx(it)"
             >
               <span class="ic"><Icon :name="it.icon ?? (it.action ? 'power' : it.href ? 'ext' : 'arrow')" :size="15" /></span>
@@ -176,7 +176,7 @@ const idx = (it: Item) => flat.value.indexOf(it)
           </div>
           <div v-if="askItem" class="grp">
             <div v-if="!results.length" class="gh small faint">Nothing found</div>
-            <button type="button" class="it ask" :class="{ sel: idx(askItem) === sel }" @click="choose(askItem)" @mousemove="sel = idx(askItem)">
+            <button type="button" class="it ask press" :class="{ sel: idx(askItem) === sel }" @click="choose(askItem)" @mousemove="sel = idx(askItem)">
               <span class="ic"><Icon name="spark" :size="15" /></span>
               <span class="lb">{{ askItem.label }}</span>
             </button>

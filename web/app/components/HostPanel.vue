@@ -55,7 +55,7 @@ const at = computed(() => pending.value && new Date(pending.value.at * 1000).toL
       <Stat label="Load 1m" :value="host.load[0]?.toFixed(2) ?? '–'" :title="`1m / 5m / 15m: ${host.load.join(' / ')}`" />
       <Stat label="CPU temp" :value="host.temps.cpu != null ? `${host.temps.cpu}°C` : '–'" :tone="host.temps.cpu > 80 ? 'warn' : ''" />
       <Stat label="Uptime" :value="duration(host.uptime)" />
-      <Stat label="Updates" :value="updates?.host?.count ?? '–'" :tone="updates?.host?.count ? 'warn' : ''" />
+      <Stat :label="$t('host.updates')" :value="updates?.host?.count ?? '–'" :tone="updates?.host?.count ? 'warn' : ''" />
     </div>
     <div class="faint small foot">{{ host.pveVersion?.split('/').slice(0, 2).join(' ') }} · kernel {{ host.kernel }}</div>
   </Panel>

@@ -6,7 +6,7 @@ defineProps<{ services: any[], list?: boolean }>()
 <template>
   <div id="services" class="services" :class="{ list }">
     <a
-      v-for="s in services" :key="s.name" :href="s.url" target="_blank" class="svc"
+      v-for="s in services" :key="s.name" :href="s.url" target="_blank" class="svc press"
       :title="`${s.note ?? ''}${s.ct ? ` · CT ${s.ct}` : ''}${s.up ? ` · ${s.ms} ms` : ' · down'}`"
     >
       <span class="icon"><AppLogo :name="s.name" /></span>
@@ -21,7 +21,7 @@ defineProps<{ services: any[], list?: boolean }>()
 
 <style scoped>
 .services { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-bottom: 14px; scroll-margin-top: 16px; }
-.svc { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 11px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); transition: border-color .15s, background .15s; }
+.svc { display: flex; align-items: center; gap: 12px; min-width: 0; padding: 11px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); color: var(--text); transition: border-color var(--dur) var(--ease-out), background var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
 .svc:hover { text-decoration: none; border-color: var(--line-2); background: var(--panel-2); }
 .icon { font-size: 18px; width: 36px; height: 36px; display: grid; place-items: center; background: var(--panel-2); border-radius: var(--radius-sm); flex: none; }
 .body { display: flex; flex-direction: column; min-width: 0; flex: 1; }

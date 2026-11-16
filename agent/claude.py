@@ -110,6 +110,13 @@ def _cc_pid(unit):
         return 0
 
 
+def _cc_write(path, data):
+    """dash-claude files hold prompts and attachments: owner-only"""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data if isinstance(data, bytes) else data.encode())
+
+
 def _cc_cleanup():
     cutoff = time.time() - CC_KEEP_DAYS * 86400
     for f in CC_DIR.glob("*"):
@@ -160,7 +167,7 @@ def _route(prompt, auto, want_model, want_effort, want_team, want_plan):
     return out
 
 
-def claude_send(chat, session, prompt, auto, model=None, effort=None, images=None, fork=None, team=False, plan=False, quiet=False, notify=True, memory=None):
+def claude_send(chat, session, prompt, auto, model=None, effort=None, images=None, fork=None, team=False, plan=False, quiet=False, notify=True, memory=None, nonce=None):
     unit = _cc_unit(chat)
     if not CC_UUID.fullmatch(session or ""):
         raise ValueError("bad session id")
@@ -179,6 +186,7 @@ def claude_send(chat, session, prompt, auto, model=None, effort=None, images=Non
             return {"running": max(live)}
         raise ValueError("Claude is still answering in this chat — stop it first")
     CC_DIR.mkdir(mode=0o700, exist_ok=True)
+    CC_DIR.chmod(0o700)
     _cc_cleanup()
     routed = _route(prompt, auto, model, effort, team, plan)
     model, effort = routed.get("model", model), routed.get("effort", effort)
@@ -189,7 +197,7 @@ def claude_send(chat, session, prompt, auto, model=None, effort=None, images=Non
     if known:
         fork = None  # the copy was made by an earlier attempt: just carry on in it
     # screenshots / files dropped into the chat: saved next to the turn, Claude opens them with Read (it sees images and PDFs)
-    paths, shots = [], 0
+    paths, shots, made = [], 0, []
     for i, im in enumerate((images or [])[:8]):
         name = str(im.get("name", ""))
         if re.fullmatch(r"[a-f0-9]{24}\.(jpg|png|webp)", name):
@@ -200,7 +208,8 @@ def claude_send(chat, session, prompt, auto, model=None, effort=None, images=Non
             f = d / m[1].lstrip(".")
         else:
             continue
-        f.write_bytes(base64.b64decode(im.get("data", "")))
+        _cc_write(f, base64.b64decode(im.get("data", "")))
+        made.append(f if f.parent == CC_DIR else f.parent)
         paths.append(str(f))
     if paths:
         what = "a screenshot" if shots == len(paths) == 1 else f"{len(paths)} screenshots" if shots == len(paths) else \
@@ -217,7 +226,7 @@ def claude_send(chat, session, prompt, auto, model=None, effort=None, images=Non
         mode = "[Mode for this message: PLAN FIRST. Auto is on, so write access exists; this turn only plans.]"
     else:
         mode = "[Mode for this message: READ-ONLY. Auto is off.]"
-    (CC_DIR / f"{turn}.prompt").write_text(f"{mode}\n\n{prompt}")
+    _cc_write(CC_DIR / f"{turn}.prompt", f"{mode}\n\n{prompt}")
     cmd = [CLAUDE, "-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
            *(["--resume", fork["from"], "--resume-session-at", fork["at"], "--fork-session", "--session-id", session] if fork
              else ["--resume" if known else "--session-id", session]), "--permission-prompts", "none",
@@ -226,7 +235,7 @@ def claude_send(chat, session, prompt, auto, model=None, effort=None, images=Non
            "--disallowedTools", "AskUserQuestion"]
     if team:
         agents = {k: v for k, v in TEAM.items() if auto and not plan or k != "builder"}
-        (CC_DIR / "team.json").write_text(json.dumps(agents))
+        _cc_write(CC_DIR / "team.json", json.dumps(agents))
         cmd += ["--agents", str(CC_DIR / "team.json")]
     cmd += ["--model", model] if model else []
     cmd += ["--effort", effort] if effort else []
@@ -240,14 +249,19 @@ def claude_send(chat, session, prompt, auto, model=None, effort=None, images=Non
     r = subprocess.run(["systemd-run", "--unit", unit, "--collect", "--quiet",
                         "-p", "WorkingDirectory=/root", "-p", f"StandardInput=file:{CC_DIR / f'{turn}.prompt'}",
                         "-p", f"StandardOutput=file:{out}", "-p", f"StandardError=file:{CC_DIR / f'{turn}.err'}",
-                        "-p", "RuntimeMaxSec=3h",
+                        "-p", "RuntimeMaxSec=3h", "-p", "UMask=0077",
                         "-E", "HOME=/root", "-E", "CLAUDE_PROFILE=noven", "-E", "TERM=dumb",
                         "-E", "PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
                         *cmd], capture_output=True, text=True, timeout=20)
     if r.returncode:
+        for p in [*made, CC_DIR / f"{turn}.prompt"]:  # the unit never started: don't leave the attachments behind
+            try:
+                shutil.rmtree(p) if p.is_dir() else p.unlink()
+            except OSError:
+                pass
         raise ValueError(f"could not start claude: {r.stderr.strip()[:300]}")
     pid = _cc_pid(unit)
-    (CC_DIR / f"{turn}.json").write_text(json.dumps({"chat": chat, "session": session, "auto": bool(auto), "quiet": bool(quiet), "push": bool(notify),
+    _cc_write(CC_DIR / f"{turn}.json", json.dumps({"chat": chat, "session": session, "auto": bool(auto), "quiet": bool(quiet), "push": bool(notify), "nonce": nonce or None,
                                                       "pid": pid, "t0": _starttime(pid), "started": time.time()}))
     return {"turn": turn, "resumed": known, **({"routed": routed} if routed else {})}
 
@@ -299,7 +313,27 @@ def claude_stop(chat):
     # SIGKILL first: a plain stop waits up to 90 s for Claude to exit on its own
     sh("systemctl", "kill", "--signal=SIGKILL", unit)
     sh("systemctl", "stop", unit)
+    # core.sh swallows errors: check the unit is really gone
+    if _cc_pid(unit):
+        time.sleep(0.5)
+        if _cc_pid(unit):
+            return {"ok": False, "message": "Claude's process is still running; stopping it failed"}
     return {"ok": True}
+
+
+def claude_latest(chat, nonce):
+    """the turn this chat's send (tagged with the page's nonce) started, {} when the agent has none: lets a page whose
+    send request got no answer find out whether the turn started anyway"""
+    _cc_unit(chat)
+    if not nonce:
+        return {}
+    for f in sorted(CC_DIR.glob(f"{chat}-*.json"), reverse=True)[:5]:
+        try:
+            if json.loads(f.read_text()).get("nonce") == nonce:
+                return {"turn": f.stem}
+        except (OSError, ValueError):
+            pass
+    return {}
 
 
 def _cc_turn(turn):
@@ -320,7 +354,8 @@ def _starttime(pid):
 
 
 def _alive(meta):
-    return meta.get("pid", 0) > 0 and _starttime(meta["pid"]) == meta.get("t0")
+    st = _starttime(meta.get("pid", 0))
+    return st is not None and st == meta.get("t0")
 
 
 # --- a push when an answer is done or waits for the owner (topic "chat", Settings → Notifications) -----------------
@@ -350,8 +385,12 @@ def _plain(md):
 
 def claude_watch():
     import push
+    swept = 0.0
     while True:
         time.sleep(5)
+        if time.time() - swept > 86400:  # the 30-day sweep also runs without anyone sending
+            swept = time.time()
+            _cc_cleanup()
         cutoff = time.time() - 4 * 3600
         for meta_f in CC_DIR.glob("*-*.json"):
             try:

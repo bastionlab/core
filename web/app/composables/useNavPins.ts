@@ -8,6 +8,8 @@ const KEY = 'nav:pinned'
 const DEFAULT = ['/', '/media', '/dev', '/deals']
 
 export function useNavPins<T extends { to: string }>(nav: () => T[]) {
+  const { toast } = useToast()
+  const { t } = useI18n()
   const keys = useState<string[]>('nav:pinned', () => {
     try {
       const v = JSON.parse(localStorage.getItem(KEY) || 'null')
@@ -27,7 +29,7 @@ export function useNavPins<T extends { to: string }>(nav: () => T[]) {
       // keep nav order, so the bar reads like the sidebar
       const order = nav().map(n => n.to)
       keys.value = [...p, to].sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99))
-    }
+    } else toast(t('nav.pinFull', { max: MAX_PINS }), { tone: 'warn' })
     try { localStorage.setItem(KEY, JSON.stringify(keys.value)) } catch {}
   }
   return { keys, pinned, isPinned, toggle, editing, full, max: MAX_PINS }

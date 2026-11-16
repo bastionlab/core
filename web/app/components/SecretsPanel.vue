@@ -84,6 +84,17 @@ onBeforeUnmount(() => clearTimeout(armTimer))
       <div v-if="r.rotate === 'pin' && pinDone" class="pin ok small">PIN changed. Reloading…</div>
     </div>
 
+    <div id="remote-access" class="rot">
+      <h3 class="grp">Remote access</h3>
+      <VpnPanel />
+      <NuxtLink class="lnk small" to="/setup">Run setup again</NuxtLink>
+    </div>
+
+    <div id="claude-login" class="rot">
+      <h3 class="grp">Claude login</h3>
+      <ClaudeLogin @done="emit('changed')" />
+    </div>
+
     <div class="rot">
       <div v-if="pending" class="confirm">
         <p class="small">{{ pending }}</p>

@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "app/assets/main.css"
+        ],
+        "createdAt": "2026-11-07T21:49:40.911Z",
+        "reason": "Assistant: .md blockquote border-left is neutral --line-2 grey (2px), not an accent; predates this session"
+      }
+    ]
+  }
+}

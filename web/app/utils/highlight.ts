@@ -1,7 +1,6 @@
 // Small dependency-free highlighter for code blocks in chat and notes: keywords, strings, comments, numbers.
 // Covers the languages the owner's replies mostly use; anything else gets strings, comments and numbers only.
 
-const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
 
 const JS = 'as async await break case catch class const continue default delete do else export extends finally for from function if import in instanceof let new of return static super switch this throw try typeof var void while yield type interface enum implements private public protected readonly null undefined true false'
 const PY = 'and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield None True False self'
@@ -51,9 +50,9 @@ export function highlight(code: string, lang = ''): string {
   while ((m = re.exec(code))) {
     const [text, com, str, , num, word] = m
     const cls = com ? 'c' : str ? 's' : num ? 'n' : kw.has(word!) ? 'k' : ''
-    out += esc(code.slice(last, m.index))
-    out += cls ? `<span class="hl-${cls}">${esc(text)}</span>` : esc(text)
+    out += escHtml(code.slice(last, m.index))
+    out += cls ? `<span class="hl-${cls}">${escHtml(text)}</span>` : escHtml(text)
     last = m.index + text.length
   }
-  return out + esc(code.slice(last))
+  return out + escHtml(code.slice(last))
 }

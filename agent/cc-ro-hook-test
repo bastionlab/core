@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+"""Table test for agent/cc-ro-hook: every ALLOW must print allow, every DENY must print nothing. Exit 1 on mismatch."""
+import json, subprocess, sys
+from pathlib import Path
+
+HOOK = str(Path(__file__).resolve().parent / "cc-ro-hook")
+ALLOW = [
+    "systemctl --failed", "pct exec 104 -- systemctl --failed --no-pager", "systemctl --state=failed --no-legend", "systemctl -a",
+    "journalctl -p err -b --no-pager | tail -50", "smartctl -a /dev/sda", "smartctl -j -x /dev/nvme0", "smartctl --scan",
+    "smartctl -l error -d sat /dev/sda", "dmesg -T | tail -100", "dmesg -T --level=err,warn", "dmesg -l err", "last -n 5", "who", "w",
+    "pveam list local", "pveam available --section system", "apt list --upgradable 2>/dev/null | head", "apt-cache policy zfsutils-linux",
+    "dpkg -l | grep pve", "dpkg-query -W pve-manager", "pvenode task list --typefilter vzdump", "pvecm status", "ha-manager status",
+    "timedatectl", "timedatectl status", "pct exec 106 -- docker ps -a", "zpool status -x", "du -sh /var/lib/* 2>/dev/null | sort -h | tail",
+    "LC_ALL=C ls", "TZ=UTC date", "systemctl status nginx -n 50 --no-pager", "systemctl show -p ActiveState nginx", "apt list --installed",
+    "apt-cache search -n foo", "git log --oneline -3", "git --no-pager -C /root/dashboard status",
+    "ls | head", "pct exec 104 -- curl -s http://127.0.0.1:3000/api/notes | python3 -c \"import json,sys;print(len(json.load(sys.stdin)))\"",
+    "git -C /root/dashboard log --oneline -3",
+]
+DENY = [
+    "systemctl restart x", "systemctl --failed restart x", "systemctl -H host status x", "systemctl -H host --failed", "systemctl -M c status x",
+    "systemctl stop", "systemctl -t service", "smartctl -t long /dev/sda", "smartctl -s off /dev/sda", "smartctl -X /dev/sda",
+    "smartctl -o on /dev/sda", "smartctl -sx /dev/sda", "smartctl --smart=on /dev/sda", "smartctl -l scterc,70,70 /dev/sda",
+    "smartctl --drivedb=x /dev/sda", "dmesg -c", "dmesg -C", "dmesg -Tc", "dmesg -n 1", "dmesg -D", "dmesg -w", "dmesg --clear",
+    "pveam download local x", "pveam remove x", "apt install x", "apt upgrade", "apt update", "apt-cache gencaches", "dpkg -i x.deb",
+    "dpkg -r x", "dpkg --configure -a", "pvenode task stop x", "pvenode config set --x", "pvecm add x", "ha-manager remove x",
+    "timedatectl set-time 10:00", "timedatectl set-ntp false", "timedatectl -H h status", "last -n 5 > /tmp/x",
+    "apt list -oDir::Cache::pkgcache=/etc/passwd", "apt-cache policy -p /etc/passwd x", "apt-cache show --pkg-cache=/etc/shadow x",
+    "apt list -c/dev/stdin", "APT_CONFIG=/dev/stdin apt list", "GIT_EXTERNAL_DIFF=x git diff", "LD_PRELOAD=/tmp/x.so ls", "PAGER=sh git log",
+    "export PAGER=sh; git log", "systemctl -p show restart nginx", "systemctl --property status stop pveproxy",
+    "git -c diff.external='touch /tmp/x' diff", "git -c core.fsmonitor='touch /tmp/x' status", "git --config-env=core.pager=X log",
+    "git --exec-path=/tmp status", "git diff --ext-diff", "git log --textconv", "systemctl -aHroot@h status", "systemctl --hos=x status",
+    "systemctl --mach=x status", "timedatectl -aHroot@h", "timedatectl --hos=x",
+    "pct exec 104 -- rm -rf /tmp/x", "journalctl --vacuum-size=1G", "pct snapshot 104 x", "sort -o /etc/passwd x",
+]
+
+
+def verdict(cmd):
+    ev = json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}})
+    out = subprocess.run([HOOK], input=ev, capture_output=True, text=True).stdout
+    return '"allow"' in out
+
+
+bad = [("ALLOW", c) for c in ALLOW if not verdict(c)] + [("DENY", c) for c in DENY if verdict(c)]
+for want, c in bad:
+    print(f"FAIL (wanted {want}): {c}")
+print(f"{len(ALLOW) + len(DENY) - len(bad)}/{len(ALLOW) + len(DENY)} ok")
+sys.exit(1 if bad else 0)

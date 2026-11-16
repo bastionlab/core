@@ -373,9 +373,33 @@ def main_checkout(cmd, aid):
         for s in subs:
             if (tree / s).is_dir():
                 check(tree / s, s, ADDONS / s if cmd == "update" else None)
-    git("merge", "--ff-only", "-q", "FETCH_HEAD", cwd=ADDONS)
     if cmd == "install":
+        # whatever state the checkout is in (local edits, unpushed work), installing must not touch it:
+        # take only this add-on's folder out of the fetched commit, never merge the whole tree
+        if not subprocess.run(["git", "ls-tree", "-d", "--name-only", "FETCH_HEAD", sub], cwd=ADDONS,
+                              capture_output=True, text=True).stdout.strip():
+            sys.exit(f"{sub} is not in the marketplace repo")
+        subprocess.run(["git", "rm", "-r", "-q", "--cached", "--sparse", "--ignore-unmatch", "--", sub], cwd=ADDONS,
+                       capture_output=True)  # stale index entries from an earlier failed attempt
         sparse("add", sub)
+        # extract next to the target first; the old folder (stale leftovers of a failed attempt) only moves aside
+        # once the new one is whole, and a failure leaves it where it was
+        ar = subprocess.run(["git", "archive", "FETCH_HEAD", "--", sub], cwd=ADDONS, capture_output=True, timeout=120)
+        if ar.returncode:
+            sys.exit(f"git archive failed: {ar.stderr.decode()[:300]}")
+        stage = Path(tempfile.mkdtemp(prefix=f".{aid}-get-", dir=ADDONS))
+        try:
+            r = subprocess.run(["tar", "-x", "-C", str(stage)], input=ar.stdout)
+            if r.returncode or not (stage / sub / "addon.yaml").exists():
+                sys.exit(f"could not unpack {sub} from the marketplace repo; nothing was changed")
+            if here.exists():
+                stash(aid)
+            (stage / sub).rename(here)
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
+    else:
+        git("merge", "--ff-only", "-q", "FETCH_HEAD", cwd=ADDONS)
+    if cmd == "install":
         say(f"{aid} {manifest(here).get('version', '?')} is in {here}")
         if (here / "install.sh").exists():
             say("running its install.sh")

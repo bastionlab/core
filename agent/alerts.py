@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Host alerts → #alerts on Discord: failed backups and full disks. Runs every 15 min (dash-alerts.timer).
-Each problem pings once, again after a day if it's still there, and once more when it's gone."""
+Each problem pings once, again after a day if it's still there, and once more when it's gone.
+state["log"] (last 40 problems with opened/closed times) and state["checked"] are read by the alertwatch add-on."""
 import json, subprocess, sys, time
 from pathlib import Path
 
@@ -12,6 +13,7 @@ from metrics import snapshot_units, vzdump_run  # noqa: E402
 STATE = Path("/var/lib/dash/alerts.json")
 FULL = 90  # %
 REMIND = 86400
+LOG_MAX = 40
 BACKUP_HOUR_SLACK = 30 * 3600  # nightly job at 23:00: nothing finished for 30 h = it didn't run
 
 
@@ -100,6 +102,21 @@ def main():
                 del open_[k]
         elif k.startswith("task:") and time.time() - open_[k]["sent"] > 7 * 86400:
             del open_[k]
+    now = time.time()
+    log = state.setdefault("log", [])
+    seen = {e["key"] for e in log}
+    for k, msg in now_problems.items():
+        if not any(e["key"] == k and e["closed"] is None for e in log) and not (k.startswith("task:") and k in seen):
+            log.append({"key": k, "msg": msg, "topic": topic(k), "at": now, "closed": None, "oneoff": k.startswith("task:")})
+    for e in log:
+        if e["closed"] is None:
+            if e["oneoff"]:
+                if now >= e["at"] + 86400:
+                    e["closed"] = e["at"] + 86400
+            elif e["key"] not in now_problems:
+                e["closed"] = now
+    state["log"] = log[-LOG_MAX:]
+    state["checked"] = now
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_text(json.dumps(state))
 

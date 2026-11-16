@@ -2,13 +2,14 @@
 /**
  * one app tile or section card on Home. It spans `w` grid columns and `h` rows. In edit mode it works like
  * phone home-screen widgets: hold (touch) or drag (mouse) the tile to move it, tap it to select it, then pull a
- * side of its frame to resize it in whole cells; the selected tile also gets a bar to pin or hide it.
+ * side of its frame to resize it in whole cells; the selected tile also gets a bar to pick a size, move it one place or hide it.
  */
-const props = defineProps<{ it: { id: string, key: string, s?: any, comp?: string }, editing: boolean, selected: boolean, hidden: boolean, pinned: boolean, drag: boolean, box: { w: number, h: number }, chips?: any[], more?: any[] }>()
-const emit = defineEmits<{ grab: [PointerEvent, HTMLElement], select: [], pin: [], hide: [], resize: [{ w: number, h: number }], resized: [] }>()
+const props = defineProps<{ it: { id: string, key: string, s?: any, comp?: string }, editing: boolean, selected: boolean, hidden: boolean, drag: boolean, box: { w: number, h: number }, chips?: any[], more?: any[], stat?: any, bars?: any[] }>()
+const emit = defineEmits<{ grab: [PointerEvent, HTMLElement], select: [], hide: [], move: [number], resize: [{ w: number, h: number }], resized: [] }>()
 
 const MAX_H = 4
-const HOLD_MS = 280
+const HOLD_MS = 250
+const PRESETS = [{ w: 1, h: 1 }, { w: 2, h: 1 }, { w: 2, h: 2 }, { w: 4, h: 1 }, { w: 4, h: 2 }]
 const el = ref<HTMLElement>()
 // the grid's column count changes with the screen: a box wider than the grid just fills it
 const cols = ref(10)
@@ -19,17 +20,34 @@ const measure = () => {
 // once a hold has turned into a drag the page must not scroll under the finger
 let lifted = false
 const noScroll = (e: TouchEvent) => { if (lifted) e.preventDefault() }
+watch(() => props.drag, d => { if (!d) lifted = false })
+// the control bar stays inside the viewport: shifted sideways when the tile sits at an edge
+const ctl = ref<HTMLElement>()
+const shift = ref(0)
+function fit() {
+  const c = ctl.value
+  if (!c) return
+  const r = c.getBoundingClientRect(), m = 8
+  const l = r.left - shift.value, rt = r.right - shift.value
+  shift.value = l < m ? m - l : rt > window.innerWidth - m ? window.innerWidth - m - rt : 0
+}
+const relayout = () => { measure(); fit() }
 onMounted(() => {
   measure()
-  window.addEventListener('resize', measure)
+  window.addEventListener('resize', relayout)
+  window.addEventListener('home:layout', relayout)
   el.value?.addEventListener('touchmove', noScroll, { passive: false })
 })
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', measure)
+  window.removeEventListener('resize', relayout)
+  window.removeEventListener('home:layout', relayout)
   el.value?.removeEventListener('touchmove', noScroll)
 })
 const w = computed(() => Math.min(props.box.w, cols.value))
 const h = computed(() => props.box.h)
+watch([() => props.selected, () => props.editing, w, h], () => nextTick(fit))
+const isPreset = (p: { w: number, h: number }) => w.value === Math.min(p.w, cols.value) && h.value === p.h
+const preset = (p: { w: number, h: number }) => { emit('resize', { w: Math.min(p.w, cols.value), h: p.h }); emit('resized') }
 
 // what the content shows: 1 column = icon + name, 2+ rows = detail rows, else the normal card.
 // AppTile, TopicCard and add-on cards read it.
@@ -54,9 +72,15 @@ function press(e: PointerEvent) {
     end()
     lifted = true
     navigator.vibrate?.(12)
-    const drop = () => { lifted = false; t.removeEventListener('pointerup', drop); t.removeEventListener('pointercancel', drop) }
-    t.addEventListener('pointerup', drop)
-    t.addEventListener('pointercancel', drop)
+    // the tile may move (reorder) and lose the pointer capture: listen on window, not on the tile
+    const drop = (u: PointerEvent) => {
+      if (u.pointerId !== ev.pointerId) return
+      lifted = false
+      window.removeEventListener('pointerup', drop)
+      window.removeEventListener('pointercancel', drop)
+    }
+    window.addEventListener('pointerup', drop)
+    window.addEventListener('pointercancel', drop)
     emit('grab', ev, t)
   }
   const move = (m: PointerEvent) => {
@@ -107,21 +131,24 @@ function resize(e: PointerEvent, side: 'l' | 'r' | 't' | 'b') {
 
 <template>
   <div
-    ref="el" class="it" :class="{ editing, sel: editing && selected, hid: hidden, drag }"
+    ref="el" class="it" :class="{ editing, sel: editing && selected, hid: hidden, ph: drag }" :data-key="it.key" :data-w="w"
     :style="{ gridColumn: `span ${w}`, gridRow: `span ${h}` }"
     @pointerdown="press" @contextmenu="editing && $event.preventDefault()"
   >
     <div class="box">
       <AppTile v-if="it.s" :s="it.s" :inert="editing" />
       <component :is="it.comp" v-else-if="it.comp" />
-      <TopicCard v-else to="/metrics" icon="metrics" name="Metrics" sub="Host, GPU, backups" :chips="chips" :more="more" />
+      <TopicCard v-else to="/metrics" icon="metrics" name="Metrics" sub="Host, GPU, backups" :chips="chips" :more="more" :stat="stat" :bars="bars" />
       <template v-if="editing && selected">
         <button v-for="s in (['l', 'r', 't', 'b'] as const)" :key="s" type="button" class="hd" :class="s" :aria-label="$t('home.size')" @pointerdown="resize($event, s)" />
       </template>
     </div>
-    <div v-if="editing && selected" class="ctl">
-      <span class="mono sz">{{ w }}×{{ h }}</span>
-      <button type="button" :class="{ on: pinned }" :aria-label="pinned ? 'Unpin' : 'Pin to the top'" @click="emit('pin')"><Icon name="pin" :size="15" /></button>
+    <div v-if="editing && selected" ref="ctl" class="ctl" :style="{ translate: `calc(-50% + ${shift}px) 0` }" @pointerdown.stop>
+      <span v-if="!PRESETS.some(isPreset)" class="mono sz">{{ w }}×{{ h }}</span>
+      <button v-for="p in PRESETS" :key="`${p.w}${p.h}`" type="button" class="pre" :class="{ on: isPreset(p) }" @click="preset(p)">{{ p.w }}×{{ p.h }}</button>
+      <span class="sep" />
+      <button type="button" :aria-label="$t('home.moveEarlier')" @click="emit('move', -1)"><Icon name="chevron-left" :size="15" /></button>
+      <button type="button" :aria-label="$t('home.moveLater')" @click="emit('move', 1)"><Icon name="chevron-right" :size="15" /></button>
       <button type="button" :class="{ on: hidden }" :aria-label="hidden ? 'Show' : 'Hide'" @click="emit('hide')"><Icon name="eyeoff" :size="15" /></button>
     </div>
   </div>
@@ -138,8 +165,10 @@ function resize(e: PointerEvent, side: 'l' | 'r' | 't' | 'b') {
 .it.editing:not(.sel) .box { outline: 1.5px dashed var(--line-2); outline-offset: 2px; }
 .it.hid .box > :first-child { opacity: .3; }
 .it.sel { z-index: 3; }
-.it.drag { z-index: 3; cursor: grabbing; }
-.it.drag .box { transform: scale(1.04); box-shadow: 0 8px 24px rgb(0 0 0 / .5); opacity: .9; }
+/* the tile being dragged: its ghost follows the pointer (useGridDrag), this one marks the free place */
+.it.editing.ph .box { outline: 1.5px dashed var(--accent); outline-offset: 0; background: var(--accent-soft); }
+.it.ph .box > * { visibility: hidden; }
+.it.ph .ctl { display: none; }
 /* the selected tile: a frame with a handle in the middle of each side */
 .it.sel .box { outline: 2px solid var(--accent); outline-offset: 2px; }
 .hd {
@@ -152,15 +181,18 @@ function resize(e: PointerEvent, side: 'l' | 'r' | 't' | 'b') {
 .hd.t { top: -9px; left: 50%; translate: -50% 0; cursor: ns-resize; }
 .hd.b { bottom: -9px; left: 50%; translate: -50% 0; cursor: ns-resize; }
 .ctl {
-  position: absolute; top: calc(100% + 10px); left: 50%; translate: -50% 0; z-index: 4; white-space: nowrap;
+  position: absolute; top: calc(100% + 10px); left: 50%; translate: -50% 0; z-index: 4; white-space: nowrap; max-width: calc(100vw - 16px);
   display: flex; align-items: center; gap: 2px; padding: 2px 2px 2px 8px;
   background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 999px; box-shadow: 0 2px 8px rgb(0 0 0 / .4);
 }
 .ctl .sz { font-size: 11px; color: var(--accent); margin-right: 2px; }
 .ctl button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.ctl .sep { width: 1px; height: 16px; margin: 0 4px; background: var(--line-2); flex: none; }
+.ctl button.pre { width: auto; padding: 0 8px; border-radius: 999px; font-size: 11px; font-variant-numeric: tabular-nums; }
 .ctl button.on { color: var(--accent); background: var(--accent-soft); }
 @media (pointer: coarse) {
   .ctl button { width: 32px; height: 32px; }
+  .ctl button.pre { width: auto; padding: 0 6px; }
   .hd { width: 18px; height: 18px; }
   .hd.l { left: -11px; } .hd.r { right: -11px; } .hd.t { top: -11px; } .hd.b { bottom: -11px; }
 }

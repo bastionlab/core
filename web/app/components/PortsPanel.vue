@@ -25,7 +25,7 @@ const sharedCount = computed(() => hosts.value.reduce((s, h) => s + h.serve.leng
     </template>
     <div class="hosts">
       <div v-for="h in hosts" :key="h.id" class="host" :class="{ open: open[h.id] }">
-        <button class="row" @click="open[h.id] = !open[h.id]">
+        <button class="row press" @click="open[h.id] = !open[h.id]">
           <span class="chev">›</span>
           <b>{{ h.name }}</b>
           <span class="faint small mono ip">{{ h.ip }}</span>
@@ -39,7 +39,7 @@ const sharedCount = computed(() => hosts.value.reduce((s, h) => s + h.serve.leng
           <div v-for="s in h.serve" :key="s.url" class="serve small">
             <span v-if="s.public" class="pill bad">public</span>
             <a :href="s.url" target="_blank" class="mono">{{ s.url.replace('https://', '').replace(/\.tail[\w]+\.ts\.net/, '') }}</a>
-            <span class="faint mono">→ {{ s.target?.replace(/^https?:\/\/(127\.0\.0\.1|localhost)/, '') }}</span>
+            <span class="faint mono">{{ $t('ports.to') }} {{ s.target?.replace(/^https?:\/\/(127\.0\.0\.1|localhost)/, '') }}</span>
           </div>
           <div class="plist">
             <component :is="p.local ? 'span' : 'a'" v-for="p in h.listen" :key="p.port + p.proc"
@@ -59,7 +59,7 @@ const sharedCount = computed(() => hosts.value.reduce((s, h) => s + h.serve.leng
 .host + .host { border-top: 1px solid var(--line); }
 .row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 0; background: none; border: 0; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .row:hover b { color: var(--accent); }
-.chev { color: var(--faint); width: 10px; transition: transform .15s; }
+.chev { color: var(--faint); width: 10px; transition: transform var(--dur) var(--ease-out); }
 .open .chev { transform: rotate(90deg); }
 .counts { margin-left: auto; display: flex; gap: 6px; align-items: center; }
 .detail { padding: 0 0 12px 18px; display: flex; flex-direction: column; gap: 6px; }

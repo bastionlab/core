@@ -1,4 +1,8 @@
 {
+  "app": {
+    "newVersion": "Neue Version verfügbar",
+    "reload": "Neu laden"
+  },
   "google": {
     "title": "Google-Konten",
     "sub": "Gemeinsam fuer Kalender und Mail",

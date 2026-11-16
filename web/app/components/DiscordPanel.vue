@@ -12,6 +12,8 @@ const urls = reactive<Record<string, string>>({})
 const msg = reactive<Record<string, string>>({})
 const good = reactive<Record<string, boolean>>({})
 const busy = ref('')
+const { armed, arm } = useArm()
+const { t } = useI18n()
 async function call(channel: string, body: any) {
   busy.value = channel; msg[channel] = ''; good[channel] = false
   try { return await $fetch<any>('/api/discord', { method: 'POST', body: { channel, ...body } }) }
@@ -32,7 +34,7 @@ const count = computed(() => (data.value?.channels || []).filter((c: any) => c.s
 
 <template>
   <Panel title="Discord" :sub="`${count}/5 channels connected`" fold="closed">
-    <p class="small muted">Edit channel → Integrations → Webhooks → paste the URL.</p>
+    <p class="small muted">In the channel settings, open Integrations, then Webhooks, and paste the URL.</p>
     <div v-for="c in data?.channels || []" :key="c.key" class="ch">
       <div class="head">
         <b>#{{ c.key }}</b>
@@ -43,7 +45,7 @@ const count = computed(() => (data.value?.channels || []).filter((c: any) => c.s
         <input v-model="urls[c.key]" placeholder="Webhook URL" autocomplete="off" spellcheck="false">
         <button class="btn primary" :disabled="!!busy || !urls[c.key]?.trim()" @click="save(c.key, urls[c.key].trim())">Save</button>
         <button v-if="c.set" class="btn" :disabled="!!busy" @click="test(c.key)">Test</button>
-        <button v-if="c.set" class="btn" :disabled="!!busy" @click="save(c.key, '')">Remove</button>
+        <button v-if="c.set" class="btn" :class="{ sure: armed === c.key }" :disabled="!!busy" @click="arm(c.key) && save(c.key, '')">{{ armed === c.key ? t('common.sure') : 'Remove' }}</button>
       </div>
       <p v-if="msg[c.key]" class="small" :class="good[c.key] ? 'ok' : 'bad'">{{ msg[c.key] }}</p>
     </div>

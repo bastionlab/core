@@ -23,7 +23,7 @@ function toggle() {
 <template>
   <component :is="skinned" v-if="skinned" v-bind="{ ...$props, fold: 'open' }"><template v-for="(_, n) in $slots" #[n]="p"><slot :name="n" v-bind="p ?? {}" /></template></component>
   <section v-else :id="id" class="panel" :class="{ folded: !open }">
-    <header :class="{ toggle: fold }" @click="toggle">
+    <header :class="{ toggle: fold }" :role="fold ? 'button' : undefined" :tabindex="fold ? 0 : undefined" :aria-expanded="fold ? open : undefined" @click="toggle" @keydown.enter.self.prevent="toggle" @keydown.space.self.prevent="toggle">
       <Icon v-if="fold" name="arrow" :size="15" class="chev" />
       <h2>{{ title }}</h2>
       <span v-if="sub" class="sub">{{ sub }}</span>

@@ -52,8 +52,8 @@ const prios = [[1, 'Highest'], [2, 'High'], [3, 'Above normal'], [4, 'Normal'], 
 
 <style scoped>
 .sh-head { display: flex; gap: 12px; align-items: center; }
-.sh-sw { flex: none; width: 42px; height: 24px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--track); padding: 0; cursor: pointer; position: relative; transition: background .15s; }
-.sh-sw i { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+.sh-sw { flex: none; width: 42px; height: 24px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--track); padding: 0; cursor: pointer; position: relative; transition: background var(--dur) var(--ease-out); }
+.sh-sw i { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--muted); transition: transform var(--dur) var(--ease-out), background var(--dur) var(--ease-out); }
 .sh-sw.on { background: var(--accent-soft); border-color: var(--accent); }
 .sh-sw.on i { transform: translateX(18px); background: var(--accent); }
 .sh-tot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }

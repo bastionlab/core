@@ -1,7 +1,32 @@
 {
+  "app": {
+    "newVersion": "New version available",
+    "reload": "Reload"
+  },
   "addons": {
     "pageOff": "{page} is turned off.",
-    "backToAddons": "Back to Add-ons"
+    "backToAddons": "Back to Add-ons",
+    "scanLoading": "Safety check: fetching and reading the code…",
+    "scanFailed": "Safety check failed: {error} (it runs again on Run)",
+    "warnings": "{n} warning | {n} warnings",
+    "passed": "Safety check passed",
+    "blocked": "Blocked: {n} finding | Blocked: {n} findings",
+    "clamav": "ClamAV {v}",
+    "also": "Also:",
+    "talksTo": "Talks to:",
+    "filesChanged": "{n} file changed: | {n} files changed:",
+    "rebuilding": "Rebuilding: the dashboard is back in a few minutes; reload then.",
+    "turnOn": "Turn on",
+    "turnOff": "Turn off",
+    "termsRisk": "terms risk",
+    "updateTo": "update to v{v}",
+    "needs": "needs {names}",
+    "needsCore": "needs core {v}",
+    "publish": "Publish",
+    "publishChanges": "Publish changes",
+    "install": "Install",
+    "alwaysOn": "Always on: Home, Notes, Chat, Metrics. Turning an add-on off hides it here; its container keeps running.",
+    "offline": "offline copy"
   },
   "google": {
     "title": "Google accounts",
@@ -26,7 +51,11 @@
     "search": "Search",
     "nothing": "Nothing yet.",
     "ctId": "CT {id}",
-    "ms": "{n} ms"
+    "ms": "{n} ms",
+    "sure": "Sure?",
+    "retry": "Retry",
+    "edit": "Edit",
+    "agentErr": "Could not reach the agent: {msg}"
   },
   "nav": {
     "home": "Home",
@@ -42,7 +71,11 @@
     "stale": "stale",
     "down": "agent unreachable",
     "chatInput": "a chat is waiting for your answer",
-    "chatWorking": "a chat is working"
+    "chatWorking": "a chat is working",
+    "showMenu": "Show menu",
+    "bannerDown": "Agent unreachable — data may be old",
+    "bannerStale": "Data is stale",
+    "pinFull": "Up to {max} tabs, unpin one first"
   },
   "backup": {
     "title": "Backup",
@@ -114,7 +147,7 @@
     "offAt": "Powering off at {t}",
     "uptime": "Up {t}",
     "size": "Drag to resize",
-    "editHint": "Hold a tile to move it · tap it to resize",
+    "editHint": "Drag to move. Tap a tile to size or hide it.",
     "layoutShared": "Same everywhere",
     "layoutOwn": {
       "phone": "Only this phone",
@@ -123,7 +156,16 @@
     },
     "throughput": "Throughput",
     "serviceUptime": "Service uptime",
-    "lastSpeedtest": "Last test: {mbit} Mbit/s"
+    "lastSpeedtest": "Last test: {mbit} Mbit/s",
+    "tiles": "Your tiles",
+    "moveEarlier": "Move earlier",
+    "moveLater": "Move later",
+    "uptimeShort": "Uptime",
+    "problems": "{n} problem | {n} problems",
+    "toCheck": "{n} to check",
+    "allGood": "All good",
+    "nDown": "{n} down",
+    "resetLayout": "Reset layout"
   },
   "deploy": {
     "title": "Deploy",
@@ -187,7 +229,10 @@
     "invited": "You're invited as {role}. Pick a name and password.",
     "join": "Create account",
     "inviteGone": "This invite has expired or was used.",
-    "unlock": "Unlock"
+    "unlock": "Unlock",
+    "locked": "Locked",
+    "digits": "{n} digits entered",
+    "delete": "Delete"
   },
   "users": {
     "title": "Users",
@@ -299,7 +344,9 @@
       "share_h": "Tell the counter which add-ons you use",
       "auto": "Auto-update add-ons",
       "auto_h": "Checks hourly for new versions"
-    }
+    },
+    "users_k": "invite roles",
+    "deploy_k": "github release"
   },
   "market": {
     "all": "All",
@@ -375,6 +422,18 @@
     "panel": "Panel",
     "showAll": "Show all {n} lines",
     "showLess": "Show less",
-    "compare": "Compare"
+    "compare": "Compare",
+    "removeImage": "Remove image",
+    "options": "Model and tools",
+    "send": "Ask"
+  },
+  "host": {
+    "updates": "Updates"
+  },
+  "ports": {
+    "to": "to"
+  },
+  "metrics": {
+    "infra": "Infrastructure"
   }
 }

@@ -55,7 +55,7 @@
  "addons/servers/web/app/pages/servers.vue": 13,
  "addons/trending-repos/web/app/pages/trending-repos.vue": 16,
  "web/app/components/ActionConfirm.vue": 3,
- "web/app/components/AskBar.vue": 14,
+ "web/app/components/AskBar.vue": 10,
  "web/app/components/AskPanel.vue": 2,
  "web/app/components/AskQuestions.vue": 7,
  "web/app/components/AskTurns.vue": 13,
@@ -63,7 +63,7 @@
  "web/app/components/ClaudeUsage.vue": 5,
  "web/app/components/CommandPalette.vue": 8,
  "web/app/components/ContainersPanel.vue": 15,
- "web/app/components/DiscordPanel.vue": 6,
+ "web/app/components/DiscordPanel.vue": 5,
  "web/app/components/GpuPanel.vue": 8,
  "web/app/components/HostPanel.vue": 15,
  "web/app/components/JobList.vue": 1,
@@ -76,9 +76,8 @@
  "web/app/components/TailnetPanel.vue": 3,
  "web/app/components/Toasts.vue": 1,
  "web/app/components/UptimePanel.vue": 3,
- "web/app/layouts/default.vue": 9,
- "web/app/pages/addons.vue": 21,
- "web/app/pages/index.vue": 6,
- "web/app/pages/login.vue": 2,
- "web/app/pages/metrics.vue": 3
+ "web/app/layouts/default.vue": 4,
+ "web/app/pages/addons.vue": 1,
+ "web/app/pages/index.vue": 1,
+ "web/app/pages/metrics.vue": 1
 }

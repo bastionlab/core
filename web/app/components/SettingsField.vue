@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** one field an add-on asks for in addon.yaml `settings:`; secrets are write-only (set / replace / clear) */
 const { t } = useI18n()
+const { armed, arm } = useArm()
 const props = defineProps<{ addon: string, f: any }>()
 const emit = defineEmits<{ saved: [] }>()
 
@@ -55,7 +56,7 @@ function quick(v: any) {
         <button v-if="!editing" type="button" class="btn sm" @click="editing = true">{{ f.set ? t('settings.replace') : t('settings.set') }}</button>
         <template v-else>
           <button type="button" class="btn primary sm" :disabled="busy || !draft" @click="saveNow()">{{ t('common.save') }}</button>
-          <button v-if="f.set" type="button" class="btn ghost sm" :disabled="busy" @click="saveNow('')">{{ t('settings.clear') }}</button>
+          <button v-if="f.set" type="button" class="btn ghost sm" :class="{ sure: armed === 'clear' }" :disabled="busy" @click="arm('clear') && saveNow('')">{{ armed === 'clear' ? t('common.sure') : t('settings.clear') }}</button>
           <button type="button" class="btn ghost sm" @click="editing = false; draft = ''">{{ t('common.cancel') }}</button>
         </template>
       </template>
