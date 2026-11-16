@@ -4,6 +4,8 @@ What changed in each core release (add-ons keep their own). Newest first.
 
 ## Unreleased
 
+## 0.1.6 (2026-11-17)
+
 ### Features
 
 - Claude sign-in from the browser (Settings, Access, and /login in chat).
